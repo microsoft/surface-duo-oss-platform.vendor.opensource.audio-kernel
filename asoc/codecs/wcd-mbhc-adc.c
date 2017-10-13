@@ -370,11 +370,18 @@ static bool wcd_mbhc_adc_check_for_spl_headset(struct wcd_mbhc *mbhc,
 	 * btn press/relesae for HEADSET type during correct work.
 	 */
 	output_mv = wcd_measure_adc_once(mbhc, MUX_CTL_IN2P);
-	adc_threshold = ((WCD_MBHC_ADC_HS_THRESHOLD_MV *
+	if (mbhc->hs_thr)
+		adc_threshold = mbhc->hs_thr;
+	else
+		adc_threshold = ((WCD_MBHC_ADC_HS_THRESHOLD_MV *
 			  wcd_mbhc_get_micbias(mbhc))/WCD_MBHC_ADC_MICBIAS_MV);
-	adc_hph_threshold = ((WCD_MBHC_ADC_HPH_THRESHOLD_MV *
-			      wcd_mbhc_get_micbias(mbhc))/
-			      WCD_MBHC_ADC_MICBIAS_MV);
+
+	if (mbhc->hph_thr)
+		adc_hph_threshold = mbhc->hph_thr;
+	else
+		adc_hph_threshold = ((WCD_MBHC_ADC_HPH_THRESHOLD_MV *
+				wcd_mbhc_get_micbias(mbhc))/
+				WCD_MBHC_ADC_MICBIAS_MV);
 
 	if (output_mv > adc_threshold || output_mv < adc_hph_threshold) {
 		spl_hs = false;
@@ -426,8 +433,10 @@ static bool wcd_is_special_headset(struct wcd_mbhc *mbhc)
 			return false;
 		}
 	}
-
-	adc_threshold = ((WCD_MBHC_ADC_HS_THRESHOLD_MV *
+	if (mbhc->hs_thr)
+		adc_threshold = mbhc->hs_thr;
+	else
+		adc_threshold = ((WCD_MBHC_ADC_HS_THRESHOLD_MV *
 			  wcd_mbhc_get_micbias(mbhc)) /
 			  WCD_MBHC_ADC_MICBIAS_MV);
 
@@ -556,14 +565,25 @@ static void wcd_micbias_disable(struct wcd_mbhc *mbhc)
 	}
 }
 
-static int wcd_mbhc_get_plug_from_adc(int adc_result)
+static int wcd_mbhc_get_plug_from_adc(struct wcd_mbhc *mbhc, int adc_result)
 
 {
 	enum wcd_mbhc_plug_type plug_type = MBHC_PLUG_TYPE_INVALID;
+	u32 hph_thr = 0, hs_thr = 0;
 
-	if (adc_result < WCD_MBHC_ADC_HPH_THRESHOLD_MV)
+	if (mbhc->hs_thr)
+		hs_thr = mbhc->hs_thr;
+	else
+		hs_thr = WCD_MBHC_ADC_HS_THRESHOLD_MV;
+
+	if (mbhc->hph_thr)
+		hph_thr = mbhc->hph_thr;
+	else
+		hph_thr = WCD_MBHC_ADC_HPH_THRESHOLD_MV;
+
+	if (adc_result < hph_thr)
 		plug_type = MBHC_PLUG_TYPE_HEADPHONE;
-	else if (adc_result > WCD_MBHC_ADC_HS_THRESHOLD_MV)
+	else if (adc_result > hs_thr)
 		plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
 	else
 		plug_type = MBHC_PLUG_TYPE_HEADSET;
@@ -612,7 +632,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	}
 	/* Find plug type */
 	output_mv = wcd_measure_adc_continuous(mbhc);
-	plug_type = wcd_mbhc_get_plug_from_adc(output_mv);
+	plug_type = wcd_mbhc_get_plug_from_adc(mbhc, output_mv);
 
 	/*
 	 * Report plug type if it is either headset or headphone
@@ -667,7 +687,7 @@ correct_plug_type:
 		 * instead of hogging system by contineous polling, wait for
 		 * sometime and re-check stop request again.
 		 */
-		plug_type = wcd_mbhc_get_plug_from_adc(output_mv);
+		plug_type = wcd_mbhc_get_plug_from_adc(mbhc, output_mv);
 
 		if ((output_mv > WCD_MBHC_ADC_HS_THRESHOLD_MV) &&
 		    (spl_hs_count < WCD_MBHC_SPL_HS_CNT)) {
@@ -713,7 +733,7 @@ correct_plug_type:
 				no_gnd_mic_swap_cnt++;
 				pt_gnd_mic_swap_cnt = 0;
 				plug_type = wcd_mbhc_get_plug_from_adc(
-						output_mv);
+						mbhc, output_mv);
 				if ((no_gnd_mic_swap_cnt <
 				    GND_MIC_SWAP_THRESHOLD) &&
 				    (spl_hs_count != WCD_MBHC_SPL_HS_CNT)) {
@@ -747,7 +767,7 @@ correct_plug_type:
 				 plug_type);
 			if (plug_type != MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 				plug_type = wcd_mbhc_get_plug_from_adc(
-						output_mv);
+						mbhc, output_mv);
 				if (!spl_hs_reported &&
 				    spl_hs_count == WCD_MBHC_SPL_HS_CNT) {
 					spl_hs_reported = true;
@@ -895,6 +915,8 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 	struct wcd_mbhc *mbhc = data;
 	unsigned long timeout;
 	int adc_threshold, output_mv, retry = 0;
+	bool hphpa_on = false;
+	u8  moisture_status = 0;
 
 	pr_debug("%s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
@@ -928,17 +950,59 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 		goto exit;
 	}
 
-	/*
-	 * ADC COMPLETE and ELEC_REM interrupts are both enabled for HEADPHONE,
-	 * need to reject the ADC COMPLETE interrupt which follows ELEC_REM one
-	 * when HEADPHONE is removed.
-	 */
-	if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
-		mbhc->extn_cable_hph_rem = true;
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 0);
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, 0);
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, 0);
-	wcd_mbhc_elec_hs_report_unplug(mbhc);
+	if (mbhc->mbhc_cfg->moisture_en) {
+		if (mbhc->mbhc_cb->hph_pa_on_status)
+			if (mbhc->mbhc_cb->hph_pa_on_status(mbhc->codec)) {
+				hphpa_on = true;
+				WCD_MBHC_REG_UPDATE_BITS(
+					WCD_MBHC_HPHL_PA_EN, 0);
+				WCD_MBHC_REG_UPDATE_BITS(
+					WCD_MBHC_HPH_PA_EN, 0);
+			}
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHR_GND, 1);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_GND, 1);
+		/* wait for 50ms to get moisture status */
+		usleep_range(50000, 50100);
+
+		WCD_MBHC_REG_READ(WCD_MBHC_MOISTURE_STATUS, moisture_status);
+	}
+
+	if (mbhc->mbhc_cfg->moisture_en && !moisture_status) {
+		pr_debug("%s: moisture present in jack\n", __func__);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE, 1);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
+		mbhc->btn_press_intr = false;
+		mbhc->is_btn_press = false;
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADSET);
+		else if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
+		else if (mbhc->current_plug == MBHC_PLUG_TYPE_GND_MIC_SWAP)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_UNSUPPORTED);
+		else if (mbhc->current_plug == MBHC_PLUG_TYPE_HIGH_HPH)
+			wcd_mbhc_report_plug(mbhc, 0, SND_JACK_LINEOUT);
+	} else {
+		/*
+		 * ADC COMPLETE and ELEC_REM interrupts are both enabled for
+		 * HEADPHONE, need to reject the ADC COMPLETE interrupt which
+		 * follows ELEC_REM one when HEADPHONE is removed.
+		 */
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
+			mbhc->extn_cable_hph_rem = true;
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, 0);
+		wcd_mbhc_elec_hs_report_unplug(mbhc);
+
+		if (hphpa_on) {
+			hphpa_on = false;
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_PA_EN, 1);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPH_PA_EN, 1);
+		}
+	}
 exit:
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	pr_debug("%s: leave\n", __func__);
