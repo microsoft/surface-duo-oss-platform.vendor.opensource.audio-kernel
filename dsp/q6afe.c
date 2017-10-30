@@ -15,7 +15,6 @@
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
-#include <linux/wakelock.h>
 #include <linux/jiffies.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
@@ -2893,6 +2892,24 @@ static int q6afe_send_enc_config(u16 port_id,
 		pr_err("%s: AFE_ENCODER_PARAM_ID_ENC_CFG_BLK for port 0x%x failed %d\n",
 			__func__, port_id, ret);
 		goto exit;
+	}
+
+	if (format == ASM_MEDIA_FMT_APTX) {
+		config.param.payload_size =
+			payload_size + sizeof(config.port.sync_mode_param);
+		pr_debug("%s: sending AFE_PARAM_ID_APTX_SYNC_MODE to DSP",
+			__func__);
+		config.pdata.param_id = AFE_PARAM_ID_APTX_SYNC_MODE;
+		config.pdata.param_size = sizeof(config.port.sync_mode_param);
+		config.port.sync_mode_param.sync_mode =
+			config.port.enc_blk_param.enc_blk_config.aptx_config.
+				aptx_v2_cfg.sync_mode;
+		ret = afe_apr_send_pkt(&config, &this_afe.wait[index]);
+		if (ret) {
+			pr_err("%s: AFE_PARAM_ID_APTX_SYNC_MODE for port 0x%x failed %d\n",
+				__func__, port_id, ret);
+			goto exit;
+		}
 	}
 
 	config.param.payload_size =
