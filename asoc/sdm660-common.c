@@ -2768,7 +2768,7 @@ static int msm_prepare_us_euro(struct snd_soc_card *card)
 static bool msm_usbc_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 {
 	int value = 0;
-	bool ret = 0;
+	bool ret = false;
 	struct snd_soc_card *card = codec->component.card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct pinctrl_state *en2_pinctrl_active;
@@ -2786,15 +2786,16 @@ static bool msm_usbc_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 				pdata->usbc_en2_gpio_p = NULL;
 				return false;
 			}
-		} else
+		} else {
 			/* if not active and usbc_en2_gpio undefined, return */
 			return false;
+		}
 	}
 
 	pdata->usbc_en2_gpio = of_get_named_gpio(card->dev->of_node,
 				    "qcom,usbc-analog-en2-gpio", 0);
 	if (!gpio_is_valid(pdata->usbc_en2_gpio)) {
-		dev_err(card->dev, "%s, property %s not in node %s",
+		dev_err(card->dev, "%s, property %s not in node %s\n",
 			__func__, "qcom,usbc-analog-en2-gpio",
 			card->dev->of_node->full_name);
 		return false;
@@ -2878,7 +2879,7 @@ static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 	} else {
 		/* if usbc is defined, swap using usbc_en2 */
 		ret = msm_usbc_swap_gnd_mic(codec, active);
-	};
+	}
 	return ret;
 }
 
