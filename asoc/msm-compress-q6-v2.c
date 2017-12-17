@@ -2610,8 +2610,8 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 		tstamp.copied_total = prtd->received_total;
 	first_buffer = prtd->first_buffer;
 	if (atomic_read(&prtd->error)) {
-		pr_err("%s Got RESET EVENTS notification, return error\n",
-			__func__);
+		pr_err_ratelimited("%s Got RESET EVENTS notification, return error\n",
+				   __func__);
 		if (cstream->direction == SND_COMPRESS_PLAYBACK)
 			runtime->total_bytes_transferred = tstamp.copied_total;
 		else
@@ -4546,7 +4546,7 @@ int __init msm_compress_dsp_init(void)
 	return platform_driver_register(&msm_compr_driver);
 }
 
-void __exit msm_compress_dsp_exit(void)
+void msm_compress_dsp_exit(void)
 {
 	platform_driver_unregister(&msm_compr_driver);
 }

@@ -49,10 +49,10 @@
 #define BUS_DOWN 1
 
 /*
- * 50 Milliseconds sufficient for DSP bring up in the lpass
+ * 200 Milliseconds sufficient for DSP bring up in the lpass
  * after Sub System Restart
  */
-#define ADSP_STATE_READY_TIMEOUT_MS 50
+#define ADSP_STATE_READY_TIMEOUT_MS 200
 
 #define EAR_PMD 0
 #define EAR_PMU 1
@@ -1579,43 +1579,6 @@ static int msm_anlg_cdc_ear_pa_boost_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int msm_anlg_cdc_loopback_mode_get(struct snd_kcontrol *kcontrol,
-					  struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct msm_asoc_mach_data *pdata = NULL;
-
-	pdata = snd_soc_card_get_drvdata(codec->component.card);
-	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	return pdata->lb_mode;
-}
-
-static int msm_anlg_cdc_loopback_mode_put(struct snd_kcontrol *kcontrol,
-					  struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct msm_asoc_mach_data *pdata = NULL;
-
-	pdata = snd_soc_card_get_drvdata(codec->component.card);
-	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 0:
-		pdata->lb_mode = false;
-		break;
-	case 1:
-		pdata->lb_mode = true;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static int msm_anlg_cdc_pa_gain_get(struct snd_kcontrol *kcontrol,
 				    struct snd_ctl_elem_value *ucontrol)
 {
@@ -1910,13 +1873,6 @@ static int msm_anlg_cdc_ext_spk_boost_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-
-static const char * const msm_anlg_cdc_loopback_mode_ctrl_text[] = {
-		"DISABLE", "ENABLE"};
-static const struct soc_enum msm_anlg_cdc_loopback_mode_ctl_enum[] = {
-		SOC_ENUM_SINGLE_EXT(2, msm_anlg_cdc_loopback_mode_ctrl_text),
-};
-
 static const char * const msm_anlg_cdc_ear_pa_boost_ctrl_text[] = {
 		"DISABLE", "ENABLE"};
 static const struct soc_enum msm_anlg_cdc_ear_pa_boost_ctl_enum[] = {
@@ -1980,8 +1936,6 @@ static const struct snd_kcontrol_new msm_anlg_cdc_snd_controls[] = {
 	SOC_ENUM_EXT("Ext Spk Boost", msm_anlg_cdc_ext_spk_boost_ctl_enum[0],
 		msm_anlg_cdc_ext_spk_boost_get, msm_anlg_cdc_ext_spk_boost_set),
 
-	SOC_ENUM_EXT("LOOPBACK Mode", msm_anlg_cdc_loopback_mode_ctl_enum[0],
-		msm_anlg_cdc_loopback_mode_get, msm_anlg_cdc_loopback_mode_put),
 	SOC_SINGLE_TLV("ADC1 Volume", MSM89XX_PMIC_ANALOG_TX_1_EN, 3,
 					8, 0, analog_gain),
 	SOC_SINGLE_TLV("ADC2 Volume", MSM89XX_PMIC_ANALOG_TX_2_EN, 3,
@@ -2618,6 +2572,18 @@ static int msm_anlg_cdc_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 		break;
 	}
 	return 0;
+}
+
+static void set_compander_mode(void *handle, int val)
+{
+	struct sdm660_cdc_priv *handle_cdc = handle;
+	struct snd_soc_codec *codec = handle_cdc->codec;
+
+	if (get_codec_version(handle_cdc) >= DIANGU) {
+		snd_soc_update_bits(codec,
+				    MSM89XX_PMIC_ANALOG_RX_COM_BIAS_DAC,
+				    0x08, val);
+	};
 }
 
 static void update_clkdiv(void *handle, int val)
@@ -4242,7 +4208,7 @@ static int msm_anlg_cdc_enable_static_supplies_to_optimum(
 				struct sdm660_cdc_pdata *pdata)
 {
 	int i;
-	int ret = 0;
+	int ret = 0, rc = 0;
 
 	for (i = 0; i < sdm660_cdc->num_of_supplies; i++) {
 		if (pdata->regulator[i].ondemand)
@@ -4251,6 +4217,12 @@ static int msm_anlg_cdc_enable_static_supplies_to_optimum(
 				sdm660_cdc->supplies[i].consumer) <= 0)
 			continue;
 
+		rc = regulator_enable(sdm660_cdc->supplies[i].consumer);
+		if (rc) {
+			dev_err(sdm660_cdc->dev, "Failed to enable %s: %d\n",
+			       sdm660_cdc->supplies[i].supply, rc);
+			break;
+		}
 		ret = regulator_set_voltage(
 				sdm660_cdc->supplies[i].consumer,
 				pdata->regulator[i].min_uv,
@@ -4267,7 +4239,10 @@ static int msm_anlg_cdc_enable_static_supplies_to_optimum(
 			 sdm660_cdc->supplies[i].supply);
 	}
 
-	return ret;
+	while (rc && i--)
+		if (!pdata->regulator[i].ondemand)
+			regulator_disable(sdm660_cdc->supplies[i].consumer);
+	return rc;
 }
 
 static int msm_anlg_cdc_disable_static_supplies_to_optimum(
@@ -4286,7 +4261,12 @@ static int msm_anlg_cdc_disable_static_supplies_to_optimum(
 		regulator_set_voltage(sdm660_cdc->supplies[i].consumer, 0,
 				pdata->regulator[i].max_uv);
 		regulator_set_load(sdm660_cdc->supplies[i].consumer, 0);
-		dev_dbg(sdm660_cdc->dev, "Regulator %s set optimum mode\n",
+		ret = regulator_disable(sdm660_cdc->supplies[i].consumer);
+		if (ret)
+			dev_err(sdm660_cdc->dev, "Failed to disable %s: %d\n",
+			       sdm660_cdc->supplies[i].supply, ret);
+
+		dev_dbg(sdm660_cdc->dev, "Regulator %s disable\n",
 				 sdm660_cdc->supplies[i].supply);
 	}
 
@@ -4455,7 +4435,7 @@ static int msm_anlg_cdc_enable_static_supplies(
 				 sdm660_cdc->supplies[i].supply);
 	}
 
-	while (ret && --i)
+	while (ret && i--)
 		if (!pdata->regulator[i].ondemand)
 			regulator_disable(sdm660_cdc->supplies[i].consumer);
 	return ret;
@@ -4653,6 +4633,7 @@ static int msm_anlg_cdc_probe(struct platform_device *pdev)
 	BLOCKING_INIT_NOTIFIER_HEAD(&sdm660_cdc->notifier_mbhc);
 
 	sdm660_cdc->dig_plat_data.handle = (void *) sdm660_cdc;
+	sdm660_cdc->dig_plat_data.set_compander_mode = set_compander_mode;
 	sdm660_cdc->dig_plat_data.update_clkdiv = update_clkdiv;
 	sdm660_cdc->dig_plat_data.get_cdc_version = get_cdc_version;
 	sdm660_cdc->dig_plat_data.register_notifier =
