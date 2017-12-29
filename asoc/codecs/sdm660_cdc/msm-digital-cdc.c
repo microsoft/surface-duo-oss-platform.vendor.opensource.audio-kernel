@@ -84,6 +84,12 @@ static int msm_digcdc_clock_control(bool flag)
 	if (flag) {
 		mutex_lock(&pdata->cdc_int_mclk0_mutex);
 		if (atomic_read(&pdata->int_mclk0_enabled) == false) {
+			if (pdata->native_clk_set)
+				pdata->digital_cdc_core_clk.clk_freq_in_hz =
+							NATIVE_MCLK_RATE;
+			else
+				pdata->digital_cdc_core_clk.clk_freq_in_hz =
+							DEFAULT_MCLK_RATE;
 			pdata->digital_cdc_core_clk.enable = 1;
 			ret = afe_set_lpass_clock_v2(
 						AFE_PORT_ID_INT0_MI2S_RX,
@@ -217,6 +223,7 @@ static int msm_dig_cdc_codec_config_compander(struct snd_soc_codec *codec,
 {
 	struct msm_dig_priv *dig_cdc = snd_soc_codec_get_drvdata(codec);
 	int comp_ch_bits_set = 0x03;
+	int comp_ch_value;
 
 	dev_dbg(codec->dev, "%s: event %d shift %d, enabled %d\n",
 		__func__, event, interp_n,
@@ -231,14 +238,45 @@ static int msm_dig_cdc_codec_config_compander(struct snd_soc_codec *codec,
 	}
 
 	if (SND_SOC_DAPM_EVENT_ON(event)) {
+		/* compander is not enabled */
+		if (!dig_cdc->comp_enabled[interp_n]) {
+			dig_cdc->set_compander_mode(dig_cdc->handle, 0x00);
+			return 0;
+		};
+		comp_ch_value = snd_soc_read(codec,
+					     MSM89XX_CDC_CORE_COMP0_B1_CTL);
+		if (interp_n == 0) {
+			if (comp_ch_value & 0x02) {
+				dev_dbg(codec->dev,
+					"%s comp ch 1  already enabled\n",
+					__func__);
+				return 0;
+			}
+		}
+		if (interp_n == 1) {
+			if (comp_ch_value & 0x01) {
+				dev_dbg(codec->dev,
+					"%s comp ch 0 already enabled\n",
+					__func__);
+				return 0;
+			}
+		}
+		dig_cdc->set_compander_mode(dig_cdc->handle, 0x08);
 		/* Enable Compander Clock */
 		snd_soc_update_bits(codec,
 			MSM89XX_CDC_CORE_COMP0_B2_CTL, 0x0F, 0x09);
 		snd_soc_update_bits(codec,
 			MSM89XX_CDC_CORE_CLK_RX_B2_CTL, 0x01, 0x01);
-		snd_soc_update_bits(codec,
-			MSM89XX_CDC_CORE_COMP0_B1_CTL,
-			1 << interp_n, 1 << interp_n);
+		if (dig_cdc->comp_enabled[MSM89XX_RX1]) {
+			snd_soc_update_bits(codec,
+				MSM89XX_CDC_CORE_COMP0_B1_CTL,
+				0x02, 0x02);
+		}
+		if (dig_cdc->comp_enabled[MSM89XX_RX2]) {
+			snd_soc_update_bits(codec,
+				MSM89XX_CDC_CORE_COMP0_B1_CTL,
+				0x01, 0x01);
+		}
 		snd_soc_update_bits(codec,
 			MSM89XX_CDC_CORE_COMP0_B3_CTL, 0xFF, 0x01);
 		snd_soc_update_bits(codec,
@@ -1359,6 +1397,9 @@ static const struct snd_soc_dapm_route audio_dig_map[] = {
 	{"RX2 MIX1 INP2", "RX3", "I2S RX3"},
 	{"RX2 MIX1 INP2", "IIR1", "IIR1"},
 	{"RX2 MIX1 INP2", "IIR2", "IIR2"},
+	{"RX2 MIX1 INP3", "RX1", "I2S RX1"},
+	{"RX2 MIX1 INP3", "RX2", "I2S RX2"},
+	{"RX2 MIX1 INP3", "RX3", "I2S RX3"},
 
 	{"RX3 MIX1 INP1", "RX1", "I2S RX1"},
 	{"RX3 MIX1 INP1", "RX2", "I2S RX2"},
@@ -1370,6 +1411,9 @@ static const struct snd_soc_dapm_route audio_dig_map[] = {
 	{"RX3 MIX1 INP2", "RX3", "I2S RX3"},
 	{"RX3 MIX1 INP2", "IIR1", "IIR1"},
 	{"RX3 MIX1 INP2", "IIR2", "IIR2"},
+	{"RX3 MIX1 INP3", "RX1", "I2S RX1"},
+	{"RX3 MIX1 INP3", "RX2", "I2S RX2"},
+	{"RX3 MIX1 INP3", "RX3", "I2S RX3"},
 
 	{"RX1 MIX2 INP1", "IIR1", "IIR1"},
 	{"RX2 MIX2 INP1", "IIR1", "IIR1"},
@@ -2080,6 +2124,7 @@ static int msm_dig_cdc_probe(struct platform_device *pdev)
 			msm_dig_cdc->dig_base, &msm_digital_regmap_config);
 
 	msm_dig_cdc->update_clkdiv = pdata->update_clkdiv;
+	msm_dig_cdc->set_compander_mode = pdata->set_compander_mode;
 	msm_dig_cdc->get_cdc_version = pdata->get_cdc_version;
 	msm_dig_cdc->handle = pdata->handle;
 	msm_dig_cdc->register_notifier = pdata->register_notifier;

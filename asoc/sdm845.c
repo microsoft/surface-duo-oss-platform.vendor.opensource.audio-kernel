@@ -21,6 +21,7 @@
 #include <linux/module.h>
 #include <linux/input.h>
 #include <linux/of_device.h>
+#include <linux/pm_qos.h>
 #include <sound/core.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
@@ -72,6 +73,7 @@
 #define TDM_CHANNEL_MAX 8
 
 #define MSM_HIFI_ON 1
+#define MSM_LL_QOS_VALUE 300 /* time in us to ensure LPM doesn't go in C3/C4 */
 
 enum {
 	SLIM_RX_0 = 0,
@@ -402,7 +404,9 @@ static char const *slim_sample_rate_text[] = {"KHZ_8", "KHZ_16",
 					"KHZ_32", "KHZ_44P1", "KHZ_48",
 					"KHZ_88P2", "KHZ_96", "KHZ_176P4",
 					"KHZ_192", "KHZ_352P8", "KHZ_384"};
-static char const *bt_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_48"};
+static char const *bt_sample_rate_text[] = {"KHZ_8", "KHZ_16",
+					"KHZ_44P1", "KHZ_48",
+					"KHZ_88P2", "KHZ_96"};
 static const char *const usb_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Five", "Six", "Seven",
 					   "Eight"};
@@ -423,9 +427,9 @@ static char const *tdm_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
 					     "KHZ_48", "KHZ_176P4",
 					     "KHZ_352P8"};
 static const char *const auxpcm_rate_text[] = {"KHZ_8", "KHZ_16"};
-static char const *mi2s_rate_text[] = {"KHZ_8", "KHZ_16",
-				      "KHZ_32", "KHZ_44P1", "KHZ_48",
-				      "KHZ_96", "KHZ_192"};
+static char const *mi2s_rate_text[] = {"KHZ_8", "KHZ_11P025", "KHZ_16",
+				      "KHZ_22P05", "KHZ_32", "KHZ_44P1",
+				      "KHZ_48", "KHZ_96", "KHZ_192"};
 static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Five", "Six", "Seven",
 					   "Eight"};
@@ -982,7 +986,16 @@ static int msm_bt_sample_rate_get(struct snd_kcontrol *kcontrol,
 	 * value.
 	 */
 	switch (slim_rx_cfg[SLIM_RX_7].sample_rate) {
+	case SAMPLING_RATE_96KHZ:
+		ucontrol->value.integer.value[0] = 5;
+		break;
+	case SAMPLING_RATE_88P2KHZ:
+		ucontrol->value.integer.value[0] = 4;
+		break;
 	case SAMPLING_RATE_48KHZ:
+		ucontrol->value.integer.value[0] = 3;
+		break;
+	case SAMPLING_RATE_44P1KHZ:
 		ucontrol->value.integer.value[0] = 2;
 		break;
 	case SAMPLING_RATE_16KHZ:
@@ -1008,8 +1021,20 @@ static int msm_bt_sample_rate_put(struct snd_kcontrol *kcontrol,
 		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
 		break;
 	case 2:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
+		break;
+	case 3:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_48KHZ;
 		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
+		break;
+	case 4:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
+		break;
+	case 5:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_96KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
 		break;
 	case 0:
 	default:
@@ -2182,26 +2207,32 @@ static int mi2s_get_sample_rate_val(int sample_rate)
 	case SAMPLING_RATE_8KHZ:
 		sample_rate_val = 0;
 		break;
-	case SAMPLING_RATE_16KHZ:
+	case SAMPLING_RATE_11P025KHZ:
 		sample_rate_val = 1;
 		break;
-	case SAMPLING_RATE_32KHZ:
+	case SAMPLING_RATE_16KHZ:
 		sample_rate_val = 2;
 		break;
-	case SAMPLING_RATE_44P1KHZ:
+	case SAMPLING_RATE_22P05KHZ:
 		sample_rate_val = 3;
 		break;
-	case SAMPLING_RATE_48KHZ:
+	case SAMPLING_RATE_32KHZ:
 		sample_rate_val = 4;
 		break;
-	case SAMPLING_RATE_96KHZ:
+	case SAMPLING_RATE_44P1KHZ:
 		sample_rate_val = 5;
 		break;
-	case SAMPLING_RATE_192KHZ:
+	case SAMPLING_RATE_48KHZ:
 		sample_rate_val = 6;
 		break;
+	case SAMPLING_RATE_96KHZ:
+		sample_rate_val = 7;
+		break;
+	case SAMPLING_RATE_192KHZ:
+		sample_rate_val = 8;
+		break;
 	default:
-		sample_rate_val = 4;
+		sample_rate_val = 6;
 		break;
 	}
 	return sample_rate_val;
@@ -2216,21 +2247,27 @@ static int mi2s_get_sample_rate(int value)
 		sample_rate = SAMPLING_RATE_8KHZ;
 		break;
 	case 1:
-		sample_rate = SAMPLING_RATE_16KHZ;
+		sample_rate = SAMPLING_RATE_11P025KHZ;
 		break;
 	case 2:
-		sample_rate = SAMPLING_RATE_32KHZ;
+		sample_rate = SAMPLING_RATE_16KHZ;
 		break;
 	case 3:
-		sample_rate = SAMPLING_RATE_44P1KHZ;
+		sample_rate = SAMPLING_RATE_22P05KHZ;
 		break;
 	case 4:
-		sample_rate = SAMPLING_RATE_48KHZ;
+		sample_rate = SAMPLING_RATE_32KHZ;
 		break;
 	case 5:
-		sample_rate = SAMPLING_RATE_96KHZ;
+		sample_rate = SAMPLING_RATE_44P1KHZ;
 		break;
 	case 6:
+		sample_rate = SAMPLING_RATE_48KHZ;
+		break;
+	case 7:
+		sample_rate = SAMPLING_RATE_96KHZ;
+		break;
+	case 8:
 		sample_rate = SAMPLING_RATE_192KHZ;
 		break;
 	default:
@@ -2614,21 +2651,6 @@ static int msm_hifi_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static s32 msm_qos_value(struct snd_pcm_runtime *runtime)
-{
-	s32 usecs;
-
-	if (!runtime->rate)
-		return -EINVAL;
-
-	/* take 75% of period time as the deadline */
-	usecs = (750000 / runtime->rate) * runtime->period_size;
-	usecs += ((750000 % runtime->rate) * runtime->period_size) /
-		 runtime->rate;
-
-	return usecs;
-}
-
 static int msm_qos_ctl_get(struct snd_kcontrol *kcontrol,
 			   struct snd_ctl_elem_value *ucontrol)
 {
@@ -2668,7 +2690,7 @@ static int msm_qos_ctl_put(struct snd_kcontrol *kcontrol,
 			pr_err("%s: runtime is null\n", __func__);
 			return -EINVAL;
 		}
-		usecs = msm_qos_value(substream->runtime);
+		usecs = MSM_LL_QOS_VALUE;
 		if (usecs >= 0)
 			pm_qos_add_request(&substream->latency_pm_qos_req,
 					PM_QOS_CPU_DMA_LATENCY, usecs);
@@ -3631,31 +3653,44 @@ static void msm_afe_clear_config(void)
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
 }
 
-static int msm_adsp_power_up_config(struct snd_soc_codec *codec)
+static int msm_adsp_power_up_config(struct snd_soc_codec *codec,
+				    struct snd_card *card)
 {
 	int ret = 0;
 	unsigned long timeout;
 	int adsp_ready = 0;
+	bool snd_card_online = 0;
 
 	timeout = jiffies +
 		msecs_to_jiffies(ADSP_STATE_READY_TIMEOUT_MS);
 
 	do {
-		if (q6core_is_adsp_ready()) {
-			pr_debug("%s: ADSP Audio is ready\n", __func__);
-			adsp_ready = 1;
-			break;
+		if (!snd_card_online) {
+			snd_card_online = snd_card_is_online_state(card);
+			pr_debug("%s: Sound card is %s\n", __func__,
+				 snd_card_online ? "Online" : "Offline");
 		}
+		if (!adsp_ready) {
+			adsp_ready = q6core_is_adsp_ready();
+			pr_debug("%s: ADSP Audio is %s\n", __func__,
+				 adsp_ready ? "ready" : "not ready");
+		}
+		if (snd_card_online && adsp_ready)
+			break;
+
 		/*
-		 * ADSP will be coming up after subsystem restart and
+		 * Sound card/ADSP will be coming up after subsystem restart and
 		 * it might not be fully up when the control reaches
 		 * here. So, wait for 50msec before checking ADSP state
 		 */
 		msleep(50);
 	} while (time_after(timeout, jiffies));
 
-	if (!adsp_ready) {
-		pr_err("%s: timed out waiting for ADSP Audio\n", __func__);
+	if (!snd_card_online || !adsp_ready) {
+		pr_err("%s: Timeout. Sound card is %s, ADSP Audio is %s\n",
+		       __func__,
+		       snd_card_online ? "Online" : "Offline",
+		       adsp_ready ? "ready" : "not ready");
 		ret = -ETIMEDOUT;
 		goto err;
 	}
@@ -3713,7 +3748,7 @@ static int sdm845_notifier_service_cb(struct notifier_block *this,
 		}
 		codec = rtd->codec;
 
-		ret = msm_adsp_power_up_config(codec);
+		ret = msm_adsp_power_up_config(codec, card->snd_card);
 		if (ret < 0) {
 			dev_err(card->dev,
 				"%s: msm_adsp_power_up_config failed ret = %d!\n",
@@ -3811,7 +3846,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 
 	msm_codec_fn.get_afe_config_fn = tavil_get_afe_config;
 
-	ret = msm_adsp_power_up_config(codec);
+	ret = msm_adsp_power_up_config(codec, rtd->card->snd_card);
 	if (ret) {
 		pr_err("%s: Failed to set AFE config %d\n", __func__, ret);
 		goto err;
@@ -4153,7 +4188,6 @@ static void msm_aux_pcm_snd_shutdown(struct snd_pcm_substream *substream)
 			dev_err(rtd->card->dev,
 				"%s lpaif_tert_muxsel_virt_addr is NULL\n",
 				__func__);
-			auxpcm_intf_conf[index].ref_cnt++;
 		}
 	}
 	mutex_unlock(&auxpcm_intf_conf[index].lock);
@@ -4616,6 +4650,30 @@ static struct snd_soc_ops sdm845_tdm_be_ops = {
 	.shutdown = sdm845_tdm_snd_shutdown
 };
 
+static int msm_fe_qos_prepare(struct snd_pcm_substream *substream)
+{
+	cpumask_t mask;
+
+	if (pm_qos_request_active(&substream->latency_pm_qos_req))
+		pm_qos_remove_request(&substream->latency_pm_qos_req);
+
+	cpumask_clear(&mask);
+	cpumask_set_cpu(1, &mask); /* affine to core 1 */
+	cpumask_set_cpu(2, &mask); /* affine to core 2 */
+	cpumask_copy(&substream->latency_pm_qos_req.cpus_affine, &mask);
+
+	substream->latency_pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
+
+	pm_qos_add_request(&substream->latency_pm_qos_req,
+			  PM_QOS_CPU_DMA_LATENCY,
+			  MSM_LL_QOS_VALUE);
+	return 0;
+}
+
+static struct snd_soc_ops msm_fe_qos_ops = {
+	.prepare = msm_fe_qos_prepare,
+};
+
 static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
@@ -4715,11 +4773,9 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	mutex_lock(&mi2s_intf_conf[index].lock);
 	if (--mi2s_intf_conf[index].ref_cnt == 0) {
 		ret = msm_mi2s_set_sclk(substream, false);
-		if (ret < 0) {
+		if (ret < 0)
 			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
 				__func__, index, ret);
-			mi2s_intf_conf[index].ref_cnt++;
-		}
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 
@@ -4986,6 +5042,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		/* this dainlink has playback support */
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA5,
+		.ops = &msm_fe_qos_ops,
 	},
 	{
 		.name = "Listen 1 Audio Service",
@@ -5053,6 +5110,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		 /* this dainlink has playback support */
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA8,
+		.ops = &msm_fe_qos_ops,
 	},
 	/* HDMI Hostless */
 	{
@@ -7036,6 +7094,7 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
 
+	audio_notifier_deregister("sdm845");
 	if (pdata->us_euro_gpio > 0) {
 		gpio_free(pdata->us_euro_gpio);
 		pdata->us_euro_gpio = 0;
@@ -7044,7 +7103,6 @@ static int msm_asoc_machine_remove(struct platform_device *pdev)
 
 	msm_release_pinctrl(pdev);
 	snd_soc_unregister_card(card);
-	audio_notifier_deregister("sdm845");
 	return 0;
 }
 

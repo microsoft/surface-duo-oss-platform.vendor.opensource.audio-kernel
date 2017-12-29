@@ -115,6 +115,7 @@ static const struct snd_kcontrol_new name##_mux = \
 #define WCD934X_AMIC_PWR_LEVEL_LP 0
 #define WCD934X_AMIC_PWR_LEVEL_DEFAULT 1
 #define WCD934X_AMIC_PWR_LEVEL_HP 2
+#define WCD934X_AMIC_PWR_LEVEL_HYBRID 3
 #define WCD934X_AMIC_PWR_LVL_MASK 0x60
 #define WCD934X_AMIC_PWR_LVL_SHIFT 0x5
 
@@ -122,6 +123,7 @@ static const struct snd_kcontrol_new name##_mux = \
 #define WCD934X_DEC_PWR_LVL_LP 0x02
 #define WCD934X_DEC_PWR_LVL_HP 0x04
 #define WCD934X_DEC_PWR_LVL_DF 0x00
+#define WCD934X_DEC_PWR_LVL_HYBRID WCD934X_DEC_PWR_LVL_DF
 #define WCD934X_STRING_LEN 100
 
 #define WCD934X_CDC_SIDETONE_IIR_COEFF_MAX 5
@@ -2879,7 +2881,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 				   int asrc_in, int event)
 {
 	struct tavil_priv *tavil = snd_soc_codec_get_drvdata(codec);
-	u16 cfg_reg, ctl_reg, clk_reg, asrc_ctl, mix_ctl_reg;
+	u16 cfg_reg, ctl_reg, clk_reg, asrc_ctl, mix_ctl_reg, paired_reg;
 	int asrc, ret = 0;
 	u8 main_sr, mix_sr, asrc_mode = 0;
 
@@ -2888,6 +2890,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX1_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX1_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC0_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC1_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC0_CTL1;
 		asrc = ASRC0;
 		break;
@@ -2895,6 +2898,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX3_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX3_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC0_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC1_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC0_CTL1;
 		asrc = ASRC0;
 		break;
@@ -2902,6 +2906,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX2_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX2_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC1_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC0_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC1_CTL1;
 		asrc = ASRC1;
 		break;
@@ -2909,6 +2914,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX4_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX4_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC1_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC0_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC1_CTL1;
 		asrc = ASRC1;
 		break;
@@ -2916,6 +2922,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX7_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX7_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC2_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC3_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC2_CTL1;
 		asrc = ASRC2;
 		break;
@@ -2923,6 +2930,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 		cfg_reg = WCD934X_CDC_RX8_RX_PATH_CFG0;
 		ctl_reg = WCD934X_CDC_RX8_RX_PATH_CTL;
 		clk_reg = WCD934X_MIXING_ASRC3_CLK_RST_CTL;
+		paired_reg = WCD934X_MIXING_ASRC2_CLK_RST_CTL;
 		asrc_ctl = WCD934X_MIXING_ASRC3_CTL1;
 		asrc = ASRC3;
 		break;
@@ -2936,6 +2944,13 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		if (tavil->asrc_users[asrc] == 0) {
+			if ((snd_soc_read(codec, clk_reg) & 0x02) ||
+			    (snd_soc_read(codec, paired_reg) & 0x02)) {
+				snd_soc_update_bits(codec, clk_reg,
+						    0x02, 0x00);
+				snd_soc_update_bits(codec, paired_reg,
+						    0x02, 0x00);
+			}
 			snd_soc_update_bits(codec, cfg_reg, 0x80, 0x80);
 			snd_soc_update_bits(codec, clk_reg, 0x01, 0x01);
 			main_sr = snd_soc_read(codec, ctl_reg) & 0x0F;
@@ -2955,7 +2970,7 @@ static int tavil_codec_enable_asrc(struct snd_soc_codec *codec,
 			tavil->asrc_users[asrc] = 0;
 			snd_soc_update_bits(codec, asrc_ctl, 0x07, 0x00);
 			snd_soc_update_bits(codec, cfg_reg, 0x80, 0x00);
-			snd_soc_update_bits(codec, clk_reg, 0x01, 0x00);
+			snd_soc_update_bits(codec, clk_reg, 0x03, 0x02);
 		}
 		break;
 	};
@@ -4001,6 +4016,7 @@ static int tavil_codec_enable_dec(struct snd_soc_dapm_widget *w,
 						    WCD934X_DEC_PWR_LVL_HP);
 				break;
 			case WCD934X_AMIC_PWR_LEVEL_DEFAULT:
+			case WCD934X_AMIC_PWR_LEVEL_HYBRID:
 			default:
 				snd_soc_update_bits(codec, dec_cfg_reg,
 						    WCD934X_DEC_PWR_LVL_MASK,
@@ -5694,7 +5710,7 @@ static const char * const rx_cf_text[] = {
 };
 
 static const char * const amic_pwr_lvl_text[] = {
-	"LOW_PWR", "DEFAULT", "HIGH_PERF"
+	"LOW_PWR", "DEFAULT", "HIGH_PERF", "HYBRID"
 };
 
 static const char * const hph_idle_detect_text[] = {
@@ -9203,13 +9219,13 @@ static int tavil_device_down(struct wcd9xxx *wcd9xxx)
 
 	codec = (struct snd_soc_codec *)(wcd9xxx->ssr_priv);
 	priv = snd_soc_codec_get_drvdata(codec);
+	for (count = 0; count < NUM_CODEC_DAIS; count++)
+		priv->dai[count].bus_down_in_recovery = true;
 	if (priv->swr.ctrl_data)
 		swrm_wcd_notify(priv->swr.ctrl_data[0].swr_pdev,
 				SWR_DEVICE_DOWN, NULL);
 	tavil_dsd_reset(priv->dsd_config);
 	snd_soc_card_change_online_state(codec->component.card, 0);
-	for (count = 0; count < NUM_CODEC_DAIS; count++)
-		priv->dai[count].bus_down_in_recovery = true;
 	wcd_dsp_ssr_event(priv->wdsp_cntl, WCD_CDC_DOWN_EVENT);
 	wcd_resmgr_set_sido_input_src_locked(priv->resmgr,
 					     SIDO_SOURCE_INTERNAL);

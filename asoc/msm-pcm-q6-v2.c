@@ -184,6 +184,11 @@ static void event_handler(uint32_t opcode,
 	case ASM_DATA_EVENT_READ_DONE_V2: {
 		pr_debug("ASM_DATA_EVENT_READ_DONE_V2\n");
 		buf_index = q6asm_get_buf_index_from_token(token);
+		if (buf_index >= CAPTURE_MAX_NUM_PERIODS) {
+			pr_err("%s: buffer index %u is out of range.\n",
+				__func__, buf_index);
+			return;
+		}
 		pr_debug("%s: token=0x%08x buf_index=0x%08x\n",
 			 __func__, token, buf_index);
 		prtd->in_frame_info[buf_index].size = payload[4];
@@ -614,8 +619,15 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *soc_prtd = substream->private_data;
 	struct msm_audio *prtd;
+	struct msm_plat_data *pdata;
 	int ret = 0;
 
+	pdata = (struct msm_plat_data *)
+		dev_get_drvdata(soc_prtd->platform->dev);
+	if (!pdata) {
+		pr_err("%s: platform data not populated\n", __func__);
+		return -EINVAL;
+	}
 	prtd = kzalloc(sizeof(struct msm_audio), GFP_KERNEL);
 	if (prtd == NULL)
 		return -ENOMEM;
@@ -693,6 +705,10 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	prtd->reset_event = false;
 	runtime->private_data = prtd;
 	msm_adsp_init_mixer_ctl_pp_event_queue(soc_prtd);
+	/* Vote to update the Rx thread priority to RT Thread for playback */
+	if ((substream->stream == SNDRV_PCM_STREAM_PLAYBACK) &&
+	    (pdata->perf_mode == LOW_LATENCY_PCM_MODE))
+		apr_start_rx_rt(prtd->audio_client->apr);
 
 	return 0;
 }
@@ -800,6 +816,7 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct snd_soc_pcm_runtime *soc_prtd = substream->private_data;
 	struct msm_audio *prtd = runtime->private_data;
+	struct msm_plat_data *pdata;
 	uint32_t timeout;
 	int dir = 0;
 	int ret = 0;
@@ -809,6 +826,16 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	if (prtd->audio_client) {
 		dir = IN;
 
+		/*
+		 * Unvote to downgrade the Rx thread priority from
+		 * RT Thread for Low-Latency use case.
+		 */
+		pdata = (struct msm_plat_data *)
+			dev_get_drvdata(soc_prtd->platform->dev);
+		if (pdata) {
+			if (pdata->perf_mode == LOW_LATENCY_PCM_MODE)
+				apr_end_rx_rt(prtd->audio_client->apr);
+		}
 		/* determine timeout length */
 		if (runtime->frame_bits == 0 || runtime->rate == 0) {
 			timeout = CMD_EOS_MIN_TIMEOUT_LENGTH;
@@ -1873,7 +1900,7 @@ int __init msm_pcm_dsp_init(void)
 	return platform_driver_register(&msm_pcm_driver);
 }
 
-void __exit msm_pcm_dsp_exit(void)
+void msm_pcm_dsp_exit(void)
 {
 	platform_driver_unregister(&msm_pcm_driver);
 }

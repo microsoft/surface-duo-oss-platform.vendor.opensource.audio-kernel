@@ -30,12 +30,14 @@
 enum {
 	AFE_COMMON_RX_CAL = 0,
 	AFE_COMMON_TX_CAL,
+	AFE_LSM_TX_CAL,
 	AFE_AANC_CAL,
 	AFE_FB_SPKR_PROT_CAL,
 	AFE_HW_DELAY_CAL,
 	AFE_SIDETONE_CAL,
 	AFE_SIDETONE_IIR_CAL,
 	AFE_TOPOLOGY_CAL,
+	AFE_LSM_TOPOLOGY_CAL,
 	AFE_CUST_TOPOLOGY_CAL,
 	AFE_FB_SPKR_PROT_TH_VI_CAL,
 	AFE_FB_SPKR_PROT_EX_VI_CAL,
@@ -1396,14 +1398,15 @@ err_exit:
 	return NULL;
 }
 
-static int afe_get_cal_topology_id(u16 port_id, u32 *topology_id)
+static int afe_get_cal_topology_id(u16 port_id, u32 *topology_id,
+				   int cal_type_index)
 {
 	int ret = 0;
 
 	struct cal_block_data   *cal_block = NULL;
 	struct audio_cal_info_afe_top   *afe_top_info = NULL;
 
-	if (this_afe.cal_data[AFE_TOPOLOGY_CAL] == NULL) {
+	if (this_afe.cal_data[cal_type_index] == NULL) {
 		pr_err("%s: [AFE_TOPOLOGY_CAL] not initialized\n", __func__);
 		return -EINVAL;
 	}
@@ -1413,9 +1416,9 @@ static int afe_get_cal_topology_id(u16 port_id, u32 *topology_id)
 	}
 	*topology_id = 0;
 
-	mutex_lock(&this_afe.cal_data[AFE_TOPOLOGY_CAL]->lock);
+	mutex_lock(&this_afe.cal_data[cal_type_index]->lock);
 	cal_block = afe_find_cal_topo_id_by_port(
-		this_afe.cal_data[AFE_TOPOLOGY_CAL], port_id);
+		this_afe.cal_data[cal_type_index], port_id);
 	if (cal_block == NULL) {
 		pr_err("%s: [AFE_TOPOLOGY_CAL] not initialized for this port %d\n",
 				__func__, port_id);
@@ -1437,7 +1440,7 @@ static int afe_get_cal_topology_id(u16 port_id, u32 *topology_id)
 		__func__, port_id, afe_top_info->acdb_id,
 		afe_top_info->topology, ret);
 unlock:
-	mutex_unlock(&this_afe.cal_data[AFE_TOPOLOGY_CAL]->lock);
+	mutex_unlock(&this_afe.cal_data[cal_type_index]->lock);
 	return ret;
 }
 
@@ -1455,7 +1458,12 @@ static int afe_send_port_topology_id(u16 port_id)
 		return -EINVAL;
 	}
 
-	ret = afe_get_cal_topology_id(port_id, &topology_id);
+	ret = afe_get_cal_topology_id(port_id, &topology_id, AFE_TOPOLOGY_CAL);
+	if (ret < 0) {
+		pr_debug("%s: Check for LSM topology\n", __func__);
+		ret = afe_get_cal_topology_id(port_id, &topology_id,
+					      AFE_LSM_TOPOLOGY_CAL);
+	}
 	if (ret || !topology_id) {
 		pr_debug("%s: AFE port[%d] get_cal_topology[%d] invalid!\n",
 				__func__, port_id, topology_id);
@@ -1572,7 +1580,7 @@ exit:
 	return cal_block;
 }
 
-static void send_afe_cal_type(int cal_index, int port_id)
+static int send_afe_cal_type(int cal_index, int port_id)
 {
 	struct cal_block_data		*cal_block = NULL;
 	int ret;
@@ -1583,19 +1591,22 @@ static void send_afe_cal_type(int cal_index, int port_id)
 	if (this_afe.cal_data[cal_index] == NULL) {
 		pr_warn("%s: cal_index %d not allocated!\n",
 			__func__, cal_index);
+		ret = -EINVAL;
 		goto done;
 	}
 
 	if (afe_port_index < 0) {
 		pr_err("%s: Error getting AFE port index %d\n",
 			__func__, afe_port_index);
+		ret = -EINVAL;
 		goto done;
 	}
 
 	mutex_lock(&this_afe.cal_data[cal_index]->lock);
 
 	if (((cal_index == AFE_COMMON_RX_CAL) ||
-	     (cal_index == AFE_COMMON_TX_CAL)) &&
+	     (cal_index == AFE_COMMON_TX_CAL) ||
+	     (cal_index == AFE_LSM_TX_CAL)) &&
 	    (this_afe.dev_acdb_id[afe_port_index] > 0))
 		cal_block = afe_find_cal(cal_index, port_id);
 	else
@@ -1604,6 +1615,7 @@ static void send_afe_cal_type(int cal_index, int port_id)
 
 	if (cal_block == NULL) {
 		pr_err("%s cal_block not found!!\n", __func__);
+		ret = -EINVAL;
 		goto unlock;
 	}
 
@@ -1613,6 +1625,7 @@ static void send_afe_cal_type(int cal_index, int port_id)
 	if (ret) {
 		pr_err("%s: Remap_cal_data failed for cal %d!\n",
 			__func__, cal_index);
+		ret = -EINVAL;
 		goto unlock;
 	}
 	ret = afe_send_cal_block(port_id, cal_block);
@@ -1622,19 +1635,23 @@ static void send_afe_cal_type(int cal_index, int port_id)
 unlock:
 	mutex_unlock(&this_afe.cal_data[cal_index]->lock);
 done:
-	return;
+	return ret;
 }
 
 void afe_send_cal(u16 port_id)
 {
+	int ret;
+
 	pr_debug("%s: port_id=0x%x\n", __func__, port_id);
 
 	if (afe_get_port_type(port_id) == MSM_AFE_PORT_TYPE_TX) {
 		afe_send_cal_spkr_prot_tx(port_id);
-		send_afe_cal_type(AFE_COMMON_TX_CAL, port_id);
+		ret = send_afe_cal_type(AFE_COMMON_TX_CAL, port_id);
+		if (ret < 0)
+			send_afe_cal_type(AFE_LSM_TX_CAL, port_id);
 	} else if (afe_get_port_type(port_id) == MSM_AFE_PORT_TYPE_RX) {
-		afe_send_cal_spkr_prot_rx(port_id);
 		send_afe_cal_type(AFE_COMMON_RX_CAL, port_id);
+		afe_send_cal_spkr_prot_rx(port_id);
 	}
 }
 
@@ -2961,7 +2978,8 @@ exit:
 static int q6afe_send_enc_config(u16 port_id,
 				 union afe_enc_config_data *cfg, u32 format,
 				 union afe_port_config afe_config,
-				 u16 afe_in_channels, u16 afe_in_bit_width)
+				 u16 afe_in_channels, u16 afe_in_bit_width,
+				 u32 scrambler_mode)
 {
 	struct afe_audioif_config_command config;
 	int index;
@@ -2972,7 +2990,7 @@ static int q6afe_send_enc_config(u16 port_id,
 	pr_debug("%s:update DSP for enc format = %d\n", __func__, format);
 	if (format != ASM_MEDIA_FMT_SBC && format != ASM_MEDIA_FMT_AAC_V2 &&
 	    format != ASM_MEDIA_FMT_APTX && format != ASM_MEDIA_FMT_APTX_HD &&
-	    format != ASM_MEDIA_FMT_CELT) {
+	    format != ASM_MEDIA_FMT_CELT && format != ASM_MEDIA_FMT_LDAC) {
 		pr_err("%s:Unsuppported format Ignore AFE config\n", __func__);
 		return 0;
 	}
@@ -3059,6 +3077,20 @@ static int q6afe_send_enc_config(u16 port_id,
 	}
 
 	config.param.payload_size =
+		payload_size + sizeof(config.port.enc_set_scrambler_param);
+	pr_debug("%s:sending AFE_ENCODER_PARAM_ID_ENABLE_SCRAMBLING mode= %d to DSP payload = %d\n",
+		  __func__, scrambler_mode, config.param.payload_size);
+	config.pdata.param_id = AFE_ENCODER_PARAM_ID_ENABLE_SCRAMBLING;
+	config.pdata.param_size = sizeof(config.port.enc_set_scrambler_param);
+	config.port.enc_set_scrambler_param.enable_scrambler = scrambler_mode;
+	ret = afe_apr_send_pkt(&config, &this_afe.wait[index]);
+	if (ret) {
+		pr_err("%s: AFE_ENCODER_PARAM_ID_ENABLE_SCRAMBLING for port 0x%x failed %d\n",
+			__func__, port_id, ret);
+		goto exit;
+	}
+
+	config.param.payload_size =
 			payload_size + sizeof(config.port.media_type);
 	config.pdata.param_size = sizeof(config.port.media_type);
 
@@ -3066,7 +3098,15 @@ static int q6afe_send_enc_config(u16 port_id,
 	config.pdata.module_id = AFE_MODULE_PORT;
 	config.pdata.param_id = AFE_PARAM_ID_PORT_MEDIA_TYPE;
 	config.port.media_type.minor_version = AFE_API_VERSION_PORT_MEDIA_TYPE;
-	config.port.media_type.sample_rate = afe_config.slim_sch.sample_rate;
+	if (format == ASM_MEDIA_FMT_LDAC) {
+		config.port.media_type.sample_rate =
+			config.port.enc_blk_param.enc_blk_config.ldac_config.
+				custom_config.sample_rate;
+	} else {
+		config.port.media_type.sample_rate =
+			afe_config.slim_sch.sample_rate;
+	}
+
 	if (afe_in_bit_width)
 		config.port.media_type.bit_width = afe_in_bit_width;
 	else
@@ -3094,7 +3134,8 @@ exit:
 
 static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 			    u32 rate, u16 afe_in_channels, u16 afe_in_bit_width,
-			    union afe_enc_config_data *cfg, u32 enc_format)
+			    union afe_enc_config_data *cfg, u32 enc_format,
+			    u32 scrambler_mode)
 {
 	struct afe_audioif_config_command config;
 	int ret = 0;
@@ -3357,7 +3398,8 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 					__func__, enc_format);
 		ret = q6afe_send_enc_config(port_id, cfg, enc_format,
 					    *afe_config, afe_in_channels,
-					    afe_in_bit_width);
+					    afe_in_bit_width,
+					    scrambler_mode);
 		if (ret) {
 			pr_err("%s: AFE encoder config for port 0x%x failed %d\n",
 				__func__, port_id, ret);
@@ -3410,7 +3452,7 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		   u32 rate)
 {
 	return __afe_port_start(port_id, afe_config, rate,
-				0, 0, NULL, ASM_MEDIA_FMT_NONE);
+				0, 0, NULL, ASM_MEDIA_FMT_NONE, 0);
 }
 EXPORT_SYMBOL(afe_port_start);
 
@@ -3433,7 +3475,8 @@ int afe_port_start_v2(u16 port_id, union afe_port_config *afe_config,
 {
 	return __afe_port_start(port_id, afe_config, rate,
 				afe_in_channels, afe_in_bit_width,
-				&enc_cfg->data, enc_cfg->format);
+				&enc_cfg->data, enc_cfg->format,
+				enc_cfg->scrambler_mode);
 }
 EXPORT_SYMBOL(afe_port_start_v2);
 
@@ -6888,6 +6931,9 @@ static int get_cal_type_index(int32_t cal_type)
 	case AFE_COMMON_TX_CAL_TYPE:
 		ret = AFE_COMMON_TX_CAL;
 		break;
+	case AFE_LSM_TX_CAL_TYPE:
+		ret = AFE_LSM_TX_CAL;
+		break;
 	case AFE_AANC_CAL_TYPE:
 		ret = AFE_AANC_CAL;
 		break;
@@ -6905,6 +6951,9 @@ static int get_cal_type_index(int32_t cal_type)
 		break;
 	case AFE_TOPOLOGY_CAL_TYPE:
 		ret = AFE_TOPOLOGY_CAL;
+		break;
+	case AFE_LSM_TOPOLOGY_CAL_TYPE:
+		ret = AFE_LSM_TOPOLOGY_CAL;
 		break;
 	case AFE_CUST_TOPOLOGY_CAL_TYPE:
 		ret = AFE_CUST_TOPOLOGY_CAL;
@@ -7408,6 +7457,12 @@ static int afe_init_cal_data(void)
 		{afe_map_cal_data, afe_unmap_cal_data,
 		cal_utils_match_buf_num} },
 
+		{{AFE_LSM_TX_CAL_TYPE,
+		{afe_alloc_cal, afe_dealloc_cal, NULL,
+		afe_set_cal, NULL, NULL} },
+		{afe_map_cal_data, afe_unmap_cal_data,
+		cal_utils_match_buf_num} },
+
 		{{AFE_AANC_CAL_TYPE,
 		{afe_alloc_cal, afe_dealloc_cal, NULL,
 		afe_set_cal, NULL, NULL} },
@@ -7435,6 +7490,12 @@ static int afe_init_cal_data(void)
 		{NULL, NULL, cal_utils_match_buf_num} },
 
 		{{AFE_TOPOLOGY_CAL_TYPE,
+		{NULL, NULL, NULL,
+		afe_set_cal, NULL, NULL} },
+		{NULL, NULL,
+		cal_utils_match_buf_num} },
+
+		{{AFE_LSM_TOPOLOGY_CAL_TYPE,
 		{NULL, NULL, NULL,
 		afe_set_cal, NULL, NULL} },
 		{NULL, NULL,
@@ -7576,7 +7637,7 @@ int __init afe_init(void)
 	return 0;
 }
 
-void __exit afe_exit(void)
+void afe_exit(void)
 {
 	afe_delete_cal_data();
 
