@@ -57,7 +57,7 @@
 
 static struct mutex routing_lock;
 
-static struct cal_type_data *cal_data;
+static struct cal_type_data *cal_data[MAX_ROUTING_CAL_TYPES];
 
 static int fm_switch_enable;
 static int hfp_switch_enable;
@@ -883,21 +883,21 @@ done:
 }
 EXPORT_SYMBOL(msm_pcm_routing_get_stream_app_type_cfg);
 
-static struct cal_block_data *msm_routing_find_topology_by_path(int path)
+static struct cal_block_data *msm_routing_find_topology_by_path(int path,
+								int cal_index)
 {
-	struct list_head *ptr, *next;
-	struct cal_block_data *cal_block = NULL;
-
+	struct list_head		*ptr, *next;
+	struct cal_block_data		*cal_block = NULL;
 	pr_debug("%s\n", __func__);
 
 	list_for_each_safe(ptr, next,
-		&cal_data->cal_blocks) {
+		&cal_data[cal_index]->cal_blocks) {
 
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 
-		if (((struct audio_cal_info_adm_top *)cal_block->cal_info)
-			->path == path) {
+		if (((struct audio_cal_info_adm_top *)cal_block
+			->cal_info)->path == path) {
 			return cal_block;
 		}
 	}
@@ -907,7 +907,8 @@ static struct cal_block_data *msm_routing_find_topology_by_path(int path)
 
 static struct cal_block_data *msm_routing_find_topology(int path,
 							int app_type,
-							int acdb_id)
+							int acdb_id,
+							int cal_index)
 {
 	struct list_head *ptr, *next;
 	struct cal_block_data *cal_block = NULL;
@@ -916,7 +917,7 @@ static struct cal_block_data *msm_routing_find_topology(int path,
 	pr_debug("%s\n", __func__);
 
 	list_for_each_safe(ptr, next,
-		&cal_data->cal_blocks) {
+		&cal_data[cal_index]->cal_blocks) {
 
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
@@ -931,7 +932,7 @@ static struct cal_block_data *msm_routing_find_topology(int path,
 	}
 	pr_debug("%s: Can't find topology for path %d, app %d, acdb_id %d defaulting to search by path\n",
 		__func__, path, app_type, acdb_id);
-	return msm_routing_find_topology_by_path(path);
+	return msm_routing_find_topology_by_path(cal_index, path);
 }
 
 static int msm_routing_get_adm_topology(int fedai_id, int session_type,
@@ -941,28 +942,37 @@ static int msm_routing_get_adm_topology(int fedai_id, int session_type,
 	struct cal_block_data *cal_block = NULL;
 	int app_type = 0, acdb_dev_id = 0;
 
-
 	pr_debug("%s: fedai_id %d, session_type %d, be_id %d\n",
 	       __func__, fedai_id, session_type, be_id);
 
 	if (cal_data == NULL)
 		goto done;
 
-	mutex_lock(&cal_data->lock);
-
 	app_type = fe_dai_app_type_cfg[fedai_id][session_type][be_id].app_type;
 	acdb_dev_id =
 		fe_dai_app_type_cfg[fedai_id][session_type][be_id].acdb_dev_id;
 
+	mutex_lock(&cal_data[ADM_TOPOLOGY_CAL_TYPE_IDX]->lock);
 	cal_block = msm_routing_find_topology(session_type, app_type,
-					      acdb_dev_id);
-	if (cal_block == NULL)
-		goto unlock;
+					      acdb_dev_id,
+					      ADM_TOPOLOGY_CAL_TYPE_IDX);
+	if (cal_block != NULL)
+		topology = ((struct audio_cal_info_adm_top *)
+			cal_block->cal_info)->topology;
+	mutex_unlock(&cal_data[ADM_TOPOLOGY_CAL_TYPE_IDX]->lock);
 
-	topology = ((struct audio_cal_info_adm_top *)
-		cal_block->cal_info)->topology;
-unlock:
-	mutex_unlock(&cal_data->lock);
+	if (cal_block == NULL) {
+		pr_debug("%s: Check for LSM topology\n", __func__);
+		mutex_lock(&cal_data[ADM_LSM_TOPOLOGY_CAL_TYPE_IDX]->lock);
+		cal_block = msm_routing_find_topology(session_type, app_type,
+						acdb_dev_id,
+						ADM_LSM_TOPOLOGY_CAL_TYPE_IDX);
+		if (cal_block != NULL)
+			topology = ((struct audio_cal_info_adm_top *)
+				cal_block->cal_info)->topology;
+		mutex_unlock(&cal_data[ADM_LSM_TOPOLOGY_CAL_TYPE_IDX]->lock);
+	}
+
 done:
 	pr_debug("%s: Using topology %d\n", __func__, topology);
 	return topology;
@@ -2562,6 +2572,7 @@ static int msm_routing_lsm_func_put(struct snd_kcontrol *kcontrol,
 
 	pr_debug("%s: port_id 0x%x, mad_type %d\n", __func__, port_id,
 		 mad_type);
+	adm_set_lsm_port_id(port_id);
 	return afe_port_set_mad_type(port_id, mad_type);
 }
 
@@ -12700,7 +12711,15 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 			     0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("INT0_MI2S_RX", "INT0 MI2S Playback",
 			     0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("INT2_MI2S_RX", "INT2 MI2S Playback",
+			     0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("INT3_MI2S_RX", "INT3 MI2S Playback",
+			     0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("INT5_MI2S_RX", "INT5 MI2S Playback",
+			     0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("INT4_MI2S_RX", "INT4 MI2S Playback",
+			     0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("INT4_MI2S_TX", "INT4 MI2S Capture",
 			     0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("QUIN_MI2S_RX", "Quinary MI2S Playback",
 						0, 0, 0, 0),
@@ -12712,6 +12731,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 			    0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("TERT_MI2S_TX", "Tertiary MI2S Capture",
 						0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("INT0_MI2S_TX", "INT0 MI2S Capture",
+			     0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("INT2_MI2S_TX", "INT2 MI2S Capture",
 						0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("INT3_MI2S_TX", "INT3 MI2S Capture",
@@ -15108,6 +15129,16 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"AUDIO_REF_EC_UL19 MUX", "TERT_MI2S_TX", "TERT_MI2S_TX"},
 	{"AUDIO_REF_EC_UL19 MUX", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
 
+
+	{"LSM1_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM2_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM3_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM4_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM5_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM6_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM7_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+	{"LSM8_UL_HL", NULL, "AUDIO_REF_EC_UL1 MUX"},
+
 	{"MM_UL1", NULL, "AUDIO_REF_EC_UL1 MUX"},
 	{"MM_UL2", NULL, "AUDIO_REF_EC_UL2 MUX"},
 	{"MM_UL3", NULL, "AUDIO_REF_EC_UL3 MUX"},
@@ -16084,6 +16115,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"BE_OUT", NULL, "PRI_MI2S_RX"},
 	{"BE_OUT", NULL, "INT0_MI2S_RX"},
 	{"BE_OUT", NULL, "INT4_MI2S_RX"},
+	{"BE_OUT", NULL, "INT2_MI2S_RX"},
+	{"BE_OUT", NULL, "INT3_MI2S_RX"},
+	{"BE_OUT", NULL, "INT5_MI2S_RX"},
 	{"BE_OUT", NULL, "INT_BT_SCO_RX"},
 	{"BE_OUT", NULL, "INT_BT_A2DP_RX"},
 	{"BE_OUT", NULL, "INT_FM_RX"},
@@ -16128,8 +16162,10 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUIN_MI2S_TX", NULL, "BE_IN"},
 	{"PRI_MI2S_TX", NULL, "BE_IN"},
 	{"TERT_MI2S_TX", NULL, "BE_IN"},
+	{"INT0_MI2S_TX", NULL, "BE_IN"},
 	{"INT2_MI2S_TX", NULL, "BE_IN"},
 	{"INT3_MI2S_TX", NULL, "BE_IN"},
+	{"INT4_MI2S_TX", NULL, "BE_IN"},
 	{"INT5_MI2S_TX", NULL, "BE_IN"},
 	{"SEC_MI2S_TX", NULL, "BE_IN"},
 	{"SENARY_MI2S_TX", NULL, "BE_IN" },
@@ -16926,14 +16962,39 @@ int msm_routing_check_backend_enabled(int fedai_id)
 	return 0;
 }
 
+static int get_cal_type_index(int32_t cal_type)
+{
+	int ret = -EINVAL;
+
+	switch (cal_type) {
+	case ADM_TOPOLOGY_CAL_TYPE:
+		ret = ADM_TOPOLOGY_CAL_TYPE_IDX;
+		break;
+	case ADM_LSM_TOPOLOGY_CAL_TYPE:
+		ret = ADM_LSM_TOPOLOGY_CAL_TYPE_IDX;
+		break;
+	default:
+		pr_err("%s: Invalid cal type %d\n", __func__, cal_type);
+	}
+	return ret;
+}
+
 static int msm_routing_set_cal(int32_t cal_type,
 					size_t data_size, void *data)
 {
 	int ret = 0;
-
+	int cal_index;
 	pr_debug("%s\n", __func__);
 
-	ret = cal_utils_set_cal(data_size, data, cal_data, 0, NULL);
+	cal_index = get_cal_type_index(cal_type);
+	if (cal_index < 0) {
+		pr_err("%s: Could not get cal index %d\n",
+			__func__, cal_index);
+		ret = -EINVAL;
+		goto done;
+	}
+
+	ret = cal_utils_set_cal(data_size, data, cal_data[cal_index], 0, NULL);
 	if (ret < 0) {
 		pr_err("%s: cal_utils_set_cal failed, ret = %d, cal type = %d!\n",
 			__func__, ret, cal_type);
@@ -16948,22 +17009,27 @@ static void msm_routing_delete_cal_data(void)
 {
 	pr_debug("%s\n", __func__);
 
-	cal_utils_destroy_cal_types(1, &cal_data);
+	cal_utils_destroy_cal_types(MAX_ROUTING_CAL_TYPES, &cal_data[0]);
 }
 
 static int msm_routing_init_cal_data(void)
 {
 	int ret = 0;
-	struct cal_type_info cal_type_info = {
-		{ADM_TOPOLOGY_CAL_TYPE,
+	struct cal_type_info cal_type_info[] = {
+		{{ADM_TOPOLOGY_CAL_TYPE,
 		{NULL, NULL, NULL,
 		msm_routing_set_cal, NULL, NULL} },
-		{NULL, NULL, cal_utils_match_buf_num}
+		{NULL, NULL, cal_utils_match_buf_num} },
+
+		{{ADM_LSM_TOPOLOGY_CAL_TYPE,
+		{NULL, NULL, NULL,
+		msm_routing_set_cal, NULL, NULL} },
+		{NULL, NULL, cal_utils_match_buf_num} },
 	};
 	pr_debug("%s\n", __func__);
 
-	ret = cal_utils_create_cal_types(1, &cal_data,
-		&cal_type_info);
+	ret = cal_utils_create_cal_types(MAX_ROUTING_CAL_TYPES, &cal_data[0],
+		&cal_type_info[0]);
 	if (ret < 0) {
 		pr_err("%s: could not create cal type!\n",
 			__func__);
