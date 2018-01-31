@@ -236,13 +236,14 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 			 __func__);
 		payload1 = data->payload;
 		ret = parse_fwk_version_info(payload1);
-		if (ret < 0)
+		if (ret < 0) {
+			q6core_lcl.adsp_status = ret;
 			pr_err("%s: Failed to parse payload:%d\n",
 			       __func__, ret);
-		else
+		} else {
 			q6core_lcl.q6core_avcs_ver_info.status =
 						VER_QUERY_SUPPORTED;
-
+		}
 		q6core_lcl.avcs_fwk_ver_resp_received = 1;
 		wake_up(&q6core_lcl.avcs_fwk_ver_req_wait);
 		break;
