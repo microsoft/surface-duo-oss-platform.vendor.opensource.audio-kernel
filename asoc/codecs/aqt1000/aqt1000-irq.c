@@ -50,8 +50,10 @@ static const struct regmap_irq_chip aqt_regmap_irq_chip = {
 	.num_regs = 2,
 	.status_base = AQT1000_INTR_CTRL_INT_STATUS_2,
 	.mask_base = AQT1000_INTR_CTRL_INT_MASK_2,
-	.unmask_base = AQT1000_INTR_CTRL_INT_CLEAR_2,
 	.ack_base = AQT1000_INTR_CTRL_INT_STATUS_2,
+	.wake_base = AQT1000_INTR_CTRL_INT_MASK_2,
+	.wake_invert = true,
+	.type_base = AQT1000_INTR_CTRL_INT_TYPE_2,
 	.runtime_pm = true,
 };
 
@@ -140,8 +142,10 @@ static irqreturn_t aqt_irq_thread(int irq, void *data)
 		dev_err(aqt->dev, "%s: Failed to read intr status: %d\n",
 			__func__, ret);
 	} else if (ret == 0) {
-		while (gpio_get_value_cansleep(pdata->irq_gpio))
-			handle_nested_irq(irq_find_mapping(aqt->virq, 0));
+		handle_nested_irq(irq_find_mapping(aqt->virq, 0));
+		/*Clear the interrupts after processing */
+		regmap_write(aqt->regmap, AQT1000_INTR_CTRL_INT_CLEAR_2, sts[0]);
+		regmap_write(aqt->regmap, AQT1000_INTR_CTRL_INT_CLEAR_3, sts[1]);
 	}
 
 	return IRQ_HANDLED;
@@ -263,7 +267,7 @@ int aqt_irq_init(struct aqt1000 *aqt)
 	return 0;
 
 err_irq:
-	regmap_del_irq_chip(irq_create_mapping(aqt->virq, 1), aqt->irq_chip);
+	regmap_del_irq_chip(irq_create_mapping(aqt->virq, 0), aqt->irq_chip);
 err:
 	return ret;
 }
@@ -281,7 +285,7 @@ int aqt_irq_exit(struct aqt1000 *aqt)
 		pr_err("%s: Null pointer handle\n", __func__);
 		return -EINVAL;
 	}
-	regmap_del_irq_chip(irq_create_mapping(aqt->virq, 1), aqt->irq_chip);
+	regmap_del_irq_chip(irq_create_mapping(aqt->virq, 0), aqt->irq_chip);
 	free_irq(aqt->irq, aqt);
 
 	return 0;

@@ -18,9 +18,9 @@ const struct snd_soc_dapm_route aqt_audio_map[] = {
 
 	/* CDC Tx interface */
 
-	{"AQT AIF1 CAP", NULL, "AQT AIF1 CAP Mixer"},
-	{"AQT AIF1 CAP Mixer", "TX0", "AQT TX0_MUX"},
-	{"AQT AIF1 CAP Mixer", "TX1", "AQT TX1_MUX"},
+	{"AQT AIF1 CAP", NULL, "AQT AIF1_CAP MUX"},
+	{"AQT AIF1_CAP MUX", "TX0", "AQT TX0_MUX"},
+	{"AQT AIF1_CAP MUX", "TX1", "AQT TX1_MUX"},
 
 	{"AQT TX0_MUX", "DEC_L", "AQT ADC0 MUX"},
 	{"AQT TX0_MUX", "DEC_R", "AQT ADC1 MUX"},
@@ -30,21 +30,17 @@ const struct snd_soc_dapm_route aqt_audio_map[] = {
 	{"AQT TX1_MUX", "DEC_R", "AQT ADC1 MUX"},
 	{"AQT TX1_MUX", "DEC_V", "AQT ADC2 MUX"},
 
-	{"AQT ADC0 MUX", "AMIC", "AQT AMIC0_MUX"},
-	{"AQT ADC0 MUX", "ANC_FB0", "AQT ANC_FB_TUNE0"},
-	{"AQT ADC0 MUX", "ANC_FB1", "AQT ANC_FB_TUNE1"},
+	{"AQT ADC0 MUX", "AMIC", "AQT AMIC1_MUX"},
+	{"AQT ADC0 MUX", "ANC_FB0", "AQT ADC10 MUX"},
+	{"AQT ADC0 MUX", "ANC_FB1", "AQT ADC11 MUX"},
 
-	{"AQT ADC1 MUX", "AMIC", "AQT AMIC1_MUX"},
-	{"AQT ADC1 MUX", "ANC_FB0", "AQT ANC_FB_TUNE0"},
-	{"AQT ADC1 MUX", "ANC_FB1", "AQT ANC_FB_TUNE1"},
+	{"AQT ADC1 MUX", "AMIC", "AQT AMIC2_MUX"},
+	{"AQT ADC1 MUX", "ANC_FB0", "AQT ADC10 MUX"},
+	{"AQT ADC1 MUX", "ANC_FB1", "AQT ADC11 MUX"},
 
-	{"AQT ADC2 MUX", "AMIC", "AQT AMIC2_MUX"},
-	{"AQT ADC2 MUX", "ANC_FB0", "AQT ANC_FB_TUNE0"},
-	{"AQT ADC2 MUX", "ANC_FB1", "AQT ANC_FB_TUNE1"},
-
-	{"AQT AMIC0_MUX", "ADC_L", "AQT ADC_L"},
-	{"AQT AMIC0_MUX", "ADC_R", "AQT ADC_R"},
-	{"AQT AMIC0_MUX", "ADC_V", "AQT ADC_V"},
+	{"AQT ADC2 MUX", "AMIC", "AQT AMIC3_MUX"},
+	{"AQT ADC2 MUX", "ANC_FB0", "AQT ADC10 MUX"},
+	{"AQT ADC2 MUX", "ANC_FB1", "AQT ADC11 MUX"},
 
 	{"AQT AMIC1_MUX", "ADC_L", "AQT ADC_L"},
 	{"AQT AMIC1_MUX", "ADC_R", "AQT ADC_R"},
@@ -54,9 +50,16 @@ const struct snd_soc_dapm_route aqt_audio_map[] = {
 	{"AQT AMIC2_MUX", "ADC_R", "AQT ADC_R"},
 	{"AQT AMIC2_MUX", "ADC_V", "AQT ADC_V"},
 
+	{"AQT AMIC3_MUX", "ADC_L", "AQT ADC_L"},
+	{"AQT AMIC3_MUX", "ADC_R", "AQT ADC_R"},
+	{"AQT AMIC3_MUX", "ADC_V", "AQT ADC_V"},
+
 	{"AQT ADC_L", NULL, "AQT AMIC1"},
 	{"AQT ADC_R", NULL, "AQT AMIC2"},
 	{"AQT ADC_V", NULL, "AQT AMIC3"},
+
+	{"AQT ADC10 MUX", "AMIC", "AQT AMIC10_MUX"},
+	{"AQT ADC11 MUX", "AMIC", "AQT AMIC11_MUX"},
 
 	{"AQT AMIC10_MUX", "ADC_L", "AQT ADC_L"},
 	{"AQT AMIC10_MUX", "ADC_R", "AQT ADC_R"},
@@ -122,7 +125,7 @@ const struct snd_soc_dapm_route aqt_audio_map[] = {
 	{"AQT RX INT1 MIX1", NULL, "AQT RX INT1_2 INTERP"},
 
 	{"AQT ASRC0 MUX", "ASRC_IN_HPHL", "AQT RX INT1_2 INTERP"},
-	{"AQT RX INT1 MIX1", "HPHL Switch", "AQT ASRC0 MUX"},
+	{"AQT RX INT1 MIX1", "AQT HPHL Switch", "AQT ASRC0 MUX"},
 
 	{"AQT RX INT2_1 INTERP", NULL, "AQT RX INT2_1 MUX"},
 	{"AQT RX INT2 MIX1", NULL, "AQT RX INT2_1 INTERP"},
@@ -132,13 +135,16 @@ const struct snd_soc_dapm_route aqt_audio_map[] = {
 	{"AQT RX INT2 MIX1", NULL, "AQT RX INT2_2 INTERP"},
 
 	{"AQT ASRC1 MUX", "ASRC_IN_HPHR", "AQT RX INT2_2 INTERP"},
-	{"AQT RX INT2 MIX1", "HPHR Switch", "AQT ASRC1 MUX"},
+	{"AQT RX INT2 MIX1", "AQT HPHR Switch", "AQT ASRC1 MUX"},
 
 	{"AQT RX INT1 DEM MUX", "CLSH_DSM_OUT", "AQT RX INT1 MIX2"},
 	{"AQT RX INT1 DAC", NULL, "AQT RX INT1 DEM MUX"},
 	{"AQT RX INT1 DAC", NULL, "AQT RX_BIAS"},
 	{"AQT RX_BIAS", NULL, "AQT MCLK"},
 	{"AQT MIC BIAS1", NULL, "AQT MCLK"},
+	{"AQT AMIC1", NULL, "AQT MIC BIAS1"},
+	{"AQT AMIC2", NULL, "AQT MIC BIAS1"},
+	{"AQT AMIC3", NULL, "AQT MIC BIAS1"},
 	{"AQT HPHL PA", NULL, "AQT RX INT1 DAC"},
 	{"AQT HPHL", NULL, "AQT HPHL PA"},
 
