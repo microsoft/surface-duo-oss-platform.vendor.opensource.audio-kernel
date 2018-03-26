@@ -1291,33 +1291,49 @@ static int swrm_get_logical_dev_num(struct swr_master *mstr, u64 dev_id,
 	u64 id = 0;
 	int ret = -EINVAL;
 	struct swr_mstr_ctrl *swrm = swr_get_ctrl_data(mstr);
+	struct swr_device *swr_dev;
+	u32 num_dev = 0;
 
 	if (!swrm) {
 		pr_err("%s: Invalid handle to swr controller\n",
 			__func__);
 		return ret;
 	}
+	if (swrm->num_dev)
+		num_dev = swrm->num_dev;
+	else
+		num_dev = mstr->num_dev;
 
 	pm_runtime_get_sync(&swrm->pdev->dev);
-	for (i = 1; i < (mstr->num_dev + 1); i++) {
+	for (i = 1; i < (num_dev + 1); i++) {
 		id = ((u64)(swrm->read(swrm->handle,
 			    SWRM_ENUMERATOR_SLAVE_DEV_ID_2(i))) << 32);
 		id |= swrm->read(swrm->handle,
 			    SWRM_ENUMERATOR_SLAVE_DEV_ID_1(i));
-		if ((id & SWR_DEV_ID_MASK) == dev_id) {
-			if (swrm_get_device_status(swrm, i) == 0x01) {
-				*dev_num = i;
-				ret = 0;
-			} else {
-				dev_err(swrm->dev, "%s: device is not ready\n",
-					 __func__);
+		/*
+		 * As pm_runtime_get_sync() brings all slaves out of reset
+		 * update logical device number for all slaves.
+		 */
+		list_for_each_entry(swr_dev, &mstr->devices, dev_list) {
+			if (swr_dev->addr == (id & SWR_DEV_ID_MASK)) {
+				u32 status = swrm_get_device_status(swrm, i);
+
+				if ((status == 0x01) || (status == 0x02)) {
+					swr_dev->dev_num = i;
+					if ((id & SWR_DEV_ID_MASK) == dev_id) {
+						*dev_num = i;
+						ret = 0;
+					}
+					dev_dbg(swrm->dev, "%s: devnum %d is assigned for dev addr %lx\n",
+						__func__, i, swr_dev->addr);
+				}
 			}
-			goto found;
 		}
 	}
-	dev_err(swrm->dev, "%s: device id 0x%llx does not match with 0x%llx\n",
-		__func__, id, dev_id);
-found:
+	if (ret)
+		dev_err(swrm->dev, "%s: device 0x%llx is not ready\n",
+			__func__, dev_id);
+
 	pm_runtime_mark_last_busy(&swrm->pdev->dev);
 	pm_runtime_put_autosuspend(&swrm->pdev->dev);
 	return ret;
@@ -1466,6 +1482,19 @@ static int swrm_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&swrm->mport_list);
 	mutex_init(&swrm->reslock);
 
+	ret = of_property_read_u32(swrm->dev->of_node, "qcom,swr-num-dev",
+				   &swrm->num_dev);
+	if (ret)
+		dev_dbg(&pdev->dev, "%s: Looking up %s property failed\n",
+			__func__, "qcom,swr-num-dev");
+	else {
+		if (swrm->num_dev > SWR_MAX_SLAVE_DEVICES) {
+			dev_err(&pdev->dev, "%s: num_dev %d > max limit %d\n",
+				__func__, swrm->num_dev, SWR_MAX_SLAVE_DEVICES);
+			ret = -EINVAL;
+			goto err_pdata_fail;
+		}
+	}
 	ret = swrm->reg_irq(swrm->handle, swr_mstr_interrupt, swrm,
 			    SWR_IRQ_REGISTER);
 	if (ret) {

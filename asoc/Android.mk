@@ -13,14 +13,15 @@ TARGET := sdm670
 AUDIO_SELECT  := CONFIG_SND_SOC_SDM670=m
 endif
 
-ifeq ($(call is-board-platform-in-list,msm8953),true)
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937),true)
 TARGET := sdm450
-AUDIO_SELECT  := CONFIG_SND_SOC_SDM450=m
+AUDIO_SELECT  += CONFIG_SND_SOC_SDM450=m
+AUDIO_SELECT  += CONFIG_SND_SOC_EXT_CODEC_SDM450=m
 endif
 
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605),true)
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937 sdm845 sdm670 qcs605),true)
 
 LOCAL_PATH := $(call my-dir)
 
@@ -55,6 +56,16 @@ LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
+ifeq ($(call is-board-platform-in-list,msm8953 sdm670 qcs605),true)
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_cpe_lsm.ko
+LOCAL_MODULE_KBUILD_NAME  := cpe_lsm_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
+###########################################################
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_machine_$(TARGET).ko
 LOCAL_MODULE_KBUILD_NAME  := machine_dlkm.ko
@@ -62,6 +73,16 @@ LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
+###########################################################
+ifeq ($(call is-board-platform-in-list,msm8953),true)
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_machine_ext_$(TARGET).ko
+LOCAL_MODULE_KBUILD_NAME  := machine_ext_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
 ###########################################################
 
 endif # DLKM check
