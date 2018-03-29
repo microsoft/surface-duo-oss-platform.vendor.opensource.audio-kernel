@@ -1040,6 +1040,7 @@ static int msm_int_dig_mclk0_event(struct snd_soc_dapm_widget *w,
 			__func__, atomic_read(&pdata->int_mclk0_rsc_ref));
 		if (atomic_read(&pdata->int_mclk0_rsc_ref) == 0) {
 			pr_debug("%s: disabling MCLK\n", __func__);
+			msm_digcdc_mclk_enable(codec, 0, true);
 			msm_int_enable_dig_cdc_clk(codec, 0, true);
 		}
 		break;
@@ -1256,6 +1257,8 @@ static int msm_int_dig_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		pr_err("failed to enable mclk\n");
 		return ret;
 	}
+	/* Enable the codec mclk config */
+	msm_digcdc_mclk_enable(codec, 1, true);
 	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBS_CFS);
 	if (ret < 0)
 		pr_err("%s: set fmt cpu dai failed; ret=%d\n", __func__, ret);
