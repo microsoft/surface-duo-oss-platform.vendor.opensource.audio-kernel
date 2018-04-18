@@ -35,6 +35,8 @@
 #include <sound/info.h>
 #include "aqt1000-registers.h"
 #include "aqt1000.h"
+#include "aqt1000-api.h"
+#include "aqt1000-mbhc.h"
 #include "aqt1000-routing.h"
 #include "../wcdcal-hwdep.h"
 #include "aqt1000-internal.h"
@@ -45,6 +47,9 @@
 #define  CF_MIN_3DB_4HZ     0x0
 #define  CF_MIN_3DB_75HZ    0x1
 #define  CF_MIN_3DB_150HZ   0x2
+
+#define AQT_VERSION_ENTRY_SIZE 17
+#define AQT_VOUT_CTL_TO_MICB(x) (1000 + x *50)
 
 static struct interp_sample_rate sr_val_tbl[] = {
 	{8000, 0x0}, {16000, 0x1}, {32000, 0x3}, {48000, 0x4}, {96000, 0x5},
@@ -682,6 +687,81 @@ static int aqt_codec_enable_rx_bias(struct snd_soc_dapm_widget *w,
 }
 
 /*
+ * aqt_mbhc_micb_adjust_voltage: adjust specific micbias voltage
+ * @codec: handle to snd_soc_codec *
+ * @req_volt: micbias voltage to be set
+ * @micb_num: micbias to be set, e.g. micbias1 or micbias2
+ *
+ * return 0 if adjustment is success or error code in case of failure
+ */
+int aqt_mbhc_micb_adjust_voltage(struct snd_soc_codec *codec,
+				   int req_volt, int micb_num)
+{
+	struct aqt1000 *aqt;
+	int cur_vout_ctl, req_vout_ctl;
+	int micb_reg, micb_val, micb_en;
+	int ret = 0;
+
+	if (!codec) {
+		pr_err("%s: Invalid codec pointer\n", __func__);
+		return -EINVAL;
+	}
+
+	if (micb_num != MIC_BIAS_1)
+		return -EINVAL;
+	else
+		micb_reg = AQT1000_ANA_MICB1;
+
+	aqt = snd_soc_codec_get_drvdata(codec);
+	mutex_lock(&aqt->micb_lock);
+
+	/*
+	 * If requested micbias voltage is same as current micbias
+	 * voltage, then just return. Otherwise, adjust voltage as
+	 * per requested value. If micbias is already enabled, then
+	 * to avoid slow micbias ramp-up or down enable pull-up
+	 * momentarily, change the micbias value and then re-enable
+	 * micbias.
+	 */
+	micb_val = snd_soc_read(codec, micb_reg);
+	micb_en = (micb_val & 0xC0) >> 6;
+	cur_vout_ctl = micb_val & 0x3F;
+
+	req_vout_ctl = aqt_get_micb_vout_ctl_val(req_volt);
+	if (req_vout_ctl < 0) {
+		ret = -EINVAL;
+		goto exit;
+	}
+	if (cur_vout_ctl == req_vout_ctl) {
+		ret = 0;
+		goto exit;
+	}
+
+	dev_dbg(codec->dev, "%s: micb_num: %d, cur_mv: %d, req_mv: %d, micb_en: %d\n",
+		 __func__, micb_num, AQT_VOUT_CTL_TO_MICB(cur_vout_ctl),
+		 req_volt, micb_en);
+
+	if (micb_en == 0x1)
+		snd_soc_update_bits(codec, micb_reg, 0xC0, 0x80);
+
+	snd_soc_update_bits(codec, micb_reg, 0x3F, req_vout_ctl);
+
+	if (micb_en == 0x1) {
+		snd_soc_update_bits(codec, micb_reg, 0xC0, 0x40);
+		/*
+		 * Add 2ms delay as per HW requirement after enabling
+		 * micbias
+		 */
+		usleep_range(2000, 2100);
+	}
+exit:
+	mutex_unlock(&aqt->micb_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(aqt_mbhc_micb_adjust_voltage);
+
+/*
  * aqt_micbias_control: enable/disable micbias
  * @codec: handle to snd_soc_codec *
  * @micb_num: micbias to be enabled/disabled, e.g. micbias1 or micbias2
@@ -734,7 +814,15 @@ int aqt_micbias_control(struct snd_soc_codec *codec,
 		aqt->micb_ref++;
 		if (aqt->micb_ref == 1) {
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x40);
+			if (post_on_event && aqt->mbhc)
+				blocking_notifier_call_chain(
+						&aqt->mbhc->notifier,
+						post_on_event,
+						&aqt->mbhc->wcd_mbhc);
 		}
+		if (is_dapm && post_dapm_on && aqt->mbhc)
+			blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					post_dapm_on, &aqt->mbhc->wcd_mbhc);
 		break;
 	case MICB_DISABLE:
 		if (aqt->micb_ref > 0)
@@ -744,8 +832,21 @@ int aqt_micbias_control(struct snd_soc_codec *codec,
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x80);
 		else if ((aqt->micb_ref == 0) &&
 			 (aqt->pullup_ref == 0)) {
+			if (pre_off_event && aqt->mbhc)
+				blocking_notifier_call_chain(
+						&aqt->mbhc->notifier,
+						pre_off_event,
+						&aqt->mbhc->wcd_mbhc);
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x00);
+			if (post_off_event && aqt->mbhc)
+				blocking_notifier_call_chain(
+						&aqt->mbhc->notifier,
+						post_off_event,
+						&aqt->mbhc->wcd_mbhc);
 		}
+		if (is_dapm && post_dapm_off && aqt->mbhc)
+			blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					post_dapm_off, &aqt->mbhc->wcd_mbhc);
 		break;
 	default:
 		dev_err(codec->dev, "%s: Invalid micbias request: %d\n",
@@ -1985,6 +2086,8 @@ static int aqt_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 	int hph_mode = aqt->hph_mode;
 	u8 dem_inp;
 	int ret = 0;
+	uint32_t impedl = 0;
+	uint32_t impedr = 0;
 
 	dev_dbg(codec->dev, "%s wname: %s event: %d hph_mode: %d\n", __func__,
 		w->name, event, hph_mode);
@@ -2018,6 +2121,17 @@ static int aqt_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec,
 					    AQT1000_CDC_RX1_RX_PATH_CFG0,
 					    0x10, 0x10);
+
+		ret = aqt_mbhc_get_impedance(aqt->mbhc,
+					       &impedl, &impedr);
+		if (!ret) {
+			aqt_clsh_imped_config(codec, impedl, false);
+			set_bit(CLSH_Z_CONFIG, &aqt->status_mask);
+		} else {
+			dev_dbg(codec->dev, "%s: Failed to get mbhc impedance %d\n",
+				__func__, ret);
+			ret = 0;
+		}
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		/* 1000us required as per HW requirement */
@@ -2026,6 +2140,10 @@ static int aqt_codec_hphl_dac_event(struct snd_soc_dapm_widget *w,
 			     AQT_CLSH_EVENT_POST_PA,
 			     AQT_CLSH_STATE_HPHL,
 			     hph_mode);
+		if (test_bit(CLSH_Z_CONFIG, &aqt->status_mask)) {
+			aqt_clsh_imped_config(codec, impedl, true);
+			clear_bit(CLSH_Z_CONFIG, &aqt->status_mask);
+		}
 		break;
 	default:
 		break;
@@ -2181,6 +2299,9 @@ static int aqt_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 		aqt_codec_override(codec, aqt->hph_mode, event);
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
+		blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					     AQT_EVENT_PRE_HPHR_PA_OFF,
+					     &aqt->mbhc->wcd_mbhc);
 		snd_soc_update_bits(codec, AQT1000_HPH_R_TEST, 0x01, 0x00);
 		snd_soc_update_bits(codec, AQT1000_CDC_RX2_RX_PATH_CTL,
 				    0x10, 0x10);
@@ -2199,6 +2320,9 @@ static int aqt_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 		else
 			usleep_range(5000, 5100);
 		aqt_codec_override(codec, aqt->hph_mode, event);
+		blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					     AQT_EVENT_POST_HPHR_PA_OFF,
+					     &aqt->mbhc->wcd_mbhc);
 		if (!(strcmp(w->name, "AQT ANC HPHR PA"))) {
 			ret = aqt_codec_enable_anc(w, kcontrol, event);
 			snd_soc_update_bits(codec,
@@ -2301,6 +2425,9 @@ static int aqt_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 		aqt_codec_override(codec, aqt->hph_mode, event);
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
+		blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					     AQT_EVENT_PRE_HPHL_PA_OFF,
+					     &aqt->mbhc->wcd_mbhc);
 		snd_soc_update_bits(codec, AQT1000_HPH_L_TEST, 0x01, 0x00);
 		snd_soc_update_bits(codec, AQT1000_CDC_RX1_RX_PATH_CTL,
 				    0x10, 0x10);
@@ -2320,6 +2447,9 @@ static int aqt_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 		else
 			usleep_range(5000, 5100);
 		aqt_codec_override(codec, aqt->hph_mode, event);
+		blocking_notifier_call_chain(&aqt->mbhc->notifier,
+					     AQT_EVENT_POST_HPHL_PA_OFF,
+					     &aqt->mbhc->wcd_mbhc);
 		if (!(strcmp(w->name, "AQT ANC HPHL PA"))) {
 			ret = aqt_codec_enable_anc(w, kcontrol, event);
 			snd_soc_update_bits(codec,
@@ -2413,6 +2543,26 @@ static const char * const native_mux_text[] = {
 AQT_DAPM_ENUM(int1_1_native, SND_SOC_NOPM, 0, native_mux_text);
 AQT_DAPM_ENUM(int2_1_native, SND_SOC_NOPM, 0, native_mux_text);
 
+static int aqt_mclk_event(struct snd_soc_dapm_widget *w,
+			  struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	int ret = 0;
+
+	dev_dbg(codec->dev, "%s: event = %d\n", __func__, event);
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		ret = aqt_cdc_mclk_enable(codec, true);
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		ret = aqt_cdc_mclk_enable(codec, false);
+		break;
+	}
+
+	return ret;
+}
+
 static int aif_cap_mixer_get(struct snd_kcontrol *kcontrol,
 			     struct snd_ctl_elem_value *ucontrol)
 {
@@ -2432,7 +2582,16 @@ static const struct snd_kcontrol_new aif1_cap_mixer[] = {
 			aif_cap_mixer_get, aif_cap_mixer_put),
 };
 
+static const char * const rx_inp_st_mux_text[] = {
+	"ZERO", "SRC0",
+};
+AQT_DAPM_ENUM(rx_inp_st, AQT1000_CDC_RX_INP_MUX_SIDETONE_SRC_CFG0, 4,
+	      rx_inp_st_mux_text);
+
 static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
+
+	SND_SOC_DAPM_SUPPLY("AQT MCLK", SND_SOC_NOPM, 0, 0, aqt_mclk_event,
+			    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 
 	SND_SOC_DAPM_AIF_OUT_E("AQT AIF1 CAP", "AQT AIF1 Capture", 0,
 		SND_SOC_NOPM, AIF1_CAP, 0, aqt_codec_enable_i2s_tx,
@@ -2591,6 +2750,10 @@ static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 
 	AQT_DAPM_MUX("AQT RX INT1_1 NATIVE MUX", 0, int1_1_native),
 	AQT_DAPM_MUX("AQT RX INT2_1 NATIVE MUX", 0, int2_1_native),
+
+	SND_SOC_DAPM_MUX("AQT RX ST MUX",
+			 AQT1000_CDC_RX_INP_MUX_SIDETONE_SRC_CFG0, 2, 0,
+			 &rx_inp_st_mux),
 };
 
 static int aqt_startup(struct snd_pcm_substream *substream,
@@ -3025,14 +3188,10 @@ static int aqt_set_micbias(struct aqt1000 *aqt,
 }
 
 static const struct aqt_reg_mask_val aqt_codec_reg_init[] = {
-	{AQT1000_CHIP_CFG0_CLK_CFG_MCLK, 0x04, 0x00},
 	{AQT1000_CHIP_CFG0_EFUSE_CTL, 0x01, 0x01},
 };
 
 static const struct aqt_reg_mask_val aqt_codec_reg_update[] = {
-	{AQT1000_CDC_CLK_RST_CTRL_MCLK_CONTROL, 0x01, 0x01},
-	{AQT1000_CDC_CLK_RST_CTRL_FS_CNT_CONTROL, 0x01, 0x01},
-	{AQT1000_CHIP_CFG0_CLK_CTL_CDC_DIG, 0x01, 0x01},
 	{AQT1000_LDOH_MODE, 0x1F, 0x0B},
 	{AQT1000_MICB1_TEST_CTL_2, 0x07, 0x01},
 	{AQT1000_MICB1_MISC_MICB1_INM_RES_BIAS, 0x03, 0x02},
@@ -3093,6 +3252,14 @@ static int aqt_soc_codec_probe(struct snd_soc_codec *codec)
 	set_bit(WCD9XXX_ANC_CAL, aqt->fw_data->cal_bit);
 	set_bit(WCD9XXX_MBHC_CAL, aqt->fw_data->cal_bit);
 
+	/* Register for Clock */
+	aqt->ext_clk = clk_get(aqt->dev, "aqt_clk");
+	if (IS_ERR(aqt->ext_clk)) {
+		dev_err(aqt->dev, "%s: clk get %s failed\n",
+			__func__, "aqt_ext_clk");
+		goto err_clk;
+	}
+
 	ret = wcd_cal_create_hwdep(aqt->fw_data,
 				   AQT1000_CODEC_HWDEP_NODE, codec);
 	if (ret < 0) {
@@ -3100,6 +3267,12 @@ static int aqt_soc_codec_probe(struct snd_soc_codec *codec)
 		goto err_hwdep;
 	}
 
+	/* Initialize MBHC module */
+	ret = aqt_mbhc_init(&aqt->mbhc, codec, aqt->fw_data);
+	if (ret) {
+		pr_err("%s: mbhc initialization failed\n", __func__);
+		goto err_hwdep;
+	}
 	aqt->codec = codec;
 	for (i = 0; i < COMPANDER_MAX; i++)
 		aqt->comp_enabled[i] = 0;
@@ -3163,6 +3336,8 @@ static int aqt_soc_codec_probe(struct snd_soc_codec *codec)
 	return ret;
 
 err_hwdep:
+	clk_put(aqt->ext_clk);
+err_clk:
 	devm_kfree(codec->dev, aqt->fw_data);
 	aqt->fw_data = NULL;
 err:
@@ -3175,8 +3350,12 @@ static int aqt_soc_codec_remove(struct snd_soc_codec *codec)
 {
 	struct aqt1000 *aqt = snd_soc_codec_get_drvdata(codec);
 
+	/* Deinitialize MBHC module */
+	aqt_mbhc_deinit(codec);
+	aqt->mbhc = NULL;
 	mutex_destroy(&aqt->i2s_lock);
 	mutex_destroy(&aqt->codec_mutex);
+	clk_put(aqt->ext_clk);
 
 	return 0;
 }
