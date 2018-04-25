@@ -117,6 +117,12 @@ static struct wcd_mbhc_register
 			  AQT1000_MBHC_NEW_FSM_STATUS, 0x01, 0, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_MUX_CTL",
 			  AQT1000_MBHC_NEW_CTL_2, 0x70, 4, 0),
+	WCD_MBHC_REGISTER("WCD_MBHC_MOISTURE_STATUS",
+			  AQT1000_MBHC_NEW_FSM_STATUS, 0x20, 5, 0),
+	WCD_MBHC_REGISTER("WCD_MBHC_HPHR_GND",
+			  AQT1000_HPH_PA_CTL2, 0x40, 6, 0),
+	WCD_MBHC_REGISTER("WCD_MBHC_HPHL_GND",
+			  AQT1000_HPH_PA_CTL2, 0x10, 4, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_HPHL_OCP_DET_EN",
 			  AQT1000_HPH_L_TEST, 0x01, 0, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_HPHR_OCP_DET_EN",
@@ -242,13 +248,7 @@ static void aqt_mbhc_program_btn_thr(struct snd_soc_codec *codec,
 
 static bool aqt_mbhc_lock_sleep(struct wcd_mbhc *mbhc, bool lock)
 {
-	struct snd_soc_codec *codec = mbhc->codec;
-	struct aqt1000 *aqt = dev_get_drvdata(codec->dev);
-	bool ret = 0;
-
-	dev_dbg(aqt->dev, "%s: lock: %d\n", __func__, lock);
-
-	return ret;
+	return true;
 }
 
 static int aqt_mbhc_register_notifier(struct wcd_mbhc *mbhc,
@@ -366,9 +366,6 @@ static int aqt_mbhc_micb_ctrl_threshold_mic(struct snd_soc_codec *codec,
 {
 	struct aqt1000_pdata *pdata = dev_get_platdata(codec->dev);
 	int rc, micb_mv;
-
-	if (micb_num != MIC_BIAS_1)
-		return -EINVAL;
 
 	/*
 	 * If device tree micbias level is already above the minimum

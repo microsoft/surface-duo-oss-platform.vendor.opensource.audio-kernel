@@ -97,6 +97,9 @@ static const DECLARE_TLV_DB_SCALE(hph_gain, -3000, 150, 0);
 static const DECLARE_TLV_DB_SCALE(analog_gain, 0, 150, 0);
 static const DECLARE_TLV_DB_SCALE(digital_gain, 0, 1, 0);
 
+static int aqt_codec_force_enable_micbias(struct snd_soc_dapm_widget *w,
+					struct snd_kcontrol *kcontrol, int event);
+
 static int aqt_get_anc_slot(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
@@ -166,6 +169,47 @@ static int aqt_put_anc_func(struct snd_kcontrol *kcontrol,
 static const char *const aqt_anc_func_text[] = {"OFF", "ON"};
 static const struct soc_enum aqt_anc_func_enum =
 	SOC_ENUM_SINGLE_EXT(2, aqt_anc_func_text);
+
+/*
+ * aqt_enable_standalone_micbias - enable micbias standalone
+ * @codec: pointer to codec instance
+ * @micb_num: number of micbias to be enabled
+ * @enable: true to enable micbias or false to disable
+ *
+ * This function is used to enable micbias (1, 2, 3 or 4) during
+ * standalone independent of whether TX use-case is running or not
+ *
+ * Return: error code in case of failure or 0 for success
+*/
+int aqt_enable_standalone_micbias(struct snd_soc_codec *codec,
+				  int micb_num, bool enable)
+{
+	const char * const micb_names[] = {
+		DAPM_MICBIAS1_STANDALONE
+	};
+	int micb_index = micb_num - 1;
+	int rc;
+
+	if (!codec) {
+		pr_err("%s: Codec memory is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (enable)
+		rc = snd_soc_dapm_force_enable_pin(
+						snd_soc_codec_get_dapm(codec),
+						micb_names[micb_index]);
+	else
+		rc = snd_soc_dapm_disable_pin(snd_soc_codec_get_dapm(codec),
+					micb_names[micb_index]);
+	if (!rc)
+		snd_soc_dapm_sync(snd_soc_codec_get_dapm(codec));
+	else
+		dev_err(codec->dev, "%s: micbias%d force %s pin failed\n",
+			__func__, micb_num, (enable ? "enable" : "disable"));
+	return rc;
+}
+EXPORT_SYMBOL(aqt_enable_standalone_micbias);
 
 static int aqt_rx_hph_mode_get(struct snd_kcontrol *kcontrol,
 				 struct snd_ctl_elem_value *ucontrol)
@@ -782,6 +826,7 @@ int aqt_micbias_control(struct snd_soc_codec *codec,
 
 	switch (micb_num) {
 	case MIC_BIAS_1:
+	case MIC_BIAS_2:
 		micb_reg = AQT1000_ANA_MICB1;
 		pre_off_event = AQT_EVENT_PRE_MICBIAS_1_OFF;
 		post_off_event = AQT_EVENT_POST_MICBIAS_1_OFF;
@@ -875,7 +920,9 @@ static int __aqt_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	dev_dbg(codec->dev, "%s: wname: %s, event: %d\n",
 		__func__, w->name, event);
 
-	if (strnstr(w->name, "AQT MIC BIAS1", sizeof("AQT MIC BIAS1")))
+	if (strnstr(w->name, "AQT MIC BIAS1", sizeof("AQT MIC BIAS1")) ||
+	    strnstr(w->name, "MIC BIAS1 Standalone",
+	    sizeof("MIC BIAS1 Standalone")))
 		micb_num = MIC_BIAS_1;
 	else
 		return -EINVAL;
@@ -973,6 +1020,17 @@ static int aqt_codec_enable_i2s_rx(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static const char * const aqt_aif1_cap_mux_text[] = {
+	"TX0", "TX1"
+};
+
+static const struct soc_enum aqt_aif1_cap_mux_enum =
+	SOC_ENUM_SINGLE(AQT1000_CDC_TX_INP_MUX_ADC_MUX13_CFG0, 0, 2,
+			aqt_aif1_cap_mux_text);
+
+static const struct snd_kcontrol_new aif1_cap_mux =
+	SOC_DAPM_ENUM("AQT AIF1_CAP MUX Mux", aqt_aif1_cap_mux_enum);
+
 static const char * const tx_mux_text[] = {
 	"ZERO", "DEC_L", "DEC_R", "DEC_V",
 };
@@ -982,12 +1040,21 @@ AQT_DAPM_ENUM(tx1, AQT1000_CDC_IF_ROUTER_TX_MUX_CFG0, 2, tx_mux_text);
 static const char * const tx_adc_mux_text[] = {
 	"AMIC", "ANC_FB0", "ANC_FB1",
 };
+
+static const char * const tx_anc_mux_text[] = {
+	"ZERO", "AMIC",
+};
+
 AQT_DAPM_ENUM(tx_adc0, AQT1000_CDC_TX_INP_MUX_ADC_MUX0_CFG1, 0,
 	      tx_adc_mux_text);
 AQT_DAPM_ENUM(tx_adc1, AQT1000_CDC_TX_INP_MUX_ADC_MUX1_CFG1, 0,
 	      tx_adc_mux_text);
 AQT_DAPM_ENUM(tx_adc2, AQT1000_CDC_TX_INP_MUX_ADC_MUX2_CFG1, 0,
 	      tx_adc_mux_text);
+AQT_DAPM_ENUM(tx_adc10, AQT1000_CDC_TX_INP_MUX_ADC_MUX2_CFG1, 0,
+	      tx_anc_mux_text);
+AQT_DAPM_ENUM(tx_adc11, AQT1000_CDC_TX_INP_MUX_ADC_MUX2_CFG1, 0,
+	      tx_anc_mux_text);
 
 static int aqt_find_amic_input(struct snd_soc_codec *codec, int adc_mux_n)
 {
@@ -1010,6 +1077,36 @@ static int aqt_find_amic_input(struct snd_soc_codec *codec, int adc_mux_n)
 		return 0;
 
 	return snd_soc_read(codec, amic_mux_sel_reg) & 0x07;
+}
+
+static int aqt_codec_tx_adc_cfg(struct snd_soc_dapm_widget *w,
+				struct snd_kcontrol *kcontrol, int event)
+{
+	int adc_mux_n = w->shift;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct aqt1000 *priv = snd_soc_codec_get_drvdata(codec);
+	int amic_n;
+
+	dev_dbg(codec->dev, "%s: event: %d\n", __func__, event);
+
+	switch (event) {
+	case SND_SOC_DAPM_POST_PMU:
+		amic_n = aqt_find_amic_input(codec, adc_mux_n);
+		if (amic_n) {
+			/*
+			 * Prevent ANC Rx pop by leaving Tx FE in HOLD
+			 * state until PA is up. Track AMIC being used
+			 * so we can release the HOLD later.
+			 */
+			set_bit(ANC_MIC_AMIC1 + amic_n - 1,
+				&priv->status_mask);
+		}
+		break;
+	default:
+		break;
+	}
+
+	return 0;
 }
 
 static u16 aqt_codec_get_amic_pwlvl_reg(struct snd_soc_codec *codec, int amic)
@@ -1094,7 +1191,9 @@ static int aqt_codec_enable_dec(struct snd_soc_dapm_widget *w,
 	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	struct aqt1000 *aqt = snd_soc_codec_get_drvdata(codec);
 	char *widget_name = NULL;
+	char *widget_dup = NULL;
 	char *dec = NULL;
+	char *token = NULL;
 	unsigned int decimator = 0;
 	u8 amic_n = 0;
 	u16 tx_vol_ctl_reg, pwr_level_reg = 0, dec_cfg_reg, hpf_gate_reg;
@@ -1107,6 +1206,8 @@ static int aqt_codec_enable_dec(struct snd_soc_dapm_widget *w,
 	if (!widget_name)
 		return -ENOMEM;
 
+	widget_dup = kstrndup(w->name, 15, GFP_KERNEL);
+
 	dec = strpbrk(widget_name, "012");
 	if (!dec) {
 		dev_err(codec->dev, "%s: decimator index not found\n",
@@ -1114,8 +1215,8 @@ static int aqt_codec_enable_dec(struct snd_soc_dapm_widget *w,
 		ret =  -EINVAL;
 		goto out;
 	}
-
-	ret = kstrtouint(dec, 10, &decimator);
+	token = strsep(&dec, " ");
+	ret = kstrtouint(token, 10, &decimator);
 	if (ret < 0) {
 		dev_err(codec->dev, "%s: Invalid decimator = %s\n",
 			__func__, widget_name);
@@ -1226,7 +1327,7 @@ static int aqt_codec_enable_dec(struct snd_soc_dapm_widget *w,
 	}
 
 out:
-	kfree(widget_name);
+	kfree(widget_dup);
 	return ret;
 }
 
@@ -2563,30 +2664,20 @@ static int aqt_mclk_event(struct snd_soc_dapm_widget *w,
 	return ret;
 }
 
-static int aif_cap_mixer_get(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	return 0;
-}
-
-static int aif_cap_mixer_put(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	return 0;
-}
-
-static const struct snd_kcontrol_new aif1_cap_mixer[] = {
-	SOC_SINGLE_EXT("TX0", SND_SOC_NOPM, AQT_TX0, 1, 0,
-			aif_cap_mixer_get, aif_cap_mixer_put),
-	SOC_SINGLE_EXT("TX1", SND_SOC_NOPM, AQT_TX1, 1, 0,
-			aif_cap_mixer_get, aif_cap_mixer_put),
-};
 
 static const char * const rx_inp_st_mux_text[] = {
 	"ZERO", "SRC0",
 };
 AQT_DAPM_ENUM(rx_inp_st, AQT1000_CDC_RX_INP_MUX_SIDETONE_SRC_CFG0, 4,
 	      rx_inp_st_mux_text);
+
+static const struct snd_kcontrol_new rx_int1_asrc_switch[] = {
+	SOC_DAPM_SINGLE("AQT HPHL Switch", SND_SOC_NOPM, 0, 1, 0),
+};
+
+static const struct snd_kcontrol_new rx_int2_asrc_switch[] = {
+	SOC_DAPM_SINGLE("AQT HPHR Switch", SND_SOC_NOPM, 0, 1, 0),
+};
 
 static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 
@@ -2597,9 +2688,7 @@ static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 		SND_SOC_NOPM, AIF1_CAP, 0, aqt_codec_enable_i2s_tx,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 
-	SND_SOC_DAPM_MIXER("AQT AIF1 CAP Mixer", SND_SOC_NOPM, AIF1_CAP, 0,
-			   aif1_cap_mixer, ARRAY_SIZE(aif1_cap_mixer)),
-
+	AQT_DAPM_MUX("AQT AIF1_CAP MUX", 0, aif1_cap),
 	AQT_DAPM_MUX("AQT TX0_MUX", 0, tx0),
 	AQT_DAPM_MUX("AQT TX1_MUX", 0, tx1),
 
@@ -2618,9 +2707,15 @@ static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
 		SND_SOC_DAPM_PRE_PMD | SND_SOC_DAPM_POST_PMD),
 
-	AQT_DAPM_MUX("AQT AMIC0_MUX", 0, tx_amic0),
-	AQT_DAPM_MUX("AQT AMIC1_MUX", 0, tx_amic1),
-	AQT_DAPM_MUX("AQT AMIC2_MUX", 0, tx_amic2),
+	SND_SOC_DAPM_MUX_E("AQT ADC10 MUX", SND_SOC_NOPM, 10, 0, &tx_adc10_mux,
+		aqt_codec_tx_adc_cfg, SND_SOC_DAPM_POST_PMU),
+
+	SND_SOC_DAPM_MUX_E("AQT ADC11 MUX", SND_SOC_NOPM, 10, 0, &tx_adc11_mux,
+		aqt_codec_tx_adc_cfg, SND_SOC_DAPM_POST_PMU),
+
+	AQT_DAPM_MUX("AQT AMIC1_MUX", 0, tx_amic0),
+	AQT_DAPM_MUX("AQT AMIC2_MUX", 0, tx_amic1),
+	AQT_DAPM_MUX("AQT AMIC3_MUX", 0, tx_amic2),
 
 	SND_SOC_DAPM_ADC_E("AQT ADC_L", NULL, AQT1000_ANA_AMIC1, 7, 0,
 		aqt_codec_enable_adc, SND_SOC_DAPM_PRE_PMU),
@@ -2681,8 +2776,10 @@ static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 	AQT_DAPM_MUX("AQT RX INT2_1 INTERP", 0, rx_int2_1_interp),
 	AQT_DAPM_MUX("AQT RX INT2_2 INTERP", 0, rx_int2_2_interp),
 
-	SND_SOC_DAPM_MIXER("AQT RX INT1 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
-	SND_SOC_DAPM_MIXER("AQT RX INT2 MIX1", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("AQT RX INT1 MIX1", SND_SOC_NOPM, 0, 0,
+			   rx_int1_asrc_switch, ARRAY_SIZE(rx_int1_asrc_switch)),
+	SND_SOC_DAPM_MIXER("AQT RX INT2 MIX1", SND_SOC_NOPM, 0, 0,
+			   rx_int2_asrc_switch, ARRAY_SIZE(rx_int2_asrc_switch)),
 
 	SND_SOC_DAPM_MUX_E("AQT ASRC0 MUX", SND_SOC_NOPM, ASRC0, 0,
 		&asrc0_mux, aqt_codec_enable_asrc_resampler,
@@ -2736,6 +2833,11 @@ static const struct snd_soc_dapm_widget aqt_dapm_widgets[] = {
 	SND_SOC_DAPM_MICBIAS_E("AQT MIC BIAS1", SND_SOC_NOPM, 0, 0,
 		aqt_codec_enable_micbias, SND_SOC_DAPM_PRE_PMU |
 		SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
+
+	SND_SOC_DAPM_MICBIAS_E(DAPM_MICBIAS1_STANDALONE, SND_SOC_NOPM, 0, 0,
+		aqt_codec_force_enable_micbias,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+		SND_SOC_DAPM_POST_PMD),
 
 	SND_SOC_DAPM_SUPPLY("AQT RX_BIAS", SND_SOC_NOPM, 0, 0,
 		aqt_codec_enable_rx_bias,
@@ -3075,6 +3177,28 @@ static int aqt_disable_master_bias(struct aqt1000 *aqt)
 	return 0;
 }
 
+static int aqt_codec_force_enable_micbias(struct snd_soc_dapm_widget *w,
+					struct snd_kcontrol *kcontrol, int event)
+{
+	int ret = 0;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		aqt_cdc_mclk_enable(codec, true);
+		ret = __aqt_codec_enable_micbias(w, SND_SOC_DAPM_PRE_PMU);
+		break;
+	case SND_SOC_DAPM_POST_PMU:
+		ret = __aqt_codec_enable_micbias(w, SND_SOC_DAPM_POST_PMU);
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		ret = __aqt_codec_enable_micbias(w, SND_SOC_DAPM_POST_PMD);
+		aqt_cdc_mclk_enable(codec, false);
+		break;
+	}
+	return ret;
+}
+
 static int aqt_cdc_req_mclk_enable(struct aqt1000 *aqt,
 				     bool enable)
 {
@@ -3239,6 +3363,7 @@ static int aqt_soc_codec_probe(struct snd_soc_codec *codec)
 
 	mutex_init(&aqt->codec_mutex);
 	mutex_init(&aqt->i2s_lock);
+	mutex_init(&aqt->micb_lock);
 	/* Class-H Init */
 	aqt_clsh_init(&aqt->clsh_d);
 	/* Default HPH Mode to Class-H Low HiFi */
@@ -3343,6 +3468,7 @@ err_clk:
 err:
 	mutex_destroy(&aqt->i2s_lock);
 	mutex_destroy(&aqt->codec_mutex);
+	mutex_destroy(&aqt->micb_lock);
 	return ret;
 }
 
@@ -3355,6 +3481,7 @@ static int aqt_soc_codec_remove(struct snd_soc_codec *codec)
 	aqt->mbhc = NULL;
 	mutex_destroy(&aqt->i2s_lock);
 	mutex_destroy(&aqt->codec_mutex);
+	mutex_destroy(&aqt->micb_lock);
 	clk_put(aqt->ext_clk);
 
 	return 0;
