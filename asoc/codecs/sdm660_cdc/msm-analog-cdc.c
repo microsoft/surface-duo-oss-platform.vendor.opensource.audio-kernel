@@ -4062,6 +4062,7 @@ static int msm_anlg_cdc_soc_probe(struct snd_soc_codec *codec)
 	struct sdm660_cdc_priv *sdm660_cdc;
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	int ret;
+	const char *prop_name = "qcom,anlg-cdc-mbhc-disable";
 
 	sdm660_cdc = dev_get_drvdata(codec->dev);
 	sdm660_cdc->codec = codec;
@@ -4153,8 +4154,18 @@ static int msm_anlg_cdc_soc_probe(struct snd_soc_codec *codec)
 		return ret;
 	}
 
-	wcd_mbhc_init(&sdm660_cdc->mbhc, codec, &mbhc_cb, &intr_ids,
-		      wcd_mbhc_registers, true);
+	if (of_property_read_bool(sdm660_cdc->dev->of_node, prop_name)) {
+		dev_dbg(sdm660_cdc->dev, "%s: aqt mbhc enabled\n", __func__);
+		/*
+		 * Ensure PMIC codec IN2P does not impact headset line
+		 * when AQT is enabled
+		 */
+		snd_soc_write(codec, MSM89XX_PMIC_ANALOG_TX_1_2_TEST_CTL_2,
+			      0x8d);
+	}
+	else
+		wcd_mbhc_init(&sdm660_cdc->mbhc, codec, &mbhc_cb, &intr_ids,
+			      wcd_mbhc_registers, true);
 
 	sdm660_cdc->int_mclk0_enabled = false;
 	/*Update speaker boost configuration*/
@@ -4180,12 +4191,17 @@ static int msm_anlg_cdc_soc_remove(struct snd_soc_codec *codec)
 {
 	struct sdm660_cdc_priv *sdm660_cdc_priv =
 					dev_get_drvdata(codec->dev);
+	const char *prop_name = "qcom,anlg-cdc-mbhc-disable";
 
 	sdm660_cdc_priv->spkdrv_reg = NULL;
 	sdm660_cdc_priv->on_demand_list[ON_DEMAND_MICBIAS].supply = NULL;
 	atomic_set(&sdm660_cdc_priv->on_demand_list[ON_DEMAND_MICBIAS].ref,
 		   0);
-	wcd_mbhc_deinit(&sdm660_cdc_priv->mbhc);
+	if (of_property_read_bool(sdm660_cdc_priv->dev->of_node, prop_name))
+		dev_dbg(sdm660_cdc_priv->dev, "%s: aqt mbhc enabled\n",
+			__func__);
+	else
+		wcd_mbhc_deinit(&sdm660_cdc_priv->mbhc);
 
 	return 0;
 }
