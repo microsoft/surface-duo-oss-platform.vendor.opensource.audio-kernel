@@ -2,13 +2,13 @@
 
 # Assume no targets will be supported
 
-ifeq ($(call is-board-platform-in-list,sdm710),true)
+ifeq ($(call is-board-platform-in-list,sdm710 qcs605),true)
 AUDIO_SELECT  := CONFIG_SND_SOC_SDM670=m
 endif
 
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,sdm710),true)
+ifeq ($(call is-board-platform-in-list,sdm710 qcs605),true)
 
 LOCAL_PATH := $(call my-dir)
 
