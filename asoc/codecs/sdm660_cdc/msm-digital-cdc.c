@@ -131,11 +131,12 @@ static int msm_digcdc_clock_control(bool flag)
 				       __func__);
 				/*
 				 * Avoid access to lpass register
-				 * as clock enable failed during SSR.
+				 * as clock enable failed during SSR/PDR.
 				 */
-				if (ret == -ENODEV)
-					msm_dig_cdc->regmap->cache_only = true;
+				msm_dig_cdc->regmap->cache_only = true;
 				return ret;
+			} else {
+				msm_dig_cdc->regmap->cache_only = false;
 			}
 			pr_debug("enabled digital codec core clk\n");
 			atomic_set(&pdata->int_mclk0_enabled, true);
@@ -1142,6 +1143,9 @@ static int msm_dig_cdc_event_notify(struct notifier_block *block,
 		break;
 	case DIG_CDC_EVENT_SSR_DOWN:
 		regcache_cache_only(msm_dig_cdc->regmap, true);
+		mutex_lock(&pdata->cdc_int_mclk0_mutex);
+		atomic_set(&pdata->int_mclk0_enabled, false);
+		mutex_unlock(&pdata->cdc_int_mclk0_mutex);
 		break;
 	case DIG_CDC_EVENT_SSR_UP:
 		regcache_cache_only(msm_dig_cdc->regmap, false);
