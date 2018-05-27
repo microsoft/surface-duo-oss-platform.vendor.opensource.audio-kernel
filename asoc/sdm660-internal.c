@@ -21,6 +21,7 @@
 #include "codecs/sdm660_cdc/msm-analog-cdc.h"
 #include "codecs/msm_sdw/msm_sdw.h"
 #include <linux/pm_qos.h>
+#include "codecs/aqt1000/aqt1000-mbhc.h"
 
 #define __CHIPSET__ "SDM660 "
 #define MSM_DAILINK_NAME(name) (__CHIPSET__#name)
@@ -454,7 +455,7 @@ static const struct snd_soc_dapm_widget msm_int_dapm_widgets[] = {
 
 static const struct snd_soc_dapm_widget msm_int_dig_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY_S("INT_MCLK0", -1, SND_SOC_NOPM, 0, 0,
-	msm_int_dig_mclk0_event, SND_SOC_DAPM_POST_PMD),
+	msm_int_dig_mclk0_event, SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_MIC("Digital Mic1", msm_dmic_event),
 	SND_SOC_DAPM_MIC("Digital Mic2", msm_dmic_event),
 	SND_SOC_DAPM_MIC("Digital Mic3", msm_dmic_event),
@@ -1035,14 +1036,13 @@ static int msm_int_dig_mclk0_event(struct snd_soc_dapm_widget *w,
 	pdata = snd_soc_card_get_drvdata(codec->component.card);
 	pr_debug("%s: event = %d\n", __func__, event);
 	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		msm_digcdc_mclk_enable(codec, 1, true);
+		msm_int_enable_dig_cdc_clk(codec, 1, true);
+		break;
 	case SND_SOC_DAPM_POST_PMD:
-		pr_debug("%s: mclk_res_ref = %d\n",
-			__func__, atomic_read(&pdata->int_mclk0_rsc_ref));
-		if (atomic_read(&pdata->int_mclk0_rsc_ref) == 0) {
-			pr_debug("%s: disabling MCLK\n", __func__);
-			msm_digcdc_mclk_enable(codec, 0, true);
-			msm_int_enable_dig_cdc_clk(codec, 0, true);
-		}
+		msm_digcdc_mclk_enable(codec, 0, true);
+		msm_int_enable_dig_cdc_clk(codec, 0, true);
 		break;
 	default:
 		pr_err("%s: invalid DAPM event %d\n", __func__, event);
@@ -1252,13 +1252,6 @@ static int msm_int_dig_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				__func__, ret);
 		return ret;
 	}
-	ret =  msm_int_enable_dig_cdc_clk(codec, 1, true);
-	if (ret < 0) {
-		pr_err("failed to enable mclk\n");
-		return ret;
-	}
-	/* Enable the codec mclk config */
-	msm_digcdc_mclk_enable(codec, 1, true);
 	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBS_CFS);
 	if (ret < 0)
 		pr_err("%s: set fmt cpu dai failed; ret=%d\n", __func__, ret);
@@ -1326,6 +1319,39 @@ static void *def_msm_int_wcd_mbhc_cal(void)
 	btn_high[4] = 500;
 
 	return msm_int_wcd_cal;
+}
+
+static void *def_msm_aqt_wcd_mbhc_cal(void)
+{
+	void *wcd_mbhc_cal;
+	struct wcd_mbhc_btn_detect_cfg *btn_cfg;
+	u16 *btn_high;
+	wcd_mbhc_cal = kzalloc(WCD_MBHC_CAL_SIZE(WCD_MBHC_DEF_BUTTONS,
+				WCD_MBHC_DEF_RLOADS), GFP_KERNEL);
+	if (!wcd_mbhc_cal)
+		return NULL;
+
+#define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(wcd_mbhc_cal)->X) = (Y))
+	S(v_hs_max, 1600);
+#undef S
+#define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(wcd_mbhc_cal)->X) = (Y))
+	S(num_btn, WCD_MBHC_DEF_BUTTONS);
+#undef S
+
+	btn_cfg = WCD_MBHC_CAL_BTN_DET_PTR(wcd_mbhc_cal);
+	btn_high = ((void *)&btn_cfg->_v_btn_low) +
+		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
+
+	btn_high[0] = 75;
+	btn_high[1] = 150;
+	btn_high[2] = 237;
+	btn_high[3] = 500;
+	btn_high[4] = 500;
+	btn_high[5] = 500;
+	btn_high[6] = 500;
+	btn_high[7] = 500;
+
+	return wcd_mbhc_cal;
 }
 
 static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
@@ -1710,6 +1736,35 @@ static int msm_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		}
 	}
 end:
+	return ret;
+}
+static int msm_snd_aqt_late_probe(struct snd_soc_card *card)
+{
+	const char *aqt_dl_name = LPASS_BE_TERT_MI2S_RX;
+	struct snd_soc_codec *aqt_cdc;
+	struct snd_soc_pcm_runtime *rtd;
+	int ret = 0;
+
+	rtd = snd_soc_get_pcm_runtime(card, aqt_dl_name);
+	if (!rtd) {
+		dev_err(card->dev,
+			"%s: snd_soc_get_pcm_runtime for %s failed!\n",
+			__func__, aqt_dl_name);
+		return -EINVAL;
+	}
+
+	aqt_cdc = rtd->codec;
+	mbhc_cfg_ptr->calibration = def_msm_aqt_wcd_mbhc_cal();
+	if (!mbhc_cfg_ptr->calibration)
+		return -ENOMEM;
+
+	ret = aqt_mbhc_hs_detect(aqt_cdc, mbhc_cfg_ptr);
+	if (ret) {
+		dev_err(card->dev,
+			"%s: aqt_mbhc_hs_detect failed\n", __func__);
+		kfree(mbhc_cfg_ptr->calibration);
+	}
+
 	return ret;
 }
 
@@ -3448,6 +3503,17 @@ static struct snd_soc_card *msm_int_populate_sndcard_dailinks(
 		len1 += ARRAY_SIZE(msm_mi2s_be_dai_links);
 	}
 	if (of_property_read_bool(dev->of_node,
+				  "qcom,mi2s-aqt-enabled")) {
+		dev_dbg(dev, "%s(): AQT support present\n",
+			 __func__);
+		/* Override codec name for TERT MI2S RX and TX for AQT */
+		msm_mi2s_be_dai_links[4].codec_name = "aqt1000-i2c-codec";
+		msm_mi2s_be_dai_links[4].codec_dai_name = "aqt_rx1";
+		msm_mi2s_be_dai_links[5].codec_name = "aqt1000-i2c-codec";
+		msm_mi2s_be_dai_links[5].codec_dai_name = "aqt_tx1";
+
+	}
+	if (of_property_read_bool(dev->of_node,
 				  "qcom,auxpcm-audio-intf")) {
 		memcpy(dailink + len1,
 		       msm_auxpcm_be_dai_links,
@@ -3537,6 +3603,11 @@ static int msm_internal_init(struct platform_device *pdev,
 	ret = snd_soc_of_parse_card_name(card, "qcom,model");
 	if (ret)
 		goto err;
+	/* call AQT late probe in case of AQT1000 enabled */
+	if (of_property_read_bool(pdev->dev.of_node,
+				  "qcom,mi2s-aqt-enabled")) {
+		card->late_probe = msm_snd_aqt_late_probe;
+	}
 	/* initialize timer */
 	INIT_DELAYED_WORK(&pdata->disable_int_mclk0_work,
 			  msm_disable_int_mclk0);

@@ -83,6 +83,12 @@ enum {
 	IIR_MAX,
 };
 
+/*
+ * msm_digcdc_mclk_enable - add mclk support in digital codec
+ * @codec: codec instance
+ * @mclk_enable: mclk enable/disable
+ * @dapm: check for dapm widget
+ */
 int msm_digcdc_mclk_enable(struct snd_soc_codec *codec,
 			int mclk_enable, bool dapm)
 {
@@ -272,7 +278,8 @@ static int msm_dig_cdc_codec_config_compander(struct snd_soc_codec *codec,
 
 	if (SND_SOC_DAPM_EVENT_ON(event)) {
 		/* compander is not enabled */
-		if (!dig_cdc->comp_enabled[interp_n] && dig_cdc->set_compander_mode) {
+		if (!dig_cdc->comp_enabled[interp_n] &&
+			dig_cdc->set_compander_mode) {
 			dig_cdc->set_compander_mode(dig_cdc->handle, 0x00);
 			return 0;
 		};
@@ -2054,7 +2061,7 @@ static int msm_dig_cdc_enable_on_demand_supply(
 	struct on_demand_dig_supply *supply;
 
 	if (w->shift >= ON_DEMAND_DIG_SUPPLIES_MAX) {
-		dev_err(codec->dev, "%s: error index > MAX Demand supplies",
+		dev_err(codec->dev, "%s: error index >= MAX on demand supplies",
 			__func__);
 		ret = -EINVAL;
 		goto out;
@@ -2064,8 +2071,6 @@ static int msm_dig_cdc_enable_on_demand_supply(
 		atomic_read(&msm_dig_cdc->on_demand_list[w->shift].ref));
 
 	supply = &msm_dig_cdc->on_demand_list[w->shift];
-	WARN_ONCE(!supply->supply, "%s isn't defined\n",
-			on_demand_supply_name[w->shift]);
 	if (!supply->supply) {
 		dev_err(codec->dev, "%s: err supply not present ond for %d",
 			__func__, w->shift);
@@ -2092,11 +2097,11 @@ static int msm_dig_cdc_enable_on_demand_supply(
 				goto out;
 			}
 			ret = regulator_enable(supply->supply);
+			if (ret)
+				dev_err(codec->dev, "%s: Failed to enable %s\n",
+					__func__,
+					on_demand_supply_name[w->shift]);
 		}
-		if (ret)
-			dev_err(codec->dev, "%s: Failed to enable %s\n",
-				__func__,
-				on_demand_supply_name[w->shift]);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		if (atomic_read(&supply->ref) == 0) {
@@ -2203,7 +2208,6 @@ static int msm_digital_cdc_init_supplies(struct msm_dig_priv *msm_cdc)
 	return ret;
 
 err_supplies:
-	kfree(msm_cdc->supplies);
 err:
 	return ret;
 }
@@ -2424,6 +2428,9 @@ static void msm_digital_cdc_disable_supplies(struct msm_dig_priv *msm_cdc)
 {
 	int i;
 
+	if (!msm_cdc->supplies)
+		return;
+
 	regulator_bulk_disable(msm_cdc->num_of_supplies,
 			       msm_cdc->supplies);
 	for (i = 0; i < msm_cdc->num_of_supplies; i++) {
@@ -2436,7 +2443,7 @@ static void msm_digital_cdc_disable_supplies(struct msm_dig_priv *msm_cdc)
 	}
 	regulator_bulk_free(msm_cdc->num_of_supplies,
 			    msm_cdc->supplies);
-	kfree(msm_cdc->supplies);
+	devm_kfree(msm_cdc->dev, msm_cdc->supplies);
 }
 
 static int msm_dig_cdc_probe(struct platform_device *pdev)
@@ -2463,24 +2470,26 @@ static int msm_dig_cdc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	msm_dig_cdc->dev = &pdev->dev;
+	if (pdev->dev.of_node == NULL)
+		return -EINVAL;
+
 	if (pdev->dev.of_node)
 		no_analog_codec = of_property_read_bool(pdev->dev.of_node,
 					"qcom,no-analog-codec");
 
 	if (no_analog_codec) {
-		if (pdev->dev.of_node) {
-			dev_dbg(&pdev->dev, "%s:Platform data from device tree\n",
-					__func__);
-			if (msm_digital_cdc_populate_dt_pdata(&pdev->dev,
-								msm_dig_cdc))
-				ret = msm_digital_cdc_init_supplies(
-								msm_dig_cdc);
-				if (ret) {
-					dev_err(&pdev->dev,
-					"%s: Fail to enable Codec supplies\n",
-					__func__);
-					goto rtn;
-				}
+		dev_dbg(&pdev->dev, "%s:Platform data from device tree\n",
+				__func__);
+		if (msm_digital_cdc_populate_dt_pdata(&pdev->dev,
+							msm_dig_cdc)) {
+			ret = msm_digital_cdc_init_supplies(
+							msm_dig_cdc);
+			if (ret) {
+				dev_err(&pdev->dev,
+				"%s: Fail to enable Codec supplies\n",
+				__func__);
+				goto rtn;
+			}
 		}
 	} else {
 		pdata = dev_get_platdata(&pdev->dev);
