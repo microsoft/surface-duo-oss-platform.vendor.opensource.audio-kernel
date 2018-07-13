@@ -143,8 +143,6 @@ static int msm_digcdc_clock_control(bool flag)
 				 */
 				msm_dig_cdc->regmap->cache_only = true;
 				return ret;
-			} else {
-				msm_dig_cdc->regmap->cache_only = false;
 			}
 			pr_debug("enabled digital codec core clk\n");
 			atomic_set(&pdata->int_mclk0_enabled, true);
