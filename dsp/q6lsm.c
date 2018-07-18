@@ -131,6 +131,24 @@ static void q6lsm_set_param_common(
 	}
 }
 
+static int q6lsm_get_session_id_from_lsm_client(struct lsm_client *client)
+{
+	int n;
+
+	for (n = LSM_MIN_SESSION_ID; n <= LSM_MAX_SESSION_ID; n++) {
+		if (lsm_session[n] == client)
+			return n;
+	}
+	pr_err("%s: cannot find matching lsm client. client = %pa\n",
+		__func__, client);
+	return LSM_INVALID_SESSION_ID;
+}
+
+static bool q6lsm_is_valid_lsm_client(struct lsm_client *client)
+{
+	return q6lsm_get_session_id_from_lsm_client(client) ? 1 : 0;
+}
+
 static int q6lsm_callback(struct apr_client_data *data, void *priv)
 {
 	struct lsm_client *client = (struct lsm_client *)priv;
@@ -150,8 +168,9 @@ static int q6lsm_callback(struct apr_client_data *data, void *priv)
 			 data->reset_proc);
 
 		mutex_lock(&session_lock);
-		if (!client) {
-			pr_err("%s: client already freed, return\n", __func__);
+		if (!client || !q6lsm_is_valid_lsm_client(client)) {
+			pr_err("%s: client already freed/invalid, return\n",
+				__func__);
 			mutex_unlock(&session_lock);
 			return 0;
 		}
