@@ -31,6 +31,7 @@
 #include <linux/of_device.h>
 #include <soc/qcom/subsystem_restart.h>
 #include <soc/qcom/scm.h>
+#include <soc/snd_event.h>
 #include <dsp/apr_audio-v2.h>
 #include <dsp/audio_notifier.h>
 #include <ipc/apr.h>
@@ -244,6 +245,7 @@ enum apr_subsys_state apr_cmpxchg_modem_state(enum apr_subsys_state prev,
 
 static void apr_modem_down(unsigned long opcode)
 {
+	snd_event_notify(apr_dev_ptr, SND_EVENT_DOWN);
 	apr_set_modem_state(APR_SUBSYS_DOWN);
 	dispatch_event(opcode, APR_DEST_MODEM);
 }
@@ -254,6 +256,7 @@ static void apr_modem_up(void)
 							APR_SUBSYS_DOWN)
 		wake_up(&modem_wait);
 	is_modem_up = 1;
+	snd_event_notify(apr_dev_ptr, SND_EVENT_UP);
 }
 
 enum apr_subsys_state apr_get_q6_state(void)
@@ -278,8 +281,19 @@ enum apr_subsys_state apr_cmpxchg_q6_state(enum apr_subsys_state prev,
 	return atomic_cmpxchg(&q6.q6_state, prev, new);
 }
 
+static void apr_ssr_disable(struct device *dev, void *data)
+{
+	apr_set_q6_state(APR_SUBSYS_DOWN);
+}
+
+static const struct snd_event_ops apr_ssr_ops = {
+	.disable = apr_ssr_disable,
+};
+
 static void apr_adsp_down(unsigned long opcode)
 {
+	pr_info("%s: Q6 is Down\n", __func__);
+	snd_event_notify(apr_dev_ptr, SND_EVENT_DOWN);
 	apr_set_q6_state(APR_SUBSYS_DOWN);
 	dispatch_event(opcode, APR_DEST_QDSP6);
 }
@@ -306,6 +320,7 @@ static void apr_adsp_up(void)
 				msecs_to_jiffies(100));
 		is_child_devices_loaded = true;
 	}
+	snd_event_notify(apr_dev_ptr, SND_EVENT_UP);
 }
 
 int apr_wait_for_device_up(int dest_id)
@@ -1141,6 +1156,7 @@ static void apr_cleanup(void)
 static int apr_probe(struct platform_device *pdev)
 {
 	int i, j, k;
+	int ret = 0;
 
 	init_waitqueue_head(&dsp_wait);
 	init_waitqueue_head(&modem_wait);
@@ -1173,11 +1189,21 @@ static int apr_probe(struct platform_device *pdev)
 	apr_tal_init();
 	apr_dev_ptr = &pdev->dev;
 	INIT_DELAYED_WORK(&add_chld_dev_work, apr_add_child_devices);
+
+	ret = snd_event_client_register(&pdev->dev, &apr_ssr_ops, NULL);
+	if (ret) {
+		pr_err("%s: Registration with Audio SSR FW failed ret = %d\n",
+			__func__, ret);
+		ret = 0;
+	} else
+		snd_event_notify(apr_dev_ptr, SND_EVENT_UP);
+
 	return apr_debug_init();
 }
 
 static int apr_remove(struct platform_device *pdev)
 {
+	snd_event_client_deregister(&pdev->dev);
 	apr_cleanup();
 	return 0;
 }
