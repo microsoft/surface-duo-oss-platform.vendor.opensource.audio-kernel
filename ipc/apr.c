@@ -46,6 +46,7 @@ static wait_queue_head_t modem_wait;
 static bool is_modem_up;
 static bool is_initial_boot;
 static bool is_child_devices_loaded;
+static char *subsys_name = NULL;
 /* Subsystem restart: QDSP6 data, functions */
 static struct workqueue_struct *apr_reset_workqueue;
 static void apr_reset_deregister(struct work_struct *work);
@@ -1126,8 +1127,7 @@ static void apr_cleanup(void)
 {
 	int i, j, k;
 
-	subsys_notif_deregister("apr_modem");
-	subsys_notif_deregister("apr_adsp");
+	subsys_notif_deregister(subsys_name);
 	if (apr_reset_workqueue)
 		destroy_workqueue(apr_reset_workqueue);
 	mutex_destroy(&q6.lock);
@@ -1142,7 +1142,7 @@ static void apr_cleanup(void)
 
 static int apr_probe(struct platform_device *pdev)
 {
-	int i, j, k;
+	int i, j, k, ret = 0;
 
 	init_waitqueue_head(&dsp_wait);
 	init_waitqueue_head(&modem_wait);
@@ -1167,10 +1167,26 @@ static int apr_probe(struct platform_device *pdev)
 		pr_err("%s: Unable to create ipc log context\n", __func__);
 
 	is_initial_boot = true;
-	subsys_notif_register("apr_adsp", AUDIO_NOTIFIER_ADSP_DOMAIN,
-			      &adsp_service_nb);
-	subsys_notif_register("apr_modem", AUDIO_NOTIFIER_MODEM_DOMAIN,
-			      &modem_service_nb);
+	ret = of_property_read_string(pdev->dev.of_node,
+				      "qcom,subsys-name",
+				      (const char **)(&subsys_name));
+	if (ret) {
+		pr_err("%s: missing subsys-name entry in dt node\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!strcmp(subsys_name, "apr_adsp")) {
+		subsys_notif_register("apr_adsp",
+				       AUDIO_NOTIFIER_ADSP_DOMAIN,
+				       &adsp_service_nb);
+	} else if (!strcmp(subsys_name, "apr_modem")) {
+		subsys_notif_register("apr_modem",
+				       AUDIO_NOTIFIER_MODEM_DOMAIN,
+				       &modem_service_nb);
+	} else {
+		pr_err("%s: invalid subsys-name %s\n", __func__, subsys_name);
+		return -EINVAL;
+	}
 
 	apr_tal_init();
 	apr_dev_ptr = &pdev->dev;
