@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -9543,11 +9543,11 @@ static int __q6asm_cmd(struct audio_client *ac, int cmd, uint32_t stream_id)
 	int cnt = 0;
 
 	if (!ac) {
-		pr_err("%s: APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	if (ac->apr == NULL) {
-		pr_err("%s: AC APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	q6asm_stream_add_hdr(ac, &hdr, sizeof(hdr), TRUE, stream_id);
@@ -9707,11 +9707,11 @@ static int __q6asm_cmd_nowait(struct audio_client *ac, int cmd,
 	int rc;
 
 	if (!ac) {
-		pr_err("%s: APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	if (ac->apr == NULL) {
-		pr_err("%s: AC APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	q6asm_stream_add_hdr_async(ac, &hdr, sizeof(hdr), TRUE, stream_id);
@@ -9736,6 +9736,12 @@ static int __q6asm_cmd_nowait(struct audio_client *ac, int cmd,
 		pr_debug("%s: CMD_PAUSE\n", __func__);
 		hdr.opcode = ASM_SESSION_CMD_PAUSE;
 		break;
+
+	case CMD_FLUSH:
+		pr_debug("%s: CMD_FLUSH\n", __func__);
+		hdr.opcode = ASM_STREAM_CMD_FLUSH;
+		break;
+
 	case CMD_EOS:
 		pr_debug("%s: CMD_EOS\n", __func__);
 		hdr.opcode = ASM_DATA_CMD_EOS;
@@ -9796,11 +9802,11 @@ int __q6asm_send_meta_data(struct audio_client *ac, uint32_t stream_id,
 	int rc = 0;
 
 	if (!ac) {
-		pr_err("%s: APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	if (ac->apr == NULL) {
-		pr_err("%s: AC APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 	pr_debug("%s: session[%d]\n", __func__, ac->session);
