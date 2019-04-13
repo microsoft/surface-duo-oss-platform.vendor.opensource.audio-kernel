@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,9 @@
 #include <ipc/apr.h>
 #include <dsp/apr_audio-v2.h>
 
-
+#define DOLBY_DECRYPT_SUB_SYSTEM 3
+#define DOLBY_ADM_SHM_SUB_SYSTEM 4
+#define DOLBY_ASM_SHM_SUB_SYSTEM 5
 
 #define AVCS_CMD_ADSP_EVENT_GET_STATE		0x0001290C
 #define AVCS_CMDRSP_ADSP_EVENT_GET_STATE	0x0001290D
@@ -24,6 +26,9 @@
 
 bool q6core_is_adsp_ready(void);
 
+int q6core_get_unlock_key(int id, int *key, dma_addr_t *paddr, size_t *plen);
+int q6core_add_remove_pool_pages(phys_addr_t buf_add, uint32_t bufsz,
+			uint32_t mempool_id, bool add_pages);
 int q6core_get_service_version(uint32_t service_id,
 			       struct avcs_fwk_ver_info *ver_info,
 			       size_t size);
@@ -192,9 +197,24 @@ struct avcs_cmd_deregister_topologies {
 
 #define CORE_UNLOAD_TOPOLOGY	1
 
+#define ADSP_MEMORY_MAP_HLOS_PHYSPOOL 4
+#define AVCS_CMD_ADD_POOL_PAGES 0x0001292E
+#define AVCS_CMD_REMOVE_POOL_PAGES 0x0001292F
+
+#define AVCS_CMD_GET_KEY (0x000132ED)
+#define AVCS_CMDRSP_GET_KEY (0x000132EE)
+
 struct avcs_cmd_load_unload_topo_modules {
 	struct apr_hdr hdr;
 	uint32_t topology_id;
+} __packed;
+
+struct avs_mem_assign_region {
+	struct apr_hdr       hdr;
+	u32                  pool_id;
+	u32                  size;
+	u32                  addr_lsw;
+	u32                  addr_msw;
 } __packed;
 
 /* This command allows a remote client(HLOS) creates a client to LPASS NPA
@@ -291,6 +311,12 @@ struct avcs_cmd_destroy_lpass_npa_client_t {
 	 */
 };
 
+struct avs_get_key {
+	struct apr_hdr       hdr;
+	u32                  version;
+	u32                  sys_id;
+} __packed;
+
 int q6core_map_memory_regions(phys_addr_t *buf_add, uint32_t mempool_id,
 			uint32_t *bufsz, uint32_t bufcnt, uint32_t *map_handle);
 int q6core_memory_unmap_regions(uint32_t mem_map_handle);
@@ -312,6 +338,7 @@ int q6core_create_lpass_npa_client(uint32_t node_id, char *client_name,
 int q6core_destroy_lpass_npa_client(uint32_t client_handle);
 int q6core_request_island_transition(uint32_t client_handle,
 				     uint32_t island_allow_mode);
+int q6core_is_avs_up(int32_t *avs_state);
 
 #if IS_ENABLED(CONFIG_USE_Q6_32CH_SUPPORT)
 static inline bool q6core_use_Q6_32ch_support(void)

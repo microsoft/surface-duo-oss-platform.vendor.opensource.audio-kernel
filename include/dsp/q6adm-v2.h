@@ -23,6 +23,7 @@
 #include <dsp/q6audio-v2.h>
 
 #define MAX_MODULES_IN_TOPO 16
+#define MAX_FE_ID 29
 #define ADM_GET_TOPO_MODULE_LIST_LENGTH\
 		((MAX_MODULES_IN_TOPO + 1) * sizeof(uint32_t))
 #define ADM_GET_TOPO_MODULE_INSTANCE_LIST_LENGTH                               \
@@ -137,6 +138,11 @@ void adm_ec_ref_rx_id(int  port_id);
 
 void adm_num_ec_ref_rx_chans(int num_chans);
 
+void adm_num_ec_ref_rx_chans_downmixed(int num_chans);
+
+int adm_ec_ref_chmixer_weights(int out_channel_idx,
+			uint16_t *weights, int count);
+
 void adm_ec_ref_rx_bit_width(int bit_width);
 
 void adm_ec_ref_rx_sampling_rate(int sampling_rate);
@@ -219,4 +225,12 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 void msm_dts_srs_acquire_lock(void);
 void msm_dts_srs_release_lock(void);
 void adm_set_native_mode(int mode);
+int adm_map_shm_fd(void **mem_hdl, int fd, struct param_hdr_v3 *hdr,
+					int port_id, int copp_idx);
+void q6adm_register_callback(void *cb);
+void q6adm_clear_callback(void);
+int q6adm_send_event_register_cmd(int port_id, int copp_idx, u8 *data,
+					int param_size, int opcode);
+int q6adm_update_rtd_info(void *rtd, int port_id,
+			int copp_idx, int fe_id, int enable);
 #endif /* __Q6_ADM_V2_H__ */

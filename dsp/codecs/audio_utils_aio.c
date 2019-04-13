@@ -1,6 +1,6 @@
 /* Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2019, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -420,7 +420,7 @@ void audio_aio_reset_ion_region(struct q6audio_aio *audio)
 	list_for_each_safe(ptr, next, &audio->ion_region_queue) {
 		region = list_entry(ptr, struct audio_aio_ion_region, list);
 		list_del(&region->list);
-		msm_audio_ion_free(region->dma_buf);
+		msm_audio_ion_free(region->mem_handle);
 		kfree(region);
 	}
 }
@@ -963,7 +963,7 @@ static int audio_aio_ion_add(struct q6audio_aio *audio,
 	size_t len = 0;
 	struct audio_aio_ion_region *region;
 	int rc = -EINVAL;
-	struct dma_buf *dma_buf = NULL;
+	void *mem_handle = NULL;
 	unsigned long ionflag;
 	void *kvaddr = NULL;
 
@@ -975,7 +975,7 @@ static int audio_aio_ion_add(struct q6audio_aio *audio,
 		goto end;
 	}
 
-	rc = msm_audio_ion_import(&dma_buf, info->fd, &ionflag,
+	rc = msm_audio_ion_import(&mem_handle, info->fd, &ionflag,
 				0, &paddr, &len, &kvaddr);
 	if (rc) {
 		pr_err("%s: msm audio ion alloc failed\n", __func__);
@@ -988,7 +988,7 @@ static int audio_aio_ion_add(struct q6audio_aio *audio,
 		goto ion_error;
 	}
 
-	region->dma_buf = dma_buf;
+	region->mem_handle = mem_handle;
 	region->vaddr = info->vaddr;
 	region->fd = info->fd;
 	region->paddr = paddr;
@@ -1010,7 +1010,7 @@ static int audio_aio_ion_add(struct q6audio_aio *audio,
 mmap_error:
 	list_del(&region->list);
 ion_error:
-	msm_audio_ion_free(dma_buf);
+	msm_audio_ion_free(mem_handle);
 import_error:
 	kfree(region);
 end:
@@ -1047,7 +1047,7 @@ static int audio_aio_ion_remove(struct q6audio_aio *audio,
 					__func__, audio);
 
 			list_del(&region->list);
-			msm_audio_ion_free(region->dma_buf);
+			msm_audio_ion_free(region->mem_handle);
 			kfree(region);
 			rc = 0;
 			break;
@@ -1156,7 +1156,7 @@ static int audio_aio_async_read(struct q6audio_aio *audio,
 	/* Write command will populate session_id as token */
 	buf_node->token = ac->session;
 	rc = q6asm_async_read(ac, &param);
-	if (rc < 0)
+	if (rc < 0 && rc != -ENETRESET)
 		pr_err_ratelimited("%s[%pK]:failed\n", __func__, audio);
 	return rc;
 }
@@ -1344,7 +1344,7 @@ int audio_aio_open(struct q6audio_aio *audio, struct file *file)
 		audio->drv_ops.in_flush = audio_aio_async_in_flush;
 		q6asm_set_io_mode(audio->ac, ASYNC_IO_MODE);
 	} else {
-		pr_err("%s[%pK]:SIO interface not supported\n",
+		pr_err_ratelimited("%s[%pK]:SIO interface not supported\n",
 			__func__, audio);
 		rc = -EACCES;
 		goto fail;
@@ -1557,7 +1557,7 @@ static long audio_aio_shared_ioctl(struct file *file, unsigned int cmd,
 		break;
 	}
 	default:
-		pr_err("%s: Unknown ioctl cmd = %d", __func__, cmd);
+		pr_err_ratelimited("%s: Unknown ioctl cmd = %d", __func__, cmd);
 		rc =  -EINVAL;
 	}
 	return rc;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -209,13 +209,13 @@ static int q6usm_us_client_buf_free(unsigned int dir,
 	pr_debug("%s: data[%pK]phys[%llx][%pK]\n", __func__,
 		 (void *)port->data, (u64)port->phys, (void *)&port->phys);
 
-	msm_audio_ion_free(port->dma_buf);
+	msm_audio_ion_free(port->mem_handle);
 
 	port->data = NULL;
 	port->phys = 0;
 	port->buf_size = 0;
 	port->buf_cnt = 0;
-	port->dma_buf = NULL;
+	port->mem_handle = NULL;
 
 	mutex_unlock(&usc->cmd_lock);
 	return rc;
@@ -249,12 +249,12 @@ int q6usm_us_param_buf_free(unsigned int dir,
 		 (void *)port->param_buf, (u64)port->param_phys,
 		 (void *)&port->param_phys);
 
-	msm_audio_ion_free(port->param_dma_buf);
+	msm_audio_ion_free(port->param_mem_handle);
 
 	port->param_buf = NULL;
 	port->param_phys = 0;
 	port->param_buf_size = 0;
-	port->param_dma_buf = NULL;
+	port->param_mem_handle = NULL;
 
 	mutex_unlock(&usc->cmd_lock);
 	return rc;
@@ -396,7 +396,7 @@ int q6usm_us_client_buf_alloc(unsigned int dir,
 	/* The size to allocate should be multiple of 4K bytes */
 	size = PAGE_ALIGN(size);
 
-	rc = msm_audio_ion_alloc(&port->dma_buf,
+	rc = msm_audio_ion_alloc(&port->mem_handle,
 		size, &port->phys,
 		&len, &port->data);
 
@@ -461,7 +461,7 @@ int q6usm_us_param_buf_alloc(unsigned int dir,
 	/* The size to allocate should be multiple of 4K bytes */
 	size = PAGE_ALIGN(size);
 
-	rc = msm_audio_ion_alloc(&port->param_dma_buf,
+	rc = msm_audio_ion_alloc(&port->param_mem_handle,
 		size, &port->param_phys,
 		&len, &port->param_buf);
 
@@ -498,6 +498,11 @@ static int32_t q6usm_mmapcallback(struct apr_client_data *data, void *priv)
 	uint32_t token;
 	uint32_t *payload = data->payload;
 
+	if (data->payload_size < (2 * sizeof(uint32_t))) {
+		pr_err("%s: payload has invalid size[%d]\n", __func__,
+		       data->payload_size);
+		return -EINVAL;
+	}
 	pr_debug("%s: ptr0[0x%x]; ptr1[0x%x]; opcode[0x%x]\n",
 		 __func__, payload[0], payload[1], data->opcode);
 	pr_debug("%s: token[0x%x]; payload_size[%d]; src[%d]; dest[%d];\n",
@@ -559,6 +564,11 @@ static int32_t q6usm_callback(struct apr_client_data *data, void *priv)
 	}
 
 	if (data->opcode == APR_BASIC_RSP_RESULT) {
+		if (data->payload_size < (2 * sizeof(uint32_t))) {
+			pr_err("%s: payload has invalid size[%d]\n", __func__,
+			       data->payload_size);
+			return -EINVAL;
+		}
 		/* status field check */
 		if (payload[1]) {
 			pr_err("%s: wrong response[%d] on cmd [%d]\n",
@@ -622,6 +632,12 @@ static int32_t q6usm_callback(struct apr_client_data *data, void *priv)
 
 		opcode = Q6USM_EVENT_READ_DONE;
 		spin_lock_irqsave(&port->dsp_lock, dsp_flags);
+		if (data->payload_size <
+		    (sizeof(uint32_t)*(READDONE_IDX_STATUS + 1))) {
+			pr_err("%s: Invalid payload size for READDONE[%d]\n",
+			       __func__, data->payload_size);
+			return -EINVAL;
+		}
 		if (payload[READDONE_IDX_STATUS]) {
 			pr_err("%s: wrong READDONE[%d]; token[%d]\n",
 			       __func__,
@@ -668,6 +684,12 @@ static int32_t q6usm_callback(struct apr_client_data *data, void *priv)
 		struct us_port_data *port = &usc->port[IN];
 
 		opcode = Q6USM_EVENT_WRITE_DONE;
+		if (data->payload_size <
+		    (sizeof(uint32_t)*(WRITEDONE_IDX_STATUS + 1))) {
+			pr_err("%s: Invalid payload size for WRITEDONE[%d]\n",
+			       __func__, data->payload_size);
+			return -EINVAL;
+		}
 		if (payload[WRITEDONE_IDX_STATUS]) {
 			pr_err("%s: wrong WRITEDONE_IDX_STATUS[%d]\n",
 			       __func__,
@@ -721,7 +743,7 @@ uint32_t q6usm_get_virtual_address(int dir,
 		ab.used = 1;
 		ab.size = size;
 		ab.actual_size = size;
-		ab.dma_buf = port->dma_buf;
+		ab.mem_handle = port->mem_handle;
 
 		ret = msm_audio_ion_mmap(&ab, vms);
 

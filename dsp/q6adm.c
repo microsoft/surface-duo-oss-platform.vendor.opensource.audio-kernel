@@ -25,6 +25,7 @@
 #include <dsp/q6core.h>
 #include <dsp/audio_cal_utils.h>
 #include <dsp/q6common.h>
+#include <dsp/q6core.h>
 #include <ipc/apr.h>
 #include "adsp_err.h"
 
@@ -55,6 +56,8 @@ enum adm_cal_status {
 	ADM_STATUS_MAX,
 };
 
+typedef void (*adm_cb)(uint32_t opcode, uint32_t token,
+		       void *pp_event_package, void *pvt);
 struct adm_copp {
 
 	atomic_t id[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
@@ -73,10 +76,12 @@ struct adm_copp {
 	atomic_t adm_delay_stat[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	uint32_t adm_delay[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
 	unsigned long adm_status[AFE_MAX_PORTS][MAX_COPPS_PER_PORT];
+	void *priv[AFE_MAX_PORTS][MAX_COPPS_PER_PORT][MAX_FE_ID];
+	adm_cb cb;
 };
 
 struct source_tracking_data {
-	struct dma_buf *dma_buf;
+	void *mem_handle;
 	struct param_outband memmap;
 	int apr_cmd_status;
 };
@@ -105,7 +110,9 @@ struct adm_ctl {
 	int num_ec_ref_rx_chans;
 	int ec_ref_rx_bit_width;
 	int ec_ref_rx_sampling_rate;
-
+	int num_ec_ref_rx_chans_downmixed;
+	uint16_t ec_ref_chmixer_weights[PCM_FORMAT_MAX_NUM_CHANNEL_V8]
+						[PCM_FORMAT_MAX_NUM_CHANNEL_V8];
 	int native_mode;
 };
 
@@ -152,6 +159,93 @@ static int adm_arrange_mch_map_v8(
 		struct adm_device_endpoint_payload *ep_payload,
 		int path,
 		int channel_mode);
+
+static uint32_t adm_pp_raise_event_opcode[] = {
+	ADM_PP_EVENT };
+
+int q6adm_send_event_register_cmd(int port_id, int copp_idx, u8 *data,
+					int param_size, int opcode)
+{
+	struct adm_register_event *adm_reg_params = NULL;
+	int ret = 0, port_idx, sz = 0;
+
+	port_id = afe_convert_virtual_to_portid(port_id);
+	port_idx = adm_validate_and_get_port_index(port_id);
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port_id %#x\n", __func__, port_id);
+		return -EINVAL;
+	}
+
+	sz = sizeof(struct apr_hdr) + param_size;
+	adm_reg_params = kzalloc(sz, GFP_KERNEL);
+
+
+	memcpy(adm_reg_params->payload, data, param_size);
+
+	adm_reg_params->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	adm_reg_params->hdr.src_svc = APR_SVC_ADM;
+	adm_reg_params->hdr.src_domain = APR_DOMAIN_APPS;
+	adm_reg_params->hdr.src_port = port_id;
+	adm_reg_params->hdr.dest_svc = APR_SVC_ADM;
+	adm_reg_params->hdr.dest_domain = APR_DOMAIN_ADSP;
+	adm_reg_params->hdr.dest_port =
+			atomic_read(&this_adm.copp.id[port_idx][copp_idx]);
+	adm_reg_params->hdr.token = port_idx << 16 | copp_idx;
+	adm_reg_params->hdr.opcode = opcode;
+	adm_reg_params->hdr.pkt_size = sz;
+
+	atomic_set(&this_adm.copp.stat[port_idx][copp_idx], 0);
+	ret = apr_send_pkt(this_adm.apr, (uint32_t *)adm_reg_params);
+	if (ret < 0) {
+		pr_err("%s: Set adm register params failed port %d rc %d\n",
+				__func__, port_id, ret);
+		ret = -EINVAL;
+		goto fail_cmd;
+	}
+
+	ret = wait_event_timeout(this_adm.copp.wait[port_idx][copp_idx],
+			atomic_read(
+			&this_adm.copp.stat[port_idx][copp_idx]) >= 0,
+			msecs_to_jiffies(TIMEOUT_MS));
+	if (!ret) {
+		pr_err("%s: set params timed out port = %d\n",
+			__func__, port_id);
+		ret = -ETIMEDOUT;
+		goto fail_cmd;
+	}
+	ret = 0;
+fail_cmd:
+	kfree(adm_reg_params);
+
+	return ret;
+}
+EXPORT_SYMBOL(q6adm_send_event_register_cmd);
+
+
+static int is_adsp_adm_raise_event(uint32_t cmd)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(adm_pp_raise_event_opcode); i++) {
+		if (cmd == adm_pp_raise_event_opcode[i])
+			return i;
+	}
+
+	return -EINVAL;
+}
+
+void q6adm_register_callback(void *cb)
+{
+	this_adm.copp.cb = cb;
+}
+EXPORT_SYMBOL(q6adm_register_callback);
+
+void q6adm_clear_callback(void)
+{
+	this_adm.copp.cb = NULL;
+}
+EXPORT_SYMBOL(q6adm_clear_callback);
 
 /**
  * adm_validate_and_get_port_index -
@@ -1324,12 +1418,22 @@ static int adm_process_get_param_response(u32 opcode, u32 idx, u32 *payload,
 	switch (opcode) {
 	case ADM_CMDRSP_GET_PP_PARAMS_V5:
 		struct_size = sizeof(struct adm_cmd_rsp_get_pp_params_v5);
+		if (payload_size < struct_size) {
+			pr_err("%s: payload size %d < expected size %d\n",
+				__func__, payload_size, struct_size);
+			break;
+		}
 		v5_rsp = (struct adm_cmd_rsp_get_pp_params_v5 *) payload;
 		data_size = v5_rsp->param_hdr.param_size;
 		param_data = v5_rsp->param_data;
 		break;
 	case ADM_CMDRSP_GET_PP_PARAMS_V6:
 		struct_size = sizeof(struct adm_cmd_rsp_get_pp_params_v6);
+		if (payload_size < struct_size) {
+			pr_err("%s: payload size %d < expected size %d\n",
+				__func__, payload_size, struct_size);
+			break;
+		}
 		v6_rsp = (struct adm_cmd_rsp_get_pp_params_v6 *) payload;
 		data_size = v6_rsp->param_hdr.param_size;
 		param_data = v6_rsp->param_data;
@@ -1469,8 +1573,8 @@ static void adm_reset_data(void)
 	 */
 	if (this_adm.sourceTrackingData.memmap.paddr != 0) {
 		msm_audio_ion_free(
-			this_adm.sourceTrackingData.dma_buf);
-		this_adm.sourceTrackingData.dma_buf = NULL;
+			this_adm.sourceTrackingData.mem_handle);
+		this_adm.sourceTrackingData.mem_handle = NULL;
 		this_adm.sourceTrackingData.memmap.size = 0;
 		this_adm.sourceTrackingData.memmap.kvaddr =
 							 NULL;
@@ -1484,9 +1588,10 @@ static void adm_reset_data(void)
 static int32_t adm_callback(struct apr_client_data *data, void *priv)
 {
 	uint32_t *payload;
-	int port_idx, copp_idx, idx, client_id;
-	int num_modules;
-	int ret;
+	int port_idx, copp_idx, idx, client_id, payload_size, ret;
+	int num_modules, i;
+	struct msm_adsp_event_data *pp_event_package = NULL;
+	struct adm_usr_info usr_data;
 
 	if (data == NULL) {
 		pr_err("%s: data parameter is null\n", __func__);
@@ -1525,6 +1630,11 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			return 0;
 		}
 		if (data->opcode == APR_BASIC_RSP_RESULT) {
+			if (data->payload_size < (2 * sizeof(uint32_t))) {
+				pr_err("%s: Invalid payload size %d\n", __func__,
+					data->payload_size);
+				return 0;
+			}
 			pr_debug("%s: APR_BASIC_RSP_RESULT id 0x%x\n",
 				__func__, payload[0]);
 			if (payload[1] != 0) {
@@ -1639,6 +1749,13 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 					pr_err("%s: ADM get topo list error = %d\n",
 					       __func__, payload[1]);
 				break;
+			case ADM_CMD_REGISTER_EVENT:
+				pr_debug("%s:ADM_CMD_REGISTER_EVENT\n",
+					 __func__);
+				if (payload[1] != 0)
+					pr_err("%s: ADM_CMD_REGISTER_EVENT error = %d\n",
+					       __func__, payload[1]);
+				break;
 			default:
 				pr_err("%s: Unknown Cmd: 0x%x\n", __func__,
 								payload[0]);
@@ -1651,9 +1768,14 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 		case ADM_CMDRSP_DEVICE_OPEN_V5:
 		case ADM_CMDRSP_DEVICE_OPEN_V6:
 		case ADM_CMDRSP_DEVICE_OPEN_V8: {
-			struct adm_cmd_rsp_device_open_v5 *open =
-			(struct adm_cmd_rsp_device_open_v5 *)data->payload;
-
+			struct adm_cmd_rsp_device_open_v5 *open = NULL;
+			if (data->payload_size <
+				sizeof(struct adm_cmd_rsp_device_open_v5)) {
+				pr_err("%s: Invalid payload size %d\n", __func__,
+					data->payload_size);
+				return 0;
+			}
+			open = (struct adm_cmd_rsp_device_open_v5 *)data->payload;
 			if (open->copp_id == INVALID_COPP_ID) {
 				pr_err("%s: invalid coppid rxed %d\n",
 					__func__, open->copp_id);
@@ -1732,6 +1854,65 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			atomic_set(&this_adm.adm_stat, 0);
 			wake_up(&this_adm.adm_wait);
 			break;
+		case ADM_PP_EVENT:
+			if (data->payload_size < (2 * sizeof(uint32_t))) {
+				pr_err("%s: payload has invalid size %d\n",
+					__func__, data->payload_size);
+				return -EINVAL;
+			}
+
+			pr_debug("%s: ADM_PP_EVENT payload[0][0x%x] payload[1][0x%x]\n",
+					 __func__, payload[0], payload[1]);
+
+			ret = is_adsp_adm_raise_event(data->opcode);
+
+			if (ret < 0)
+				return 0;
+
+			/*
+			 *  repack payload for adm_copp_pp_event
+			 *  package is composed of event type + size + payload
+			 */
+			payload_size = data->payload_size;
+			pp_event_package = kzalloc(payload_size
+					+ sizeof(struct msm_adsp_event_data)
+					, GFP_ATOMIC);
+			if (!pp_event_package)
+				return -ENOMEM;
+
+			pp_event_package->event_type = ret
+							+ ADSP_ADM_SERVICE_ID;
+			usr_data.service_id = ADSP_ADM_SERVICE_ID;
+			usr_data.token_coppidx = data->token;
+
+			pp_event_package->payload_len = data->payload_size +
+						sizeof(struct adm_usr_info);
+			memcpy((void *)pp_event_package->payload, &(usr_data),
+					sizeof(struct adm_usr_info));
+			memcpy((void *)pp_event_package->payload +
+					sizeof(struct adm_usr_info),
+					data->payload, data->payload_size);
+			if (this_adm.copp.cb) {
+				for (i = 0; i < MAX_FE_ID; i++) {
+					if (this_adm.copp.priv[port_idx]
+							[copp_idx][i]) {
+						pr_debug("%s: calling adm callback for feid %d\n",
+								__func__, i);
+						this_adm.copp.cb(data->opcode,
+						data->token,
+						(void *)pp_event_package,
+						this_adm.copp.priv[port_idx]
+						[copp_idx][i]);
+					}
+				}
+			}
+			kfree(pp_event_package);
+			break;
+
+		case ADM_CMD_REGISTER_EVENT:
+			pr_debug("%s: ADM_CMD_REGISTER_PP_EVENTS\n", __func__);
+			break;
+
 		default:
 			pr_err("%s: Unknown cmd:0x%x\n", __func__,
 				data->opcode);
@@ -1886,7 +2067,7 @@ static int remap_cal_data(struct cal_block_data *cal_block, int cal_index)
 {
 	int ret = 0;
 
-	if (cal_block->map_data.dma_buf == NULL) {
+	if (cal_block->map_data.mem_handle == NULL) {
 		pr_err("%s: No ION allocation for cal index %d!\n",
 			__func__, cal_index);
 		ret = -EINVAL;
@@ -2664,7 +2845,7 @@ static int adm_arrange_mch_ep2_map_v8(
 		ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LB;
 		ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RB;
 		ep_payload->dev_channel_mapping[8] = PCM_CHANNEL_CS;
-		ep_payload->dev_channel_mapping[9] = PCM_CHANNELS;
+		ep_payload->dev_channel_mapping[9] = PCM_CHANNEL_TS;
 	} else if (channel_mode == 12) {
 		ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 		ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
@@ -2688,7 +2869,7 @@ static int adm_arrange_mch_ep2_map_v8(
 		ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LB;
 		ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RB;
 		ep_payload->dev_channel_mapping[8] = PCM_CHANNEL_CS;
-		ep_payload->dev_channel_mapping[9] = PCM_CHANNELS;
+		ep_payload->dev_channel_mapping[9] = PCM_CHANNEL_TS;
 		ep_payload->dev_channel_mapping[10] = PCM_CHANNEL_CVH;
 		ep_payload->dev_channel_mapping[11] = PCM_CHANNEL_MS;
 		ep_payload->dev_channel_mapping[12] = PCM_CHANNEL_FLC;
@@ -2703,6 +2884,126 @@ static int adm_arrange_mch_ep2_map_v8(
 
 	return rc;
 }
+
+int q6adm_update_rtd_info(void *rtd, int port_id,
+		int copp_idx, int fe_id, int enable)
+{
+	int port_idx;
+
+	pr_debug("%s: port_id %#x flag %d\n", __func__, port_id, enable);
+	port_id = q6audio_convert_virtual_to_portid(port_id);
+	port_idx = adm_validate_and_get_port_index(port_id);
+
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
+		return -EINVAL;
+	}
+
+	if (enable)
+		this_adm.copp.priv[port_idx][copp_idx][fe_id] = rtd;
+	else
+		this_adm.copp.priv[port_idx][copp_idx][fe_id] = NULL;
+
+	return 0;
+}
+EXPORT_SYMBOL(q6adm_update_rtd_info);
+
+static int adm_copp_set_ec_ref_mfc_cfg(int port_id, int copp_idx,
+					int sample_rate, int bps,
+					int in_channels, int out_channels)
+{
+	struct audproc_mfc_param_media_fmt mfc_cfg;
+	struct param_hdr_v3 param_hdr;
+	u16 *chmixer_params = NULL;
+	int rc = 0, i  = 0, j = 0, param_index = 0, param_size = 0;
+	struct adm_device_endpoint_payload ep_payload = {0, 0, 0, {0}};
+
+	memset(&mfc_cfg, 0, sizeof(mfc_cfg));
+	memset(&ep_payload, 0, sizeof(ep_payload));
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	param_hdr.module_id = AUDPROC_MODULE_ID_MFC_EC_REF;
+	param_hdr.instance_id = INSTANCE_ID_0;
+
+	pr_debug("%s: port_id %d copp_idx %d SR %d, BW %d in_ch %d out_ch %d\n",
+			__func__, port_id, copp_idx, sample_rate,
+			bps, in_channels, out_channels);
+
+	if (out_channels <= 0 || out_channels > AUDPROC_MFC_OUT_CHANNELS_MAX) {
+		pr_err("%s: unsupported out channels=%d\n", __func__, out_channels);
+		return -EINVAL;
+	}
+
+	/* 1. Update Media Format */
+	param_hdr.param_id = AUDPROC_PARAM_ID_MFC_OUTPUT_MEDIA_FORMAT;
+	param_hdr.param_size = sizeof(mfc_cfg);
+
+	mfc_cfg.sampling_rate = sample_rate;
+	mfc_cfg.bits_per_sample = bps;
+	mfc_cfg.num_channels = out_channels;
+
+	ep_payload.dev_num_channel = out_channels;
+	rc = adm_arrange_mch_ep2_map_v8(&ep_payload, out_channels);
+	if (rc < 0) {
+		pr_err("%s: unable to get map for out channels=%d\n",
+				__func__, out_channels);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < out_channels; i++)
+		mfc_cfg.channel_type[i] = (uint16_t) ep_payload.dev_channel_mapping[i];
+
+
+	rc = adm_pack_and_set_one_pp_param(port_id, copp_idx,
+				param_hdr, (uint8_t *) &mfc_cfg);
+	if (rc) {
+		pr_err("%s: Failed to set media format, err %d\n", __func__, rc);
+		return rc;
+	}
+
+	/* 2. Send Channel Mixer params */
+	param_size =  2 * (4 + out_channels + in_channels + (out_channels * in_channels));
+	param_size = round_up(param_size, 4);
+	param_hdr.param_id = DEFAULT_CHMIXER_PARAM_ID_COEFF;
+	param_hdr.param_size = param_size;
+
+	pr_debug("%s: chmixer param sz = %d\n", __func__, param_size);
+	chmixer_params = kzalloc(param_size, GFP_KERNEL);
+	if (!chmixer_params) {
+		return -ENOMEM;
+	}
+	param_index = 2; /* param[0] and [1] represents chmixer rule(always 0) */
+	chmixer_params[param_index++] = out_channels;
+	chmixer_params[param_index++] = in_channels;
+
+	/* output channel map is same as one set in media format */
+	for (i = 0; i < out_channels; i++)
+		chmixer_params[param_index++] = ep_payload.dev_channel_mapping[i];
+
+	/* input channel map should be same as one set for ep2 during copp open */
+	ep_payload.dev_num_channel = in_channels;
+	rc = adm_arrange_mch_ep2_map_v8(&ep_payload, in_channels);
+	if (rc < 0) {
+		pr_err("%s: unable to get in channal map\n", __func__);
+		goto exit;
+	}
+	for (i = 0; i < in_channels; i++)
+		chmixer_params[param_index++] = ep_payload.dev_channel_mapping[i];
+
+	for (i = 0; i < out_channels; i++)
+		for (j = 0; j < in_channels; j++)
+		chmixer_params[param_index++] = this_adm.ec_ref_chmixer_weights[i][j];
+
+	rc = adm_pack_and_set_one_pp_param(port_id, copp_idx,
+					   param_hdr, (uint8_t *) chmixer_params);
+	if (rc)
+		pr_err("%s: Failed to set chmixer params, err %d\n", __func__, rc);
+
+exit:
+	kfree(chmixer_params);
+	return rc;
+}
+
 /**
  * adm_open -
  *        command to send ADM open
@@ -2737,6 +3038,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 	int tmp_port = q6audio_get_port_id(port_id);
 	void *adm_params = NULL;
 	int param_size;
+	int num_ec_ref_rx_chans = this_adm.num_ec_ref_rx_chans;
 
 	pr_debug("%s:port %#x path:%d rate:%d mode:%d perf_mode:%d,topo_id %d\n",
 		 __func__, port_id, path, rate, channel_mode, perf_mode,
@@ -2791,8 +3093,14 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 
 	if ((topology == VPM_TX_SM_ECNS_V2_COPP_TOPOLOGY) ||
 	    (topology == VPM_TX_DM_FLUENCE_COPP_TOPOLOGY) ||
-	    (topology == VPM_TX_DM_RFECNS_COPP_TOPOLOGY))
+	    (topology == VPM_TX_DM_RFECNS_COPP_TOPOLOGY)||
+	    (topology == VPM_TX_DM_FLUENCE_EF_COPP_TOPOLOGY)) {
+		if ((rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_8K) &&
+		    (rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_16K) &&
+		    (rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_32K) &&
+		    (rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_48K))
 		rate = 16000;
+	}
 
 	if (topology == VPM_TX_VOICE_SMECNS_V2_COPP_TOPOLOGY)
 		channel_mode = 1;
@@ -2908,7 +3216,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				if (this_adm.num_ec_ref_rx_chans != 0) {
 					open_v8.endpoint_id_2 =
 						this_adm.ec_ref_rx;
-					this_adm.ec_ref_rx = -1;
 				} else {
 					pr_err("%s: EC channels not set %d\n",
 						__func__,
@@ -2952,7 +3259,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				if (this_adm.ec_ref_rx_bit_width != 0) {
 					ep2_payload.bit_width =
 						this_adm.ec_ref_rx_bit_width;
-					this_adm.ec_ref_rx_bit_width = 0;
 				} else {
 					ep2_payload.bit_width = bit_width;
 				}
@@ -2960,7 +3266,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				if (this_adm.ec_ref_rx_sampling_rate != 0) {
 					ep2_payload.sample_rate =
 					this_adm.ec_ref_rx_sampling_rate;
-					this_adm.ec_ref_rx_sampling_rate = 0;
 				} else {
 					ep2_payload.sample_rate = rate;
 				}
@@ -2993,7 +3298,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			if ((this_adm.num_ec_ref_rx_chans != 0)
 				&& (path != ADM_PATH_PLAYBACK)
 				&& (open_v8.endpoint_id_2 != 0xFFFF)) {
-				this_adm.num_ec_ref_rx_chans = 0;
 				memcpy(adm_params + sizeof(open_v8)
 						+ ep1_payload_size,
 						(void *)&ep2_payload,
@@ -3030,7 +3334,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 			if (this_adm.ec_ref_rx && (path != 1) &&
 			    (afe_get_port_type(tmp_port) == MSM_AFE_PORT_TYPE_TX)) {
 				open.endpoint_id_2 = this_adm.ec_ref_rx;
-				this_adm.ec_ref_rx = -1;
 			}
 
 			open.topology_id = topology;
@@ -3062,12 +3365,10 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				open_v6.hdr.pkt_size = sizeof(open_v6);
 				open_v6.dev_num_channel_eid2 =
 					this_adm.num_ec_ref_rx_chans;
-				this_adm.num_ec_ref_rx_chans = 0;
 
 				if (this_adm.ec_ref_rx_bit_width != 0) {
 					open_v6.bit_width_eid2 =
 						this_adm.ec_ref_rx_bit_width;
-					this_adm.ec_ref_rx_bit_width = 0;
 				} else {
 					open_v6.bit_width_eid2 = bit_width;
 				}
@@ -3075,7 +3376,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				if (this_adm.ec_ref_rx_sampling_rate != 0) {
 					open_v6.sample_rate_eid2 =
 					       this_adm.ec_ref_rx_sampling_rate;
-					this_adm.ec_ref_rx_sampling_rate = 0;
 				} else {
 					open_v6.sample_rate_eid2 = rate;
 				}
@@ -3125,6 +3425,23 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		}
 	}
 	atomic_inc(&this_adm.copp.cnt[port_idx][copp_idx]);
+
+	/*
+	 * Configure MFC(in ec_ref path) if chmixing param is applicable and set.
+	 * Except channels and channel maps the media format config for this module
+	 * should match with the COPP(EP1) config values.
+	 */
+	if (path != ADM_PATH_PLAYBACK &&
+		this_adm.num_ec_ref_rx_chans_downmixed != 0 &&
+		num_ec_ref_rx_chans != this_adm.num_ec_ref_rx_chans_downmixed) {
+		ret = adm_copp_set_ec_ref_mfc_cfg(port_id, copp_idx,
+				rate, bit_width, num_ec_ref_rx_chans,
+				this_adm.num_ec_ref_rx_chans_downmixed);
+		this_adm.num_ec_ref_rx_chans_downmixed = 0;
+		if (ret)
+			pr_err("%s: set EC REF MFC cfg failed, err %d\n", __func__, ret);
+	}
+
 	return copp_idx;
 }
 EXPORT_SYMBOL(adm_open);
@@ -3413,6 +3730,52 @@ void adm_num_ec_ref_rx_chans(int num_chans)
 EXPORT_SYMBOL(adm_num_ec_ref_rx_chans);
 
 /**
+ * adm_num_ec_rx_ref_chans_downmixed -
+ *        Update EC ref num of channels(downmixed) to be fed to EC algo
+ *
+ */
+void adm_num_ec_ref_rx_chans_downmixed(int num_chans)
+{
+	this_adm.num_ec_ref_rx_chans_downmixed = num_chans;
+	pr_debug("%s: num_ec_ref_rx_chans_downmixed:%d\n",
+		__func__, this_adm.num_ec_ref_rx_chans_downmixed);
+}
+EXPORT_SYMBOL(adm_num_ec_ref_rx_chans_downmixed);
+
+/**
+ * adm_ec_ref_chmixer_weights -
+ *        Update MFC(in ec ref) Channel Mixer Weights to be used
+ *        for downmixing rx channels before feeding them to EC algo
+ * @out_channel_idx: index of output channel to which weightages are applicable
+ * @weights:         pointer to array having input weightages
+ * @count:           array sizeof pointer weights, max supported value is
+ *                   PCM_FORMAT_MAX_NUM_CHANNEL_V8
+ * Returns 0 on success or error on failure
+ */
+int adm_ec_ref_chmixer_weights(int out_channel_idx,
+				uint16_t *weights, int count)
+{
+	int i = 0;
+
+	if (weights == NULL || count <= 0 || out_channel_idx < 0 ||
+		count > PCM_FORMAT_MAX_NUM_CHANNEL_V8 ||
+		out_channel_idx >= PCM_FORMAT_MAX_NUM_CHANNEL_V8) {
+		pr_err("%s: invalid weightages count(%d) ch_idx(%d)",
+				__func__, count, out_channel_idx);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < count; i++) {
+		this_adm.ec_ref_chmixer_weights[out_channel_idx][i] = weights[i];
+		pr_debug("%s: out ch idx :%d, weight[%d] = %d\n",
+			__func__, out_channel_idx, i, weights[i]);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(adm_ec_ref_chmixer_weights);
+
+/**
  * adm_ec_ref_rx_bit_width -
  *        Update EC ref bit_width
  *
@@ -3526,8 +3889,8 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 					__func__, ret);
 			}
 			msm_audio_ion_free(
-				this_adm.sourceTrackingData.dma_buf);
-			this_adm.sourceTrackingData.dma_buf = NULL;
+				this_adm.sourceTrackingData.mem_handle);
+			this_adm.sourceTrackingData.mem_handle = NULL;
 			this_adm.sourceTrackingData.memmap.size = 0;
 			this_adm.sourceTrackingData.memmap.kvaddr = NULL;
 			this_adm.sourceTrackingData.memmap.paddr = 0;
@@ -4803,13 +5166,83 @@ done:
 }
 EXPORT_SYMBOL(adm_get_sound_focus);
 
+int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
+				   int port_id, int copp_idx)
+{
+	dma_addr_t paddr;
+	size_t pa_len = 0;
+	int ret = 0, sec_key = 0;
+	struct adm_event_shm params;
+	u8 *packed_params = NULL;
+	u32 packed_params_size = 0;
+
+	ret = msm_audio_ion_phys_assign(handle, fd, &paddr, &pa_len,
+				HLOS_TO_ADSP, DOLBY_ADM_SHM_SUB_SYSTEM);
+
+	if (ret) {
+		pr_err("%s: failed to allocate memory\n", __func__);
+		return ret;
+	}
+	params.shm_buf_addr_lsw    = lower_32_bits(paddr);
+	params.shm_buf_addr_msw    = msm_audio_populate_upper_32_bits(paddr);
+	params.buf_size            = pa_len;
+	params.shm_buf_num_regions = 1;
+	params.shm_buf_mem_pool_id = ADSP_MEMORY_MAP_SHMEM8_4K_POOL;
+	params.shm_buf_flag        = 0x00;
+
+	params.adm_map_region.shm_addr_lsw = params.shm_buf_addr_lsw;
+	params.adm_map_region.shm_addr_msw = params.shm_buf_addr_msw;
+	params.adm_map_region.mem_size_bytes = pa_len;
+
+	packed_params_size         = sizeof(struct param_hdr_v3) +
+					sizeof(struct adm_event_shm);
+	packed_params              = kzalloc(packed_params_size, GFP_KERNEL);
+	if (!packed_params) {
+		ret = -ENOMEM;
+		goto fail;
+	}
+
+	ret = q6common_pack_pp_params(packed_params, hdr, (u8 *)&params,
+						&packed_params_size);
+
+	ret = adm_set_pp_params(port_id, copp_idx, NULL, packed_params,
+							packed_params_size);
+
+	if (ret < 0) {
+		pr_err("%s: failed to map memory, paddr = 0x%pK, size = %zd\n",
+			__func__, (void *)paddr, pa_len);
+		goto fail;
+	}
+
+	ret = 0;
+	goto done;
+fail:
+	ret = msm_audio_is_hypervisor_supported();
+
+	if (!ret) {
+		ret = q6core_get_unlock_key(DOLBY_ADM_SHM_SUB_SYSTEM, &sec_key,
+						&paddr, &pa_len);
+		if (ret) {
+			pr_err("%s Failed to get the key\n", __func__);
+			return ret;
+		}
+	}
+	msm_audio_ion_phys_free(handle, &paddr, &pa_len, ADSP_TO_HLOS,
+					DOLBY_ADM_SHM_SUB_SYSTEM, sec_key);
+done:
+	kfree(packed_params);
+
+	return ret;
+}
+EXPORT_SYMBOL(adm_map_shm_fd);
+
 static int adm_source_tracking_alloc_map_memory(void)
 {
 	int ret;
 
 	pr_debug("%s: Enter\n", __func__);
 
-	ret = msm_audio_ion_alloc(&this_adm.sourceTrackingData.dma_buf,
+	ret = msm_audio_ion_alloc(&this_adm.sourceTrackingData.mem_handle,
 				  AUD_PROC_BLOCK_SIZE,
 				  &this_adm.sourceTrackingData.memmap.paddr,
 				  &this_adm.sourceTrackingData.memmap.size,
@@ -4832,8 +5265,8 @@ static int adm_source_tracking_alloc_map_memory(void)
 			(void *)this_adm.sourceTrackingData.memmap.paddr,
 			(uint32_t)this_adm.sourceTrackingData.memmap.size);
 
-		msm_audio_ion_free(this_adm.sourceTrackingData.dma_buf);
-		this_adm.sourceTrackingData.dma_buf = NULL;
+		msm_audio_ion_free(this_adm.sourceTrackingData.mem_handle);
+		this_adm.sourceTrackingData.mem_handle = NULL;
 		this_adm.sourceTrackingData.memmap.size = 0;
 		this_adm.sourceTrackingData.memmap.kvaddr = NULL;
 		this_adm.sourceTrackingData.memmap.paddr = 0;
@@ -5063,7 +5496,7 @@ int __init adm_init(void)
 	if (adm_init_cal_data())
 		pr_err("%s: could not init cal data!\n", __func__);
 
-	this_adm.sourceTrackingData.dma_buf = NULL;
+	this_adm.sourceTrackingData.mem_handle = NULL;
 	this_adm.sourceTrackingData.memmap.size = 0;
 	this_adm.sourceTrackingData.memmap.kvaddr = NULL;
 	this_adm.sourceTrackingData.memmap.paddr = 0;

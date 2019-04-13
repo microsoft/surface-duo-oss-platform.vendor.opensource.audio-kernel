@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -664,10 +664,11 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.key_code[6] = 0,
 	.key_code[7] = 0,
 	.linein_th = 5000,
-	.moisture_en = true,
+	.moisture_en = false,
 	.mbhc_micbias = MIC_BIAS_2,
 	.anc_micbias = MIC_BIAS_2,
 	.enable_anc_mic_detect = false,
+	.moisture_duty_cycle_en = true,
 };
 
 static struct snd_soc_dapm_route wcd_audio_paths[] = {
@@ -4750,28 +4751,6 @@ static void msm_afe_clear_config(void)
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
 }
 
-static int msm_config_hph_en0_gpio(struct snd_soc_codec *codec, bool high)
-{
-	struct snd_soc_card *card = codec->component.card;
-	struct msm_asoc_mach_data *pdata;
-	int val;
-
-	if (!card)
-		return 0;
-
-	pdata = snd_soc_card_get_drvdata(card);
-	if (!pdata || !gpio_is_valid(pdata->hph_en0_gpio))
-		return 0;
-
-	val = gpio_get_value_cansleep(pdata->hph_en0_gpio);
-	if ((!!val) == high)
-		return 0;
-
-	gpio_direction_output(pdata->hph_en0_gpio, (int)high);
-
-	return 1;
-}
-
 static int msm_audrx_tavil_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
@@ -4896,15 +4875,17 @@ static int msm_audrx_tavil_init(struct snd_soc_pcm_runtime *rtd)
 	}
 
 	card = rtd->card->snd_card;
-	entry = snd_info_create_subdir(card->module, "codecs",
-					 card->proc_root);
-	if (!entry) {
-		pr_debug("%s: Cannot create codecs module entry\n",
-			 __func__);
-		ret = 0;
-		goto err;
+	if (!pdata->codec_root) {
+		entry = snd_info_create_subdir(card->module, "codecs",
+						 card->proc_root);
+		if (!entry) {
+			pr_debug("%s: Cannot create codecs module entry\n",
+				 __func__);
+			ret = 0;
+			goto err;
+		}
+		pdata->codec_root = entry;
 	}
-	pdata->codec_root = entry;
 	tavil_codec_info_create_codec_entry(pdata->codec_root, codec);
 
 	codec_reg_done = true;
@@ -5064,17 +5045,18 @@ static int msm_audrx_tasha_init(struct snd_soc_pcm_runtime *rtd)
 	}
 
 	card = rtd->card->snd_card;
-	entry = snd_info_create_subdir(card->module, "codecs",
-					 card->proc_root);
-	if (!entry) {
-		pr_debug("%s: Cannot create codecs module entry\n",
-			 __func__);
-		ret = 0;
-		goto err;
+	if (!pdata->codec_root) {
+		entry = snd_info_create_subdir(card->module, "codecs",
+						 card->proc_root);
+		if (!entry) {
+			pr_debug("%s: Cannot create codecs module entry\n",
+				 __func__);
+			ret = 0;
+			goto err;
+		}
+		pdata->codec_root = entry;
 	}
-	pdata->codec_root = entry;
 	tasha_codec_info_create_codec_entry(pdata->codec_root, codec);
-	tasha_mbhc_zdet_gpio_ctrl(msm_config_hph_en0_gpio, rtd->codec);
 
 	codec_reg_done = true;
 	return 0;
@@ -5136,14 +5118,16 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		__func__, rtd->card->num_aux_devs);
 	if (rtd->card->num_aux_devs &&
 	    !list_empty(&rtd->card->aux_comp_list)) {
-		aux_comp = list_first_entry(&rtd->card->aux_comp_list,
-				struct snd_soc_component, card_aux_list);
-		if (!strcmp(aux_comp->name, WSA8810_NAME_1) ||
-		    !strcmp(aux_comp->name, WSA8810_NAME_2)) {
-			wsa_macro_set_spkr_mode(rtd->codec,
-						WSA_MACRO_SPKR_MODE_1);
-			wsa_macro_set_spkr_gain_offset(rtd->codec,
-					WSA_MACRO_GAIN_OFFSET_M1P5_DB);
+		list_for_each_entry(aux_comp, &rtd->card->aux_comp_list,
+				card_aux_list) {
+			if (!strcmp(aux_comp->name, WSA8810_NAME_1) ||
+			    !strcmp(aux_comp->name, WSA8810_NAME_2)) {
+				wsa_macro_set_spkr_mode(rtd->codec,
+							WSA_MACRO_SPKR_MODE_1);
+				wsa_macro_set_spkr_gain_offset(rtd->codec,
+						WSA_MACRO_GAIN_OFFSET_M1P5_DB);
+				break;
+			}
 		}
 	}
 	card = rtd->card->snd_card;
@@ -8720,8 +8704,8 @@ static int msm_init_aux_dev(struct platform_device *pdev,
 		__func__, found);
 
 codec_aux_dev:
-	if (!strnstr(card->name, "tavil", sizeof("tavil")) &&
-	    !strnstr(card->name, "tasha", sizeof("tasha"))) {
+	if (!strnstr(card->name, "tavil", strlen(card->name)) &&
+	    !strnstr(card->name, "tasha", strlen(card->name))) {
 		/* Get maximum aux codec device count for this platform */
 		ret = of_property_read_u32(pdev->dev.of_node,
 					   "qcom,codec-max-aux-devs",
@@ -8955,8 +8939,8 @@ static int sm6150_ssr_enable(struct device *dev, void *data)
 		goto err;
 	}
 
-	if (strnstr(card->name, "tavil", sizeof("tavil")) ||
-	    strnstr(card->name, "tasha", sizeof("tasha"))) {
+	if (strnstr(card->name, "tavil", strlen(card->name)) ||
+	    strnstr(card->name, "tasha", strlen(card->name))) {
 		pdata = snd_soc_card_get_drvdata(card);
 		if (!pdata->is_afe_config_done) {
 			const char *be_dl_name = LPASS_BE_SLIMBUS_0_RX;
@@ -8999,8 +8983,8 @@ static void sm6150_ssr_disable(struct device *dev, void *data)
 	dev_dbg(dev, "%s: setting snd_card to OFFLINE\n", __func__);
 	snd_soc_card_change_online_state(card, 0);
 
-	if (strnstr(card->name, "tavil", sizeof("tavil")) ||
-	    strnstr(card->name, "tasha", sizeof("tasha"))) {
+	if (strnstr(card->name, "tavil", strlen(card->name)) ||
+	    strnstr(card->name, "tasha", strlen(card->name))) {
 		pdata = snd_soc_card_get_drvdata(card);
 		msm_afe_clear_config();
 		pdata->is_afe_config_done = false;
@@ -9226,8 +9210,8 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	}
 
 	msm_i2s_auxpcm_init(pdev);
-	if (!strnstr(card->name, "tavil", sizeof("tavil")) &&
-	    !strnstr(card->name, "tasha", sizeof("tasha"))) {
+	if (!strnstr(card->name, "tavil", strlen(card->name)) &&
+	    !strnstr(card->name, "tasha", strlen(card->name))) {
 		pdata->dmic01_gpio_p = of_parse_phandle(pdev->dev.of_node,
 						      "qcom,cdc-dmic01-gpios",
 						       0);

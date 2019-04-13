@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +24,7 @@ static int unmap_memory(struct cal_type_data *cal_type,
 size_t get_cal_info_size(int32_t cal_type)
 {
 	size_t size = 0;
+	size_t size1 = 0, size2 = 0;
 
 	switch (cal_type) {
 	case CVP_VOC_RX_TOPOLOGY_CAL_TYPE:
@@ -101,8 +102,11 @@ size_t get_cal_info_size(int32_t cal_type)
 		 * Since get and set parameter structures are different in size
 		 * use the maximum size of get and set parameter structure
 		 */
-		size = max(sizeof(struct audio_cal_info_sp_th_vi_ftm_cfg),
+		size1 = max(sizeof(struct audio_cal_info_sp_th_vi_ftm_cfg),
 			   sizeof(struct audio_cal_info_sp_th_vi_param));
+		size2 = max(sizeof(struct audio_cal_info_sp_th_vi_v_vali_cfg),
+			   sizeof(struct audio_cal_info_sp_th_vi_v_vali_param));
+		size = max(size1, size2);
 		break;
 	case AFE_FB_SPKR_PROT_EX_VI_CAL_TYPE:
 		/*
@@ -444,9 +448,9 @@ static void delete_cal_block(struct cal_block_data *cal_block)
 	cal_block->client_info = NULL;
 	kfree(cal_block->cal_info);
 	cal_block->cal_info = NULL;
-	if (cal_block->map_data.dma_buf  != NULL) {
-		msm_audio_ion_free(cal_block->map_data.dma_buf);
-		cal_block->map_data.dma_buf = NULL;
+	if (cal_block->map_data.mem_handle  != NULL) {
+		msm_audio_ion_free(cal_block->map_data.mem_handle);
+		cal_block->map_data.mem_handle = NULL;
 	}
 	kfree(cal_block);
 done:
@@ -604,7 +608,7 @@ static int cal_block_ion_alloc(struct cal_block_data *cal_block)
 		goto done;
 	}
 
-	ret = msm_audio_ion_import(&cal_block->map_data.dma_buf,
+	ret = msm_audio_ion_import(&cal_block->map_data.mem_handle,
 		cal_block->map_data.ion_map_handle,
 		NULL, 0,
 		&cal_block->cal_data.paddr,
@@ -734,8 +738,8 @@ static int realloc_memory(struct cal_block_data *cal_block)
 {
 	int ret = 0;
 
-	msm_audio_ion_free(cal_block->map_data.dma_buf);
-	cal_block->map_data.dma_buf = NULL;
+	msm_audio_ion_free(cal_block->map_data.mem_handle);
+	cal_block->map_data.mem_handle = NULL;
 	cal_block->cal_data.size = 0;
 
 	ret = cal_block_ion_alloc(cal_block);

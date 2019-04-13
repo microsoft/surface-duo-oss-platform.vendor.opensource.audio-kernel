@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +24,7 @@
 #include <sound/pcm_params.h>
 #include <dsp/apr_audio-v2.h>
 #include <dsp/q6afe-v2.h>
+#include <dsp/sp_params.h>
 #include <dsp/q6core.h>
 #include "msm-dai-q6-v2.h"
 #include "codecs/core.h"
@@ -279,6 +280,7 @@ struct msm_dai_q6_tdm_dai_data {
 	struct afe_clk_set clk_set; /* hold LPASS clock config. */
 	union afe_port_group_config group_cfg; /* hold tdm group config */
 	struct afe_tdm_port_config port_cfg; /* hold tdm config */
+	struct afe_param_id_tdm_lane_cfg lane_cfg; /* hold tdm lane config */
 };
 
 /* MI2S format field for AFE_PORT_CMD_I2S_CONFIG command
@@ -343,6 +345,11 @@ static const struct soc_enum tdm_config_enum[] = {
 static DEFINE_MUTEX(tdm_mutex);
 
 static atomic_t tdm_group_ref[IDX_GROUP_TDM_MAX];
+
+static struct afe_param_id_tdm_lane_cfg tdm_lane_cfg = {
+	AFE_GROUP_DEVICE_ID_QUINARY_TDM_RX,
+	0x0,
+};
 
 /* cache of group cfg per parent node */
 static struct afe_param_id_group_device_tdm_cfg tdm_group_cfg = {
@@ -1090,17 +1097,6 @@ static int msm_dai_q6_auxpcm_prepare(struct snd_pcm_substream *substream,
 	}
 
 	afe_open(aux_dai_data->rx_pid, &dai_data->port_config, dai_data->rate);
-	if (q6core_get_avcs_api_version_per_service(
-		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
-		/*
-		 * send island mode config
-		 * This should be the first configuration
-		 */
-		rc = afe_send_port_island_mode(aux_dai_data->tx_pid);
-		if (rc)
-			dev_err(dai->dev, "%s: afe send island mode failed %d\n",
-				__func__, rc);
-	}
 	afe_open(aux_dai_data->tx_pid, &dai_data->port_config, dai_data->rate);
 	goto exit;
 
@@ -3234,11 +3230,64 @@ static int  msm_dai_q6_afe_dec_cfg_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int msm_dai_q6_afe_feedback_dec_cfg_get(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	u32 format_size = 0;
+
+	if (!dai_data) {
+		pr_err("%s: Invalid dai data\n", __func__);
+		return -EINVAL;
+	}
+
+	format_size = sizeof(dai_data->dec_config.format);
+	memcpy(ucontrol->value.bytes.data,
+		&dai_data->dec_config.format,
+		format_size);
+
+	pr_debug("%s: abr_dec_cfg for %d format\n",
+			__func__, dai_data->dec_config.format);
+	memcpy(ucontrol->value.bytes.data + format_size,
+		&dai_data->dec_config.abr_dec_cfg,
+		sizeof(struct afe_imc_dec_enc_info));
+
+	return 0;
+}
+
+static int msm_dai_q6_afe_feedback_dec_cfg_put(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	u32 format_size = 0;
+
+	if (!dai_data) {
+		pr_err("%s: Invalid dai data\n", __func__);
+		return -EINVAL;
+	}
+
+	memset(&dai_data->dec_config, 0x0,
+		sizeof(struct afe_dec_config));
+	format_size = sizeof(dai_data->dec_config.format);
+	memcpy(&dai_data->dec_config.format,
+		ucontrol->value.bytes.data,
+		format_size);
+
+	pr_debug("%s: abr_dec_cfg for %d format\n",
+			__func__, dai_data->dec_config.format);
+	memcpy(&dai_data->dec_config.abr_dec_cfg,
+		ucontrol->value.bytes.data + format_size,
+		sizeof(struct afe_imc_dec_enc_info));
+	dai_data->dec_config.abr_dec_cfg.is_abr_enabled = true;
+	return 0;
+}
+
 static int msm_dai_q6_afe_dec_cfg_get(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
 	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
 	u32 format_size = 0;
+	int ret = 0;
 
 	if (!dai_data) {
 		pr_err("%s: Invalid dai data\n", __func__);
@@ -3255,20 +3304,23 @@ static int msm_dai_q6_afe_dec_cfg_get(struct snd_kcontrol *kcontrol,
 			&dai_data->dec_config.data,
 			sizeof(struct asm_aac_dec_cfg_v2_t));
 		break;
+	case DEC_FMT_APTX_ADAPTIVE:
+		memcpy(ucontrol->value.bytes.data + format_size,
+			&dai_data->dec_config.data,
+			sizeof(struct asm_aptx_ad_dec_cfg_t));
+		break;
 	case DEC_FMT_SBC:
 	case DEC_FMT_MP3:
 		/* No decoder specific data available */
 		break;
 	default:
-		pr_debug("%s: Default decoder config for %d format: Expect abr_dec_cfg\n",
+		pr_err("%s: Invalid format %d\n",
 				__func__, dai_data->dec_config.format);
-		memcpy(ucontrol->value.bytes.data + format_size,
-			&dai_data->dec_config.abr_dec_cfg,
-			sizeof(struct afe_abr_dec_cfg_t));
-
+		ret = -EINVAL;
 		break;
 	}
-	return 0;
+
+	return ret;
 }
 
 static int msm_dai_q6_afe_dec_cfg_put(struct snd_kcontrol *kcontrol,
@@ -3276,6 +3328,7 @@ static int msm_dai_q6_afe_dec_cfg_put(struct snd_kcontrol *kcontrol,
 {
 	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
 	u32 format_size = 0;
+	int ret = 0;
 
 	if (!dai_data) {
 		pr_err("%s: Invalid dai data\n", __func__);
@@ -3301,15 +3354,19 @@ static int msm_dai_q6_afe_dec_cfg_put(struct snd_kcontrol *kcontrol,
 			ucontrol->value.bytes.data + format_size,
 			sizeof(struct asm_sbc_dec_cfg_t));
 		break;
-	default:
-		pr_debug("%s: Default decoder config for %d format: Expect abr_dec_cfg\n",
-				__func__, dai_data->dec_config.format);
-		memcpy(&dai_data->dec_config.abr_dec_cfg,
+	case DEC_FMT_APTX_ADAPTIVE:
+		memcpy(&dai_data->dec_config.data,
 			ucontrol->value.bytes.data + format_size,
-			sizeof(struct afe_abr_dec_cfg_t));
+			sizeof(struct asm_aptx_ad_dec_cfg_t));
+		break;
+	default:
+		pr_err("%s: Invalid format %d\n",
+				__func__, dai_data->dec_config.format);
+		ret = -EINVAL;
 		break;
 	}
-	return 0;
+
+	return ret;
 }
 
 static const struct snd_kcontrol_new afe_dec_config_controls[] = {
@@ -3319,8 +3376,8 @@ static const struct snd_kcontrol_new afe_dec_config_controls[] = {
 		.iface = SNDRV_CTL_ELEM_IFACE_PCM,
 		.name = "SLIM_7_TX Decoder Config",
 		.info = msm_dai_q6_afe_dec_cfg_info,
-		.get = msm_dai_q6_afe_dec_cfg_get,
-		.put = msm_dai_q6_afe_dec_cfg_put,
+		.get = msm_dai_q6_afe_feedback_dec_cfg_get,
+		.put = msm_dai_q6_afe_feedback_dec_cfg_put,
 	},
 	{
 		.access = (SNDRV_CTL_ELEM_ACCESS_READWRITE |
@@ -4193,6 +4250,7 @@ static struct platform_driver msm_auxpcm_dev_driver = {
 		.name = "msm-auxpcm-dev",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_auxpcm_dev_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -4911,18 +4969,6 @@ static int msm_dai_q6_mi2s_prepare(struct snd_pcm_substream *substream,
 		dai->id, port_id, dai_data->channels, dai_data->rate);
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		if (q6core_get_avcs_api_version_per_service(
-		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
-			/*
-			 * send island mode config.
-			 * This should be the first configuration
-			 */
-			rc = afe_send_port_island_mode(port_id);
-			if (rc)
-				dev_err(dai->dev, "%s: afe send island mode failed %d\n",
-					__func__, rc);
-		}
-
 		/* PORT START should be set if prepare called
 		 * in active state.
 		 */
@@ -6222,6 +6268,7 @@ static struct platform_driver msm_dai_q6_dev = {
 		.name = "msm-dai-q6-dev",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_dev_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -6259,6 +6306,7 @@ static struct platform_driver msm_dai_q6 = {
 		.name = "msm-dai-q6",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -6294,6 +6342,7 @@ static struct platform_driver msm_dai_mi2s_q6 = {
 		.name = "msm-dai-mi2s",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_mi2s_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -6311,6 +6360,7 @@ static struct platform_driver msm_dai_q6_mi2s_driver = {
 		.name = "msm-dai-q6-mi2s",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_mi2s_dev_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -6380,6 +6430,7 @@ static struct platform_driver msm_dai_q6_spdif_driver = {
 		.name = "msm-dai-q6-spdif",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_spdif_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -6524,6 +6575,24 @@ static int msm_dai_tdm_q6_probe(struct platform_device *pdev)
 	} else
 		dev_dbg(&pdev->dev, "%s: clk attribute not found\n", __func__);
 
+	/* extract tdm lane cfg to static */
+	tdm_lane_cfg.port_id = tdm_group_cfg.group_id;
+	tdm_lane_cfg.lane_mask = AFE_LANE_MASK_INVALID;
+	if (of_find_property(pdev->dev.of_node,
+			"qcom,msm-cpudai-tdm-lane-mask", NULL)) {
+		rc = of_property_read_u16(pdev->dev.of_node,
+			"qcom,msm-cpudai-tdm-lane-mask",
+			&tdm_lane_cfg.lane_mask);
+		if (rc) {
+			dev_err(&pdev->dev, "%s: value for tdm lane mask not found %s\n",
+				__func__, "qcom,msm-cpudai-tdm-lane-mask");
+			goto rtn;
+		}
+		dev_dbg(&pdev->dev, "%s: tdm lane mask from DT file %d\n",
+			__func__, tdm_lane_cfg.lane_mask);
+	} else
+		dev_dbg(&pdev->dev, "%s: tdm lane mask not found\n", __func__);
+
 	/* extract tdm clk src master/slave info into static */
 	rc = of_property_read_u32(pdev->dev.of_node,
 		"qcom,msm-cpudai-tdm-clk-internal",
@@ -6586,6 +6655,7 @@ static struct platform_driver msm_dai_tdm_q6 = {
 		.name = "msm-dai-tdm",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_tdm_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -7630,7 +7700,7 @@ static int msm_dai_q6_dai_tdm_remove(struct snd_soc_dai *dai)
 
 		if (atomic_read(group_ref) == 0) {
 			rc = afe_port_group_enable(group_id,
-				NULL, false);
+				NULL, false, NULL);
 			if (rc < 0) {
 				dev_err(dai->dev, "fail to disable AFE group 0x%x\n",
 					group_id);
@@ -8000,7 +8070,17 @@ static int msm_dai_q6_tdm_hw_params(struct snd_pcm_substream *substream,
 	 * NOTE: group config is set to the same as slot config.
 	 */
 	tdm_group->bit_width = tdm_group->slot_width;
-	tdm_group->num_channels = tdm_group->nslots_per_frame;
+
+	/*
+	 * for multi lane scenario
+	 * Total number of active channels = number of active lanes * number of active slots.
+	 */
+	if (dai_data->lane_cfg.lane_mask != AFE_LANE_MASK_INVALID)
+		tdm_group->num_channels = tdm_group->nslots_per_frame
+			* num_of_bits_set(dai_data->lane_cfg.lane_mask);
+	else
+		tdm_group->num_channels = tdm_group->nslots_per_frame;
+
 	tdm_group->sample_rate = dai_data->rate;
 
 	pr_debug("%s: TDM GROUP:\n"
@@ -8025,6 +8105,10 @@ static int msm_dai_q6_tdm_hw_params(struct snd_pcm_substream *substream,
 		tdm_group->port_id[5],
 		tdm_group->port_id[6],
 		tdm_group->port_id[7]);
+	pr_debug("%s: TDM GROUP ID 0x%x lane mask 0x%x:\n",
+		__func__,
+		tdm_group->group_id,
+		dai_data->lane_cfg.lane_mask);
 
 	/*
 	 * update tdm config param
@@ -8146,17 +8230,6 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 	group_ref = &tdm_group_ref[group_idx];
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		if (q6core_get_avcs_api_version_per_service(
-		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
-			/*
-			 * send island mode config.
-			 * This should be the first configuration
-			 */
-			rc = afe_send_port_island_mode(dai->id);
-			if (rc)
-				dev_err(dai->dev, "%s: afe send island mode failed %d\n",
-					__func__, rc);
-		}
 
 		if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
 			/* TX and RX share the same clk. So enable the clk
@@ -8180,7 +8253,8 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 			 */
 			if (dai_data->num_group_ports > 1) {
 				rc = afe_port_group_enable(group_id,
-					&dai_data->group_cfg, true);
+					&dai_data->group_cfg, true,
+					&dai_data->lane_cfg);
 				if (rc < 0) {
 					dev_err(dai->dev,
 					"%s: fail to enable AFE group 0x%x\n",
@@ -8195,7 +8269,7 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 		if (rc < 0) {
 			if (atomic_read(group_ref) == 0) {
 				afe_port_group_enable(group_id,
-					NULL, false);
+					NULL, false, NULL);
 			}
 			if (msm_dai_q6_get_tdm_clk_ref(group_idx) == 0) {
 				msm_dai_q6_tdm_set_clk(dai_data,
@@ -8252,7 +8326,7 @@ static void msm_dai_q6_tdm_shutdown(struct snd_pcm_substream *substream,
 
 		if (atomic_read(group_ref) == 0) {
 			rc = afe_port_group_enable(group_id,
-				NULL, false);
+				NULL, false, NULL);
 			if (rc < 0) {
 				dev_err(dai->dev, "%s: fail to disable AFE group 0x%x\n",
 					__func__, group_id);
@@ -10157,7 +10231,7 @@ static int msm_dai_q6_tdm_dev_probe(struct platform_device *pdev)
 	dai_data->group_cfg.tdm_cfg = tdm_group_cfg;
 	/* copy static num group ports per parent node */
 	dai_data->num_group_ports = num_tdm_group_ports;
-
+	dai_data->lane_cfg = tdm_lane_cfg;
 
 	dev_set_drvdata(&pdev->dev, dai_data);
 
@@ -10214,6 +10288,7 @@ static struct platform_driver msm_dai_q6_tdm_driver = {
 		.name = "msm-dai-q6-tdm",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_dai_q6_tdm_dev_dt_match,
+		.suppress_bind_attrs = true,
 	},
 };
 
@@ -10422,17 +10497,6 @@ static int msm_dai_q6_cdc_dma_prepare(struct snd_pcm_substream *substream,
 	int rc = 0;
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		if (q6core_get_avcs_api_version_per_service(
-		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
-			/*
-			 * send island mode config.
-			 * This should be the first configuration
-			 */
-			rc = afe_send_port_island_mode(dai->id);
-			if (rc)
-				pr_err("%s: afe send island mode failed %d\n",
-					__func__, rc);
-		}
 		if ((dai->id == AFE_PORT_ID_WSA_CODEC_DMA_TX_0) &&
 			(dai_data->port_config.cdc_dma.data_format == 1))
 			dai_data->port_config.cdc_dma.data_format =
@@ -10473,12 +10537,31 @@ static void msm_dai_q6_cdc_dma_shutdown(struct snd_pcm_substream *substream,
 		clear_bit(STATUS_PORT_STARTED, dai_data->hwfree_status);
 }
 
+/* all ports with same WSA requirement can use this digital mute API */
+static int msm_dai_q6_spk_digital_mute(struct snd_soc_dai *dai,
+				       int mute)
+{
+	int port_id = dai->id;
+
+	if (mute)
+		afe_get_sp_xt_logging_data(port_id);
+
+	return 0;
+}
 
 static struct snd_soc_dai_ops msm_dai_q6_cdc_dma_ops = {
 	.prepare          = msm_dai_q6_cdc_dma_prepare,
 	.hw_params        = msm_dai_q6_cdc_dma_hw_params,
 	.shutdown         = msm_dai_q6_cdc_dma_shutdown,
 	.set_channel_map = msm_dai_q6_cdc_dma_set_channel_map,
+};
+
+static struct snd_soc_dai_ops msm_dai_q6_cdc_wsa_dma_ops = {
+	.prepare          = msm_dai_q6_cdc_dma_prepare,
+	.hw_params        = msm_dai_q6_cdc_dma_hw_params,
+	.shutdown         = msm_dai_q6_cdc_dma_shutdown,
+	.set_channel_map = msm_dai_q6_cdc_dma_set_channel_map,
+	.digital_mute = msm_dai_q6_spk_digital_mute,
 };
 
 static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
@@ -10503,7 +10586,7 @@ static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
 			.rate_max = 384000,
 		},
 		.name = "WSA_CDC_DMA_RX_0",
-		.ops = &msm_dai_q6_cdc_dma_ops,
+		.ops = &msm_dai_q6_cdc_wsa_dma_ops,
 		.id = AFE_PORT_ID_WSA_CODEC_DMA_RX_0,
 		.probe = msm_dai_q6_dai_cdc_dma_probe,
 		.remove = msm_dai_q6_dai_cdc_dma_remove,
@@ -10555,7 +10638,7 @@ static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
 			.rate_max = 384000,
 		},
 		.name = "WSA_CDC_DMA_RX_1",
-		.ops = &msm_dai_q6_cdc_dma_ops,
+		.ops = &msm_dai_q6_cdc_wsa_dma_ops,
 		.id = AFE_PORT_ID_WSA_CODEC_DMA_RX_1,
 		.probe = msm_dai_q6_dai_cdc_dma_probe,
 		.remove = msm_dai_q6_dai_cdc_dma_remove,

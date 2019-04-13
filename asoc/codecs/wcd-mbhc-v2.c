@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -854,7 +854,7 @@ static bool wcd_mbhc_moisture_detect(struct wcd_mbhc *mbhc, bool detection_type)
 {
 	bool ret = false;
 
-	if (!mbhc->mbhc_cfg->moisture_en ||
+	if (!mbhc->mbhc_cfg->moisture_en &&
 	    !mbhc->mbhc_cfg->moisture_duty_cycle_en)
 		return ret;
 
@@ -1344,9 +1344,15 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	else
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HS_L_DET_PULL_UP_CTRL, 3);
 
+	/* Configure for moisture detection when duty cycle is not enabled.
+	 * Otherwise disable moisture detection.
+	 */
 	if (mbhc->mbhc_cfg->moisture_en && mbhc->mbhc_cb->mbhc_moisture_config
 		&& !mbhc->mbhc_cfg->moisture_duty_cycle_en)
 		mbhc->mbhc_cb->mbhc_moisture_config(mbhc);
+	else if (mbhc->mbhc_cfg->moisture_duty_cycle_en &&
+		 mbhc->mbhc_cb->mbhc_moisture_detect_en)
+		mbhc->mbhc_cb->mbhc_moisture_detect_en(mbhc, false);
 
 	/*
 	 * For USB analog we need to override the switch configuration.
@@ -1354,9 +1360,6 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	 * by an external source
 	 */
 	if (mbhc->mbhc_cfg->enable_usbc_analog) {
-		mbhc->hphl_swh = 0;
-		mbhc->gnd_swh = 0;
-
 		if (mbhc->mbhc_cb->hph_pull_up_control_v2)
 			mbhc->mbhc_cb->hph_pull_up_control_v2(codec,
 							      HS_PULLUP_I_OFF);

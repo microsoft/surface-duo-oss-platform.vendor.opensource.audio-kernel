@@ -50,6 +50,9 @@
 #define AFE_API_VERSION_V3		3
 /* for VAD and Island mode */
 #define AFE_API_VERSION_V4		4
+/* for VAD enable */
+#define AFE_API_VERSION_V6		6
+
 
 typedef int (*routing_cb)(int port);
 
@@ -298,7 +301,7 @@ struct afe_audio_buffer {
 	uint32_t   used;
 	uint32_t   size;/* size of buffer */
 	uint32_t   actual_size; /* actual number of bytes read by DSP */
-	struct     dma_buf *dma_buf;
+	void       *mem_handle;
 };
 
 struct afe_audio_port_data {
@@ -343,6 +346,7 @@ int afe_set_display_stream(u16 rx_port_id, u32 stream_idx, u32 ctl_idx);
 int afe_loopback_gain(u16 port_id, u16 volume);
 int afe_validate_port(u16 port_id);
 int afe_get_port_index(u16 port_id);
+int afe_get_port_id(u16 port_idx);
 int afe_get_topology(int port_id);
 int afe_start_pseudo_port(u16 port_id);
 int afe_stop_pseudo_port(u16 port_id);
@@ -438,7 +442,8 @@ int afe_set_aanc_noise_level(int val);
 int afe_port_group_set_param(u16 group_id,
 	union afe_port_group_config *afe_group_config);
 int afe_port_group_enable(u16 group_id,
-	union afe_port_group_config *afe_group_config, u16 enable);
+	union afe_port_group_config *afe_group_config, u16 enable,
+	struct afe_param_id_tdm_lane_cfg *lane_cfg);
 int afe_unmap_rtac_block(uint32_t *mem_map_handle);
 int afe_map_rtac_block(struct rtac_cal_block_data *cal_block);
 int afe_send_slot_mapping_cfg(
@@ -452,8 +457,12 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 void afe_set_routing_callback(routing_cb cb);
 int afe_get_av_dev_drift(struct afe_param_id_dev_timing_stats *timing_stats,
 		u16 port);
+int afe_get_sp_rx_tmax_xmax_logging_data(
+		struct afe_sp_rx_tmax_xmax_logging_param *xt_logging,
+		u16 port_id);
 int afe_cal_init_hwdep(void *card);
 int afe_send_port_island_mode(u16 port_id);
+int afe_send_port_vad_cfg_params(u16 port_id);
 int afe_send_cmd_wakeup_register(void *handle, bool enable);
 void afe_register_wakeup_irq_callback(
 	void (*afe_cb_wakeup_irq)(void *handle));
@@ -497,4 +506,11 @@ struct afe_cmd_remote_lpass_core_hw_devote_request {
 int afe_vote_lpass_core_hw(uint32_t hw_block_id, char *client_name,
 			uint32_t *client_handle);
 int afe_unvote_lpass_core_hw(uint32_t hw_block_id, uint32_t client_handle);
+int afe_get_spk_initial_cal(void);
+void afe_get_spk_r0(int *spk_r0);
+void afe_get_spk_t0(int *spk_t0);
+int afe_get_spk_v_vali_flag(void);
+void afe_get_spk_v_vali_sts(int *spk_v_vali_sts);
+void afe_set_spk_initial_cal(int initial_cal);
+void afe_set_spk_v_vali_flag(int v_vali_flag);
 #endif /* __Q6AFE_V2_H__ */

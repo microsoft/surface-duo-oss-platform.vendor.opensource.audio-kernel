@@ -80,6 +80,10 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 
 #define MAX_NUMBER_OF_STREAMS 2
 
+#ifndef COMPRESSED_PERF_MODE_FLAG
+#define COMPRESSED_PERF_MODE_FLAG 0
+#endif
+
 struct msm_compr_gapless_state {
 	bool set_next_stream_id;
 	int32_t stream_opened[MAX_NUMBER_OF_STREAMS];
@@ -158,6 +162,9 @@ struct msm_compr_audio {
 	uint32_t run_mode;
 	uint32_t start_delay_lsw;
 	uint32_t start_delay_msw;
+
+	int32_t shm_ion_fd;
+	void *mem_hdl_shmfd;
 
 	uint64_t marker_timestamp;
 
@@ -1016,6 +1023,12 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 			break;
 		}
 
+		/* overwrite the values in gapless*/
+		if (use_gapless_codec_options && (codec_options != NULL)) {
+			prtd->num_channels = codec_options->pcm_dec.num_channels;
+			chmap = codec_options->pcm_dec.ch_map;
+		}
+
 		if (q6core_get_avcs_api_version_per_service(
 					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 					ADSP_ASM_API_VERSION_V2) {
@@ -1283,7 +1296,8 @@ static int msm_compr_configure_dsp_for_playback
 	struct msm_compr_audio *prtd = runtime->private_data;
 	struct snd_soc_pcm_runtime *soc_prtd = cstream->private_data;
 	uint16_t bits_per_sample = 16;
-	int dir = IN, ret = 0;
+	int dir = IN, ret = 0, port_id, copp_idx;
+	bool tmp = false;
 	struct audio_client *ac = prtd->audio_client;
 	uint32_t stream_index;
 	struct asm_softpause_params softpause = {
@@ -1446,6 +1460,11 @@ static int msm_compr_configure_dsp_for_playback
 	if (ret < 0)
 		pr_err("%s, failed to send media format block\n", __func__);
 
+	tmp = msm_pcm_routing_get_portid_copp_idx(soc_prtd->dai_link->id,
+				SESSION_TYPE_RX, &port_id, &copp_idx);
+	if (tmp)
+		q6adm_update_rtd_info(soc_prtd, port_id, copp_idx,
+					soc_prtd->dai_link->id, 1);
 	return ret;
 }
 
@@ -1678,6 +1697,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	populate_codec_list(prtd);
 	prtd->audio_client = q6asm_audio_client_alloc(
 				(app_cb)compr_event_handler, prtd);
+
 	if (prtd->audio_client == NULL) {
 		pr_err("%s: Could not allocate memory for client\n", __func__);
 		kfree(pdata->audio_effects[rtd->dai_link->id]);
@@ -1693,6 +1713,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	prtd->audio_client->perf_mode = false;
 	prtd->session_id = prtd->audio_client->session;
 	msm_adsp_init_mixer_ctl_pp_event_queue(rtd);
+	msm_adsp_init_mixer_ctl_adm_pp_event_queue(rtd);
 	pdata->is_in_use[rtd->dai_link->id] = true;
 	return 0;
 }
@@ -1747,6 +1768,11 @@ static int msm_compr_capture_open(struct snd_compr_stream *cstream)
 	atomic_set(&prtd->wait_on_close, 0);
 	atomic_set(&prtd->error, 0);
 
+	init_waitqueue_head(&prtd->eos_wait);
+	init_waitqueue_head(&prtd->drain_wait);
+	init_waitqueue_head(&prtd->close_wait);
+	init_waitqueue_head(&prtd->wait_for_stream_avail);
+
 	runtime->private_data = prtd;
 
 	return 0;
@@ -1770,9 +1796,12 @@ static int msm_compr_playback_free(struct snd_compr_stream *cstream)
 	struct snd_soc_pcm_runtime *soc_prtd;
 	struct msm_compr_pdata *pdata;
 	struct audio_client *ac;
-	int dir = IN, ret = 0, stream_id;
+	int dir = IN, ret = 0, stream_id, sec_key, port_id, copp_idx;
+	bool tmp = false;
 	unsigned long flags;
 	uint32_t stream_index;
+	dma_addr_t paddr;
+	size_t pa_len = 0;
 
 	pr_debug("%s\n", __func__);
 
@@ -1820,6 +1849,12 @@ static int msm_compr_playback_free(struct snd_compr_stream *cstream)
 	spin_lock_irqsave(&prtd->lock, flags);
 	stream_id = ac->stream_id;
 	stream_index = STREAM_ARRAY_INDEX(NEXT_STREAM_ID(stream_id));
+	tmp = msm_pcm_routing_get_portid_copp_idx(soc_prtd->dai_link->id,
+				SESSION_TYPE_RX, &port_id, &copp_idx);
+	if (tmp)
+		q6adm_update_rtd_info(soc_prtd, port_id, copp_idx,
+				soc_prtd->dai_link->id, 0);
+
 
 	if ((stream_index < MAX_NUMBER_OF_STREAMS && stream_index >= 0) &&
 	    (prtd->gapless_state.stream_opened[stream_index])) {
@@ -1848,9 +1883,29 @@ static int msm_compr_playback_free(struct snd_compr_stream *cstream)
 	}
 
 	q6asm_audio_client_buf_free_contiguous(dir, ac);
+	if (prtd->shm_ion_fd > 0) {
+		ret = msm_audio_is_hypervisor_supported();
+
+		if (!ret) {
+			ret = q6core_get_unlock_key(DOLBY_ASM_SHM_SUB_SYSTEM,
+				       &sec_key, &paddr, &pa_len);
+			if (ret) {
+				pr_err("%s Failed to get the key\n", __func__);
+				goto shm_ion_free_done;
+			}
+		}
+
+		ret = msm_audio_ion_phys_free(prtd->mem_hdl_shmfd, &paddr,
+						&pa_len, ADSP_TO_HLOS,
+					DOLBY_ASM_SHM_SUB_SYSTEM, sec_key);
+		prtd->shm_ion_fd = 0;
+	}
+
+shm_ion_free_done:
 
 	q6asm_audio_client_free(ac);
 	msm_adsp_clean_mixer_ctl_pp_event_queue(soc_prtd);
+	msm_adsp_clean_mixer_ctl_adm_pp_event_queue(soc_prtd);
 	if (pdata->audio_effects[soc_prtd->dai_link->id] != NULL) {
 		kfree(pdata->audio_effects[soc_prtd->dai_link->id]);
 		pdata->audio_effects[soc_prtd->dai_link->id] = NULL;
@@ -1991,6 +2046,11 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 				 __func__, params->codec.id);
 			return -EINVAL;
 		}
+	}
+
+	if (params->codec.flags & COMPRESSED_PERF_MODE_FLAG) {
+		pr_debug("%s: setting perf mode = %d", __func__, LOW_LATENCY_PCM_MODE);
+		prtd->audio_client->perf_mode = LOW_LATENCY_PCM_MODE;
 	}
 
 	switch (params->codec.id) {
@@ -2636,7 +2696,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			break;
 		}
 
-		if (prtd->codec_param.codec.format == SNDRV_PCM_FORMAT_S24_LE)
+		if ((prtd->codec_param.codec.format == SNDRV_PCM_FORMAT_S24_LE) ||
+			(prtd->codec_param.codec.format == SNDRV_PCM_FORMAT_S24_3LE))
 			bits_per_sample = 24;
 		else if (prtd->codec_param.codec.format ==
 			 SNDRV_PCM_FORMAT_S32_LE)
@@ -2644,13 +2705,22 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 
 		pr_debug("%s: open_write stream_id %d bits_per_sample %d",
 				__func__, stream_id, bits_per_sample);
-		rc = q6asm_stream_open_write_v4(prtd->audio_client,
+
+		if (q6core_get_avcs_api_version_per_service(
+					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+					ADSP_ASM_API_VERSION_V2)
+			rc = q6asm_stream_open_write_v5(prtd->audio_client,
+				prtd->codec, bits_per_sample,
+				stream_id,
+				prtd->gapless_state.use_dsp_gapless_mode);
+		else
+			rc = q6asm_stream_open_write_v4(prtd->audio_client,
 				prtd->codec, bits_per_sample,
 				stream_id,
 				prtd->gapless_state.use_dsp_gapless_mode);
 		if (rc < 0) {
-			pr_err("%s: Session out open failed for gapless\n",
-				 __func__);
+			pr_err("%s: Session out open failed for gapless [%d]\n",
+				__func__, rc);
 			break;
 		}
 
@@ -2734,12 +2804,10 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 				rc = q6asm_get_session_time(
 				prtd->audio_client, &prtd->marker_timestamp);
 			if (rc < 0) {
-				pr_err("%s: Get Session Time return =%lld\n",
-					__func__, timestamp);
 				if (atomic_read(&prtd->error))
 					return -ENETRESET;
 				else
-					return -EAGAIN;
+					return rc;
 			}
 		}
 	} else {
@@ -3124,6 +3192,7 @@ static int msm_compr_set_next_track_param(struct snd_compr_stream *cstream,
 	case FORMAT_VORBIS:
 	case FORMAT_ALAC:
 	case FORMAT_APE:
+	case FORMAT_LINEAR_PCM:
 		memcpy(&(prtd->gapless_state.codec_options),
 			codec_options,
 			sizeof(union snd_codec_options));
@@ -3662,7 +3731,7 @@ static int msm_compr_channel_map_put(struct snd_kcontrol *kcontrol,
 
 	pr_debug("%s: fe_id- %llu\n", __func__, fe_id);
 
-	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
+	if (fe_id >= MSM_FRONTEND_DAI_MM_SIZE) {
 		pr_err("%s Received out of bounds fe_id %llu\n",
 			__func__, fe_id);
 		rc = -EINVAL;
@@ -3704,7 +3773,7 @@ static int msm_compr_channel_map_get(struct snd_kcontrol *kcontrol,
 	int rc = 0, i;
 
 	pr_debug("%s: fe_id- %llu\n", __func__, fe_id);
-	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
+	if (fe_id >= MSM_FRONTEND_DAI_MM_SIZE) {
 		pr_err("%s: Received out of bounds fe_id %llu\n",
 			__func__, fe_id);
 		rc = -EINVAL;
@@ -3784,7 +3853,7 @@ done:
 	return ret;
 }
 
-static int msm_compr_ion_fd_map_put(struct snd_kcontrol *kcontrol,
+static int msm_compr_shm_ion_fd_map_put(struct snd_kcontrol *kcontrol,
 				    struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_component *comp = snd_kcontrol_chip(kcontrol);
@@ -3793,7 +3862,6 @@ static int msm_compr_ion_fd_map_put(struct snd_kcontrol *kcontrol,
 				snd_soc_component_get_drvdata(comp);
 	struct snd_compr_stream *cstream = NULL;
 	struct msm_compr_audio *prtd;
-	int fd;
 	int ret = 0;
 
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
@@ -3823,10 +3891,12 @@ static int msm_compr_ion_fd_map_put(struct snd_kcontrol *kcontrol,
 		goto done;
 	}
 
-	memcpy(&fd, ucontrol->value.bytes.data, sizeof(fd));
-	ret = q6asm_send_ion_fd(prtd->audio_client, fd);
+	memcpy(&prtd->shm_ion_fd, ucontrol->value.bytes.data,
+		sizeof(prtd->shm_ion_fd));
+	ret = q6asm_audio_map_shm_fd(prtd->audio_client,
+			&prtd->mem_hdl_shmfd, prtd->shm_ion_fd);
 	if (ret < 0)
-		pr_err("%s: failed to register ion fd\n", __func__);
+		pr_err("%s: failed to map shm ion fd\n", __func__);
 done:
 	return ret;
 }
@@ -4028,8 +4098,8 @@ static int msm_compr_channel_map_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = PCM_FORMAT_MAX_NUM_CHANNEL_V8;
 	uinfo->value.integer.min = 0;
-	/* See PCM_CHANNEL_RSD=34 in apr_audio-v2.h */
-	uinfo->value.integer.max = 34;
+	/* See PCM_CHANNEL_UNUSED=47 in apr_audio-v2.h */
+	uinfo->value.integer.max = 47;
 	return 0;
 }
 
@@ -4464,7 +4534,7 @@ static int msm_compr_add_io_fd_cmd_control(struct snd_soc_pcm_runtime *rtd)
 		.name = "?",
 		.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
 		.info = msm_adsp_stream_cmd_info,
-		.put = msm_compr_ion_fd_map_put,
+		.put = msm_compr_shm_ion_fd_map_put,
 		.private_value = 0,
 		}
 	};
@@ -4592,6 +4662,16 @@ static int msm_compr_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	chmixer_pspd->output_channel = ucontrol->value.integer.value[3];
 	chmixer_pspd->port_idx = ucontrol->value.integer.value[4];
 
+	if (chmixer_pspd->input_channel <= 0 ||
+		chmixer_pspd->input_channel > PCM_FORMAT_MAX_NUM_CHANNEL_V8 ||
+		chmixer_pspd->output_channel <= 0 ||
+		chmixer_pspd->output_channel > PCM_FORMAT_MAX_NUM_CHANNEL_V8) {
+		pr_err("%s: Invalid channels, in %d, out %d\n",
+				__func__, chmixer_pspd->input_channel,
+				chmixer_pspd->output_channel);
+		return -EINVAL;
+	}
+
 	if (chmixer_pspd->enable) {
 		if (session_type == SESSION_TYPE_RX &&
 			!chmixer_pspd->override_in_ch_map) {
@@ -4635,13 +4715,8 @@ static int msm_compr_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	cstream = pdata->cstream[fe_id];
 	if (chmixer_pspd->enable && cstream && cstream->runtime) {
 		prtd = cstream->runtime->private_data;
-		if (!prtd) {
-			pr_err("%s invalid prtd\n", __func__);
-			ret = -EINVAL;
-			goto done;
-		}
 
-		if (prtd->audio_client) {
+		if (prtd && prtd->audio_client) {
 			stream_id = prtd->audio_client->session;
 			be_id = chmixer_pspd->port_idx;
 			ret = msm_pcm_routing_set_channel_mixer_runtime(be_id,
@@ -4654,7 +4729,6 @@ static int msm_compr_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	if (reset_override_in_ch_map)
 		chmixer_pspd->override_in_ch_map = false;
 
-done:
 	return ret;
 }
 
@@ -5222,6 +5296,7 @@ static struct platform_driver msm_compr_driver = {
 		.name = "msm-compress-dsp",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_compr_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = msm_compr_dev_probe,
 	.remove = msm_compr_remove,

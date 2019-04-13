@@ -37,6 +37,7 @@
 #include <dsp/q6audio-v2.h>
 #include <dsp/q6core.h>
 #include <dsp/q6asm-v2.h>
+#include <dsp/q6adm-v2.h>
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
@@ -325,7 +326,8 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	struct msm_audio *prtd = runtime->private_data;
 	struct msm_plat_data *pdata;
 	struct snd_pcm_hw_params *params;
-	int ret;
+	int ret, port_id, copp_idx;
+	bool tmp = false;
 	uint32_t fmt_type = FORMAT_LINEAR_PCM;
 	uint16_t bits_per_sample;
 	uint16_t sample_word_size;
@@ -430,6 +432,11 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 		pr_err("%s: stream reg failed ret:%d\n", __func__, ret);
 		return ret;
 	}
+	tmp = msm_pcm_routing_get_portid_copp_idx(soc_prtd->dai_link->id,
+				SESSION_TYPE_RX, &port_id, &copp_idx);
+	if (tmp)
+		q6adm_update_rtd_info(soc_prtd, port_id, copp_idx,
+					soc_prtd->dai_link->id, 1);
 	if (prtd->compress_enable) {
 		ret = q6asm_media_format_block_gen_compr(
 			prtd->audio_client, runtime->rate,
@@ -756,8 +763,10 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	prtd->reset_event = false;
 	runtime->private_data = prtd;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		msm_adsp_init_mixer_ctl_pp_event_queue(soc_prtd);
+		msm_adsp_init_mixer_ctl_adm_pp_event_queue(soc_prtd);
+	}
 
 	/* Vote to update the Rx thread priority to RT Thread for playback */
 	if ((substream->stream == SNDRV_PCM_STREAM_PLAYBACK) &&
@@ -871,8 +880,9 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	struct msm_audio *prtd = runtime->private_data;
 	struct msm_plat_data *pdata;
 	uint32_t timeout;
-	int dir = 0;
+	int dir = 0, port_id, copp_idx;
 	int ret = 0;
+	bool tmp = false;
 
 	pr_debug("%s: cmd_pending 0x%lx\n", __func__, prtd->cmd_pending);
 
@@ -913,9 +923,15 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 					prtd->audio_client);
 		q6asm_audio_client_free(prtd->audio_client);
 	}
+	tmp = msm_pcm_routing_get_portid_copp_idx(soc_prtd->dai_link->id,
+				SESSION_TYPE_RX, &port_id, &copp_idx);
+	if (tmp)
+		q6adm_update_rtd_info(soc_prtd, port_id, copp_idx,
+					soc_prtd->dai_link->id, 0);
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->id,
 						SNDRV_PCM_STREAM_PLAYBACK);
 	msm_adsp_clean_mixer_ctl_pp_event_queue(soc_prtd);
+	msm_adsp_clean_mixer_ctl_adm_pp_event_queue(soc_prtd);
 	kfree(prtd);
 	runtime->private_data = NULL;
 
@@ -1351,7 +1367,7 @@ static int msm_pcm_volume_ctl_get(struct snd_kcontrol *kcontrol,
 {
 	struct snd_pcm_volume *vol = snd_kcontrol_chip(kcontrol);
 	struct snd_pcm_substream *substream =
-		vol->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
+		vol->pcm->streams[vol->stream].substream;
 	struct msm_audio *prtd;
 
 	pr_debug("%s\n", __func__);
@@ -1375,7 +1391,7 @@ static int msm_pcm_volume_ctl_put(struct snd_kcontrol *kcontrol,
 	int rc = 0;
 	struct snd_pcm_volume *vol = snd_kcontrol_chip(kcontrol);
 	struct snd_pcm_substream *substream =
-		vol->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
+		vol->pcm->streams[vol->stream].substream;
 	struct msm_audio *prtd;
 	int volume = ucontrol->value.integer.value[0];
 
@@ -1396,15 +1412,16 @@ static int msm_pcm_volume_ctl_put(struct snd_kcontrol *kcontrol,
 	return rc;
 }
 
-static int msm_pcm_add_volume_control(struct snd_soc_pcm_runtime *rtd)
+static int msm_pcm_add_volume_control(struct snd_soc_pcm_runtime *rtd,
+				      int stream)
 {
 	int ret = 0;
 	struct snd_pcm *pcm = rtd->pcm;
 	struct snd_pcm_volume *volume_info;
 	struct snd_kcontrol *kctl;
 
-	dev_dbg(rtd->dev, "%s, Volume control add\n", __func__);
-	ret = snd_pcm_add_volume_ctls(pcm, SNDRV_PCM_STREAM_PLAYBACK,
+	dev_dbg(rtd->dev, "%s, volume control add\n", __func__);
+	ret = snd_pcm_add_volume_ctls(pcm, stream,
 			NULL, 1, rtd->dai_link->id,
 			&volume_info);
 	if (ret < 0) {
@@ -1885,14 +1902,23 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	chmixer_pspd->output_channel = ucontrol->value.integer.value[3];
 	chmixer_pspd->port_idx = ucontrol->value.integer.value[4];
 
-	if (chmixer_pspd->enable) {
+	if (chmixer_pspd->input_channel <= 0 ||
+		chmixer_pspd->input_channel > PCM_FORMAT_MAX_NUM_CHANNEL_V8 ||
+		chmixer_pspd->output_channel <= 0 ||
+		chmixer_pspd->output_channel > PCM_FORMAT_MAX_NUM_CHANNEL_V8) {
+		pr_err("%s: Invalid channels, in %d, out %d\n",
+				__func__, chmixer_pspd->input_channel,
+				chmixer_pspd->output_channel);
+		return -EINVAL;
+	}
+
+	prtd = substream->runtime ? substream->runtime->private_data : NULL;
+	if (chmixer_pspd->enable && prtd) {
 		if (session_type == SESSION_TYPE_RX &&
 			!chmixer_pspd->override_in_ch_map) {
-			if (pdata->ch_map[fe_id] &&
-				pdata->ch_map[fe_id]->set_ch_map) {
+			if (prtd->set_channel_map) {
 				for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
-					chmixer_pspd->in_ch_map[i] =
-						pdata->ch_map[fe_id]->channel_map[i];
+					chmixer_pspd->in_ch_map[i] = prtd->channel_map[i];
 			} else {
 				q6asm_map_channels(asm_ch_map,
 					chmixer_pspd->input_channel, false);
@@ -1903,17 +1929,14 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 			reset_override_in_ch_map = true;
 		} else if (session_type == SESSION_TYPE_TX &&
 				!chmixer_pspd->override_out_ch_map) {
-			if (pdata->ch_map[fe_id] &&
-				pdata->ch_map[fe_id]->set_ch_map) {
-				for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
-					chmixer_pspd->out_ch_map[i] =
-						pdata->ch_map[fe_id]->channel_map[i];
-			} else {
-				q6asm_map_channels(asm_ch_map,
-					chmixer_pspd->output_channel, false);
-				for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
-					chmixer_pspd->out_ch_map[i] = asm_ch_map[i];
-			}
+			/*
+			 * Channel map set in prtd is for plyback only,
+			 * hence always use default for capture path.
+			 */
+			q6asm_map_channels(asm_ch_map,
+				chmixer_pspd->output_channel, false);
+			for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
+				chmixer_pspd->out_ch_map[i] = asm_ch_map[i];
 			chmixer_pspd->override_out_ch_map = true;
 			reset_override_out_ch_map = true;
 		}
@@ -1927,22 +1950,13 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 			session_type,
 			chmixer_pspd);
 
-	if (chmixer_pspd->enable && substream->runtime) {
-		prtd = substream->runtime->private_data;
-		if (!prtd) {
-			pr_err("%s find invalid prtd fail\n", __func__);
-			ret = -EINVAL;
-			goto done;
-		}
-
-		if (prtd->audio_client) {
-			stream_id = prtd->audio_client->session;
-			be_id = chmixer_pspd->port_idx;
-			msm_pcm_routing_set_channel_mixer_runtime(be_id,
-					stream_id,
-					session_type,
-					chmixer_pspd);
-		}
+	if (chmixer_pspd->enable && prtd && prtd->audio_client) {
+		stream_id = prtd->audio_client->session;
+		be_id = chmixer_pspd->port_idx;
+		msm_pcm_routing_set_channel_mixer_runtime(be_id,
+				stream_id,
+				session_type,
+				chmixer_pspd);
 	}
 
 	if (reset_override_out_ch_map)
@@ -1950,7 +1964,6 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	if (reset_override_in_ch_map)
 		chmixer_pspd->override_in_ch_map = false;
 
-done:
 	return ret;
 }
 
@@ -2503,11 +2516,14 @@ static int msm_asoc_pcm_new(struct snd_soc_pcm_runtime *rtd)
 		return ret;
 	}
 
-	ret = msm_pcm_add_volume_control(rtd);
+	ret = msm_pcm_add_volume_control(rtd, SNDRV_PCM_STREAM_PLAYBACK);
 	if (ret)
 		pr_err("%s: Could not add pcm Volume Control %d\n",
 			__func__, ret);
-
+	ret = msm_pcm_add_volume_control(rtd, SNDRV_PCM_STREAM_CAPTURE);
+	if (ret)
+		pr_err("%s: Could not add pcm Volume Control %d\n",
+			__func__, ret);
 	ret = msm_pcm_add_compress_control(rtd);
 	if (ret)
 		pr_err("%s: Could not add pcm Compress Control %d\n",
@@ -2631,6 +2647,7 @@ static struct platform_driver msm_pcm_driver = {
 		.name = "msm-pcm-dsp",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_pcm_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = msm_pcm_probe,
 	.remove = msm_pcm_remove,

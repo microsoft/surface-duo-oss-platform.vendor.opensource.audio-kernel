@@ -460,6 +460,10 @@ static const struct snd_kcontrol_new rx_int2_1_vbat_mix_switch[] = {
 	SOC_DAPM_SINGLE("RX AUX VBAT Enable", SND_SOC_NOPM, 0, 1, 0)
 };
 
+static const char * const hph_idle_detect_text[] = {"OFF", "ON"};
+
+static SOC_ENUM_SINGLE_EXT_DECL(hph_idle_detect_enum, hph_idle_detect_text);
+
 RX_MACRO_DAPM_ENUM(rx_int0_2, BOLERO_CDC_RX_INP_MUX_RX_INT0_CFG1, 0,
 		rx_int_mix_mux_text);
 RX_MACRO_DAPM_ENUM(rx_int1_2, BOLERO_CDC_RX_INP_MUX_RX_INT1_CFG1, 0,
@@ -1051,7 +1055,7 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 			ret = bolero_request_clock(rx_priv->dev,
 					RX_MACRO, mclk_mux, true);
 			if (ret < 0) {
-				dev_err(rx_priv->dev,
+				dev_err_ratelimited(rx_priv->dev,
 					"%s: rx request clock enable failed\n",
 					__func__);
 				goto exit;
@@ -1631,6 +1635,38 @@ static void rx_macro_hd2_control(struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec, hd2_enable_reg, 0x04, 0x00);
 		snd_soc_update_bits(codec, hd2_scale_reg, 0x3C, 0x00);
 	}
+}
+
+static int rx_macro_hph_idle_detect_get(struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	struct rx_macro_priv *rx_priv = NULL;
+	struct device *rx_dev = NULL;
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	ucontrol->value.integer.value[0] =
+		rx_priv->idle_det_cfg.hph_idle_detect_en;
+
+	return 0;
+}
+
+static int rx_macro_hph_idle_detect_put(struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	struct rx_macro_priv *rx_priv = NULL;
+	struct device *rx_dev = NULL;
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	rx_priv->idle_det_cfg.hph_idle_detect_en =
+		ucontrol->value.integer.value[0];
+
+	return 0;
 }
 
 static int rx_macro_get_compander(struct snd_kcontrol *kcontrol,
@@ -2511,6 +2547,9 @@ static const struct snd_kcontrol_new rx_macro_snd_controls[] = {
 	SOC_SINGLE_EXT("RX_COMP2 Switch", SND_SOC_NOPM, RX_MACRO_COMP2, 1, 0,
 		rx_macro_get_compander, rx_macro_set_compander),
 
+	SOC_ENUM_EXT("HPH Idle Detect", hph_idle_detect_enum,
+		rx_macro_hph_idle_detect_get, rx_macro_hph_idle_detect_put),
+
 	SOC_ENUM_EXT("RX_EAR Mode", rx_macro_ear_mode_enum,
 		rx_macro_get_ear_mode, rx_macro_put_ear_mode),
 
@@ -3120,7 +3159,7 @@ static int rx_swrm_clock(void *handle, bool enable)
 		if (rx_priv->swr_clk_users == 0) {
 			ret = rx_macro_mclk_enable(rx_priv, 1, true);
 			if (ret < 0) {
-				dev_err(rx_priv->dev,
+				dev_err_ratelimited(rx_priv->dev,
 					"%s: rx request clock enable failed\n",
 					__func__);
 				goto exit;
