@@ -1683,6 +1683,11 @@ done:
 }
 EXPORT_SYMBOL(q6core_get_unlock_key);
 
+/**
+ * address returned for fd i/p is physical and for sharing
+ * physical address with ADSP, SID bit is not set in this function.
+ */
+
 int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 			uint32_t mempool_id, bool add_pages)
 {
@@ -1708,7 +1713,7 @@ int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 	mem_pool.pool_id = mempool_id;
 	mem_pool.size = bufsz;
 	mem_pool.addr_lsw = lower_32_bits(buf_add);
-	mem_pool.addr_msw = msm_audio_populate_upper_32_bits(buf_add);
+	mem_pool.addr_msw = upper_32_bits(buf_add);
 	pr_debug("%s: sending memory map, size %d\n",
 		  __func__, bufsz);
 
