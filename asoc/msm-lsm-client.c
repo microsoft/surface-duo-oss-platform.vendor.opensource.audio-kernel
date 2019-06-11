@@ -342,13 +342,15 @@ static void lsm_event_handler(uint32_t opcode, uint32_t token,
 		if (likely(prtd->event_status)) {
 			if (client_size >= (payload_size + index)) {
 				memcpy(prtd->event_status->payload,
-			       		&((uint8_t *)payload)[index],
-			       		payload_size);
+					&((uint8_t *)payload)[index],
+					payload_size);
 				prtd->event_avail = 1;
-				spin_unlock_irqrestore(&prtd->event_lock, flags);
+				spin_unlock_irqrestore(&prtd->event_lock,
+								flags);
 				wake_up(&prtd->event_wait);
 			} else {
-				spin_unlock_irqrestore(&prtd->event_lock, flags);
+				spin_unlock_irqrestore(&prtd->event_lock,
+								flags);
 				dev_err(rtd->dev,
 						"%s: Failed to copy memory with invalid size = %d\n",
 						__func__, payload_size);
