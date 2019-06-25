@@ -1246,6 +1246,10 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 			substream->name, substream->stream);
 
+	ret = msm_mi2s_sclk_ctl(substream, false);
+	if (ret < 0)
+		pr_err("%s:clock disable failed; ret=%d\n", __func__,
+				ret);
 	if (card->aux_dev && substream->stream ==
 			SNDRV_PCM_STREAM_PLAYBACK) {
 		ret = msm8952_enable_wsa_mclk(card, false);
