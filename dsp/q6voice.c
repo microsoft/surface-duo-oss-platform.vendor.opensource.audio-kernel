@@ -443,6 +443,7 @@ int voice_get_idx_for_session(u32 session_id)
 
 	return idx;
 }
+EXPORT_SYMBOL(voice_get_idx_for_session);
 
 static struct voice_data *voice_get_session_by_idx(int idx)
 {
