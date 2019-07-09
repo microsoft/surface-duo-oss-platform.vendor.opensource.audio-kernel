@@ -154,7 +154,7 @@ static int msm_dtmf_detect_volte_rx_get(struct snd_kcontrol *kcontrol,
 
 static struct snd_kcontrol_new msm_dtmf_controls[] = {
 	SOC_SINGLE_MULTI_EXT("DTMF_Generate Rx Low High Duration Gain",
-			     SND_SOC_NOPM, 0, 5000, 0, 4,
+			     SND_SOC_NOPM, 0, 65535, 0, 4,
 			     msm_dtmf_rx_generate_get,
 			     msm_dtmf_rx_generate_put),
 	SOC_SINGLE_EXT("DTMF_Detect Rx Voice enable", SND_SOC_NOPM, 0, 1, 0,
