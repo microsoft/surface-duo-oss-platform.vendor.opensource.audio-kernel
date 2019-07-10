@@ -1720,13 +1720,15 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 		case ADM_CMDRSP_DEVICE_OPEN_V5:
 		case ADM_CMDRSP_DEVICE_OPEN_V6: {
 			struct adm_cmd_rsp_device_open_v5 *open = NULL;
+
 			if (data->payload_size <
 				sizeof(struct adm_cmd_rsp_device_open_v5)) {
-				pr_err("%s: Invalid payload size %d\n", __func__,
-					data->payload_size);
+				pr_err("%s: Invalid payload size %d\n",
+				       __func__, data->payload_size);
 				return 0;
 			}
-			open = (struct adm_cmd_rsp_device_open_v5 *)data->payload;
+			open =
+			    (struct adm_cmd_rsp_device_open_v5 *)data->payload;
 			if (open->copp_id == INVALID_COPP_ID) {
 				pr_err("%s: invalid coppid rxed %d\n",
 					__func__, open->copp_id);
@@ -1802,8 +1804,8 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			} else if (data->payload_size >=
 				   (2 * sizeof(uint32_t))) {
 				if (payload[1] >
-					   ((ADM_GET_TOPO_MODULE_LIST_LENGTH /
-					   sizeof(uint32_t)) - 1)) {
+				    ((ADM_GET_TOPO_MODULE_LIST_LENGTH /
+				    sizeof(uint32_t)) - 1)) {
 					pr_err("%s: ADM_CMDRSP_GET_PP_TOPO_MODULE_LIST",
 						 __func__);
 					pr_err(":size = %d\n", payload[1]);
@@ -1817,14 +1819,13 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 						adm_module_topo_list[idx+i] =
 							payload[1+i];
 						pr_debug("%s:payload[%d] = %x\n",
-							 __func__, (i+1), payload[1+i]);
+							 __func__, (i+1),
+							 payload[1+i]);
 					}
 				}
-			} else {
+			} else
 				pr_err("%s: Invalid payload size %d\n",
 				       __func__, data->payload_size);
-			}
-
 			atomic_set(&this_adm.copp.stat
 				[port_idx][copp_idx], payload[0]);
 			wake_up(&this_adm.copp.wait[port_idx][copp_idx]);
@@ -2037,7 +2038,7 @@ static void send_adm_custom_topology(void)
 	this_adm.set_custom_topology = 0;
 
 	cal_block = cal_utils_get_only_cal_block(this_adm.cal_data[cal_index]);
-	if (cal_block == NULL)
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block))
 		goto unlock;
 
 	pr_debug("%s: Sending cal_index %d\n", __func__, cal_index);
@@ -2218,6 +2219,9 @@ static struct cal_block_data *adm_find_cal_by_path(int cal_index, int path)
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
+
 		if (cal_index == ADM_AUDPROC_CAL ||
 		    cal_index == ADM_LSM_AUDPROC_CAL ||
 		    cal_index == ADM_LSM_AUDPROC_PERSISTENT_CAL) {
@@ -2252,6 +2256,9 @@ static struct cal_block_data *adm_find_cal_by_app_type(int cal_index, int path,
 
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
+
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
 
 		if (cal_index == ADM_AUDPROC_CAL ||
 		    cal_index == ADM_LSM_AUDPROC_CAL ||
@@ -2291,6 +2298,8 @@ static struct cal_block_data *adm_find_cal(int cal_index, int path,
 
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
 
 		if (cal_index == ADM_AUDPROC_CAL ||
 		    cal_index == ADM_LSM_AUDPROC_CAL ||
@@ -2361,6 +2370,8 @@ static void send_adm_cal_type(int cal_index, int path, int port_id,
 
 	ret = adm_remap_and_send_cal_block(cal_index, port_id, copp_idx,
 		cal_block, perf_mode, app_type, acdb_id, sample_rate);
+
+	cal_utils_mark_cal_used(cal_block);
 unlock:
 	mutex_unlock(&this_adm.cal_data[cal_index]->lock);
 done:
@@ -3397,7 +3408,7 @@ int send_rtac_audvol_cal(void)
 
 	cal_block = cal_utils_get_only_cal_block(
 		this_adm.cal_data[ADM_RTAC_AUDVOL_CAL]);
-	if (cal_block == NULL) {
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
 		pr_err("%s: can't find cal block!\n", __func__);
 		goto unlock;
 	}
