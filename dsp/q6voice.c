@@ -3858,6 +3858,7 @@ int voc_map_rtac_block(struct rtac_cal_block_data *cal_block)
 				&cal_block->cal_data.paddr,
 				cal_block->map_data.map_size);
 
+			common.rtac_mem_map_table.dma_buf = NULL;
 			goto done_unlock;
 		}
 	}
@@ -6872,6 +6873,7 @@ int voc_end_voice_call(uint32_t session_id)
 		if (ret < 0)
 			pr_debug("%s: voice_mhi_end failed! %d\n",
 				 __func__, ret);
+
 		v->voc_state = VOC_RELEASE;
 	} else {
 		pr_err("%s: Error: End voice called in state %d\n",
