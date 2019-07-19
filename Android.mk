@@ -3,7 +3,7 @@ MY_LOCAL_PATH := $(call my-dir)
 
 UAPI_OUT := $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/include
 
-ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 msmnile $(MSMSTEPPE) atoll $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 sdmshrike msmnile $(MSMSTEPPE) atoll $(TRINKET)),true)
 $(shell mkdir -p $(UAPI_OUT)/linux;)
 $(shell mkdir -p $(UAPI_OUT)/sound;)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers)
@@ -24,21 +24,21 @@ include $(MY_LOCAL_PATH)/soc/Android.mk
 include $(MY_LOCAL_PATH)/asoc/Android.mk
 include $(MY_LOCAL_PATH)/asoc/codecs/Android.mk
 
-ifneq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), msmnile_au sm6150_au msmnile_gvmq sdmshrike_au))
+ifneq ($(TARGET_BOARD_AUTO),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/wcd934x/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/wcd934x/Android.mk
 endif
 endif
 
-ifeq ($(call is-board-platform-in-list,sdm670 msmnile),true)
-ifneq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), msmnile_au msmnile_gvmq sdmshrike_au))
+ifeq ($(call is-board-platform-in-list,sdm670 sdmshrike msmnile),true)
+ifneq ($(TARGET_BOARD_AUTO),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/aqt1000/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/aqt1000/Android.mk
 endif
 endif
 
 ifeq ($(call is-board-platform-in-list,$(MSMSTEPPE) atoll $(TRINKET)),true)
-ifneq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), sm6150_au))
+ifneq ($(TARGET_BOARD_AUTO),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/bolero/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/bolero/Android.mk
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/wcd937x/Module.symvers)
@@ -53,8 +53,8 @@ include $(MY_LOCAL_PATH)/asoc/codecs/sdm660_cdc/Android.mk
 include $(MY_LOCAL_PATH)/asoc/codecs/msm_sdw/Android.mk
 endif
 
-ifeq ($(call is-board-platform-in-list,msmnile),true)
-ifneq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), msmnile_au msmnile_gvmq sdmshrike_au))
+ifeq ($(call is-board-platform-in-list,sdmshrike msmnile),true)
+ifneq ($(TARGET_BOARD_AUTO),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/wcd9360/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/wcd9360/Android.mk
 endif
