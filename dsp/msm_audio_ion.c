@@ -531,7 +531,9 @@ int msm_audio_ion_alloc(void **handle, size_t bufsz,
 	pr_debug("%s: mapped address = %pK, size=%zd\n", __func__,
 		*vaddr, bufsz);
 
-	memset(*vaddr, 0, bufsz);
+	if (*vaddr != NULL) {
+		memset(*vaddr, 0, bufsz);
+	}
 
 err:
 	return rc;
