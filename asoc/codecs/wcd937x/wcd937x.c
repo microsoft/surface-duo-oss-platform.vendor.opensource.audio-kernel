@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -36,6 +36,8 @@
 #define WCD937X_VERSION_1_0 1
 #define WCD937X_VERSION_ENTRY_SIZE 32
 #define EAR_RX_PATH_AUX 1
+
+#define NUM_ATTEMPTS 5
 
 enum {
 	CODEC_TX = 0,
@@ -623,7 +625,6 @@ static int wcd937x_codec_aux_dac_event(struct snd_soc_dapm_widget *w,
 
 		break;
 	case SND_SOC_DAPM_POST_PMD:
-		wcd937x_rx_clk_disable(component);
 		snd_soc_component_update_bits(component,
 				WCD937X_DIGITAL_CDC_ANA_CLK_CTL,
 				0x04, 0x00);
@@ -1310,7 +1311,7 @@ static int wcd937x_codec_enable_adc(struct snd_soc_dapm_widget *w,
 		/* Enable BCS for Headset mic */
 		if (w->shift == 1 && !(snd_soc_component_read32(component,
 				WCD937X_TX_NEW_TX_CH2_SEL) & 0x80)) {
-			wcd937x_tx_connect_port(codec, MBHC, true);
+			wcd937x_tx_connect_port(component, MBHC, true);
 			set_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask);
 		}
 		wcd937x_tx_connect_port(component, ADC1 + (w->shift), true);
@@ -1319,7 +1320,7 @@ static int wcd937x_codec_enable_adc(struct snd_soc_dapm_widget *w,
 		wcd937x_tx_connect_port(component, ADC1 + (w->shift), false);
 		if (w->shift == 1 &&
 			test_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask)) {
-			wcd937x_tx_connect_port(codec, MBHC, false);
+			wcd937x_tx_connect_port(component, MBHC, false);
 			clear_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask);
 		}
 		snd_soc_component_update_bits(component,
@@ -1448,7 +1449,7 @@ int wcd937x_micbias_control(struct snd_soc_component *component,
 		mutex_unlock(&wcd937x->ana_tx_clk_lock);
 		if (wcd937x->micb_ref[micb_index] == 1) {
 			snd_soc_component_update_bits(component,
-				WCD937X_DIGITAL_CDC_DIG_CLK_CTL, 0xE0, 0xE0);
+				WCD937X_DIGITAL_CDC_DIG_CLK_CTL, 0xF0, 0xF0);
 			snd_soc_component_update_bits(component,
 				WCD937X_DIGITAL_CDC_ANA_CLK_CTL, 0x10, 0x10);
 			snd_soc_component_update_bits(component,
@@ -1517,18 +1518,37 @@ int wcd937x_micbias_control(struct snd_soc_component *component,
 }
 EXPORT_SYMBOL(wcd937x_micbias_control);
 
+void wcd937x_disable_bcs_before_slow_insert(struct snd_soc_component *component,
+					    bool bcs_disable)
+{
+	struct wcd937x_priv *wcd937x = snd_soc_component_get_drvdata(component);
+
+	if (wcd937x->update_wcd_event) {
+		if (bcs_disable)
+			wcd937x->update_wcd_event(wcd937x->handle,
+						WCD_BOLERO_EVT_BCS_CLK_OFF, 0);
+		else
+			wcd937x->update_wcd_event(wcd937x->handle,
+						WCD_BOLERO_EVT_BCS_CLK_OFF, 1);
+	}
+}
+
 static int wcd937x_get_logical_addr(struct swr_device *swr_dev)
 {
 	int ret = 0;
 	uint8_t devnum = 0;
+	int num_retry = NUM_ATTEMPTS;
 
-	ret = swr_get_logical_dev_num(swr_dev, swr_dev->addr, &devnum);
-	if (ret) {
-		dev_err(&swr_dev->dev,
-			"%s get devnum %d for dev addr %lx failed\n",
-			__func__, devnum, swr_dev->addr);
-		return ret;
-	}
+	do {
+		ret = swr_get_logical_dev_num(swr_dev, swr_dev->addr, &devnum);
+		if (ret) {
+			dev_err(&swr_dev->dev,
+				"%s get devnum %d for dev addr %lx failed\n",
+				__func__, devnum, swr_dev->addr);
+			/* retry after 1ms */
+			usleep_range(1000, 1010);
+		}
+	} while (ret && --num_retry);
 	swr_dev->dev_num = devnum;
 	return 0;
 }
@@ -1566,20 +1586,20 @@ static int wcd937x_event_notify(struct notifier_block *block,
 					0x80, 0x00);
 		break;
 	case BOLERO_WCD_EVT_SSR_DOWN:
+		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = true;
 		mbhc = &wcd937x->mbhc->wcd_mbhc;
 		wcd937x_mbhc_ssr_down(wcd937x->mbhc, component);
 		wcd937x_reset_low(wcd937x->dev);
 		break;
 	case BOLERO_WCD_EVT_SSR_UP:
 		wcd937x_reset(wcd937x->dev);
+		/* allow reset to take effect */
+		usleep_range(10000, 10010);
 		wcd937x_get_logical_addr(wcd937x->tx_swr_dev);
 		wcd937x_get_logical_addr(wcd937x->rx_swr_dev);
+		wcd937x_init_reg(component);
 		regcache_mark_dirty(wcd937x->regmap);
 		regcache_sync(wcd937x->regmap);
-		/* Enable surge protection */
-		snd_soc_component_update_bits(component,
-				WCD937X_HPH_SURGE_HPHLR_SURGE_EN,
-				0xFF, 0xD9);
 		/* Initialize MBHC module */
 		mbhc = &wcd937x->mbhc->wcd_mbhc;
 		ret = wcd937x_mbhc_post_ssr_init(wcd937x->mbhc, component);
@@ -1589,6 +1609,7 @@ static int wcd937x_event_notify(struct notifier_block *block,
 		} else {
 			wcd937x_mbhc_hs_detect(component, mbhc->mbhc_cfg);
 		}
+		wcd937x->mbhc->wcd_mbhc.deinit_in_progress = false;
 		break;
 	default:
 		dev_err(component->dev, "%s: invalid event %d\n", __func__,
@@ -1640,6 +1661,51 @@ static int wcd937x_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 					int event)
 {
 	return __wcd937x_codec_enable_micbias(w, event);
+}
+
+static int __wcd937x_codec_enable_micbias_pullup(struct snd_soc_dapm_widget *w,
+						 int event)
+{
+	struct snd_soc_component *component =
+			snd_soc_dapm_to_component(w->dapm);
+	int micb_num;
+
+	dev_dbg(component->dev, "%s: wname: %s, event: %d\n",
+		__func__, w->name, event);
+
+	if (strnstr(w->name, "VA MIC BIAS1", sizeof("VA MIC BIAS1")))
+		micb_num = MIC_BIAS_1;
+	else if (strnstr(w->name, "VA MIC BIAS2", sizeof("VA MIC BIAS2")))
+		micb_num = MIC_BIAS_2;
+	else if (strnstr(w->name, "VA MIC BIAS3", sizeof("VA MIC BIAS3")))
+		micb_num = MIC_BIAS_3;
+	else
+		return -EINVAL;
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		wcd937x_micbias_control(component, micb_num,
+					MICB_PULLUP_ENABLE, true);
+		break;
+	case SND_SOC_DAPM_POST_PMU:
+		/* 1 msec delay as per HW requirement */
+		usleep_range(1000, 1100);
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		wcd937x_micbias_control(component, micb_num,
+					MICB_PULLUP_DISABLE, true);
+		break;
+	};
+
+	return 0;
+
+}
+
+static int wcd937x_codec_enable_micbias_pullup(struct snd_soc_dapm_widget *w,
+					       struct snd_kcontrol *kcontrol,
+					       int event)
+{
+	return __wcd937x_codec_enable_micbias_pullup(w, event);
 }
 
 static int wcd937x_rx_hph_mode_get(struct snd_kcontrol *kcontrol,
@@ -2052,6 +2118,20 @@ static const struct snd_soc_dapm_widget wcd937x_dapm_widgets[] = {
 	SND_SOC_DAPM_OUTPUT("HPHL"),
 	SND_SOC_DAPM_OUTPUT("HPHR"),
 
+	/* micbias pull up widgets*/
+	SND_SOC_DAPM_MICBIAS_E("VA MIC BIAS1", SND_SOC_NOPM, 0, 0,
+				wcd937x_codec_enable_micbias_pullup,
+				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+				SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MICBIAS_E("VA MIC BIAS2", SND_SOC_NOPM, 0, 0,
+				wcd937x_codec_enable_micbias_pullup,
+				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+				SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MICBIAS_E("VA MIC BIAS3", SND_SOC_NOPM, 0, 0,
+				wcd937x_codec_enable_micbias_pullup,
+				SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMU |
+				SND_SOC_DAPM_POST_PMD),
+
 };
 
 static const struct snd_soc_dapm_widget wcd9375_dapm_widgets[] = {
@@ -2388,6 +2468,7 @@ static int wcd937x_soc_codec_probe(struct snd_soc_component *component)
 		return -EINVAL;
 
 	wcd937x->component = component;
+	snd_soc_component_init_regmap(component, wcd937x->regmap);
 	variant = (snd_soc_component_read32(
 			component, WCD937X_DIGITAL_EFUSE_REG_0) & 0x1E) >> 1;
 	wcd937x->variant = variant;
@@ -2932,7 +3013,7 @@ static void wcd937x_unbind(struct device *dev)
 }
 
 static const struct of_device_id wcd937x_dt_match[] = {
-	{ .compatible = "qcom,wcd937x-codec" },
+	{ .compatible = "qcom,wcd937x-codec" , .data = "wcd937x" },
 	{}
 };
 

@@ -14,16 +14,14 @@ ifeq ($(KERNEL_BUILD), 1)
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
-	ifeq ($(CONFIG_ARCH_KONA), y)
-		include $(AUDIO_ROOT)/config/konaauto.conf
-		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
+	ifeq ($(CONFIG_ARCH_LAHAINA), y)
+		include $(AUDIO_ROOT)/config/lahainaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/lahainaautoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_LITO), y)
 		include $(AUDIO_ROOT)/config/litoauto.conf
-		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
 	endif
-
 endif
 
 # As per target team, build is done as follows:
@@ -50,18 +48,14 @@ UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 COMMON_DIR :=	include
 COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
-############ WCD938X ############
+############ WSA883X ############
 
-# for WCD938X Codec
-ifdef CONFIG_SND_SOC_WCD938X
-	WCD938X_OBJS += wcd938x.o
-	WCD938X_OBJS += wcd938x-regmap.o
-	WCD938X_OBJS += wcd938x-tables.o
-	WCD938X_OBJS += wcd938x-mbhc.o
-endif
-
-ifdef CONFIG_SND_SOC_WCD938X_SLAVE
-	WCD938X_SLAVE_OBJS += wcd938x-slave.o
+# for WSA883X Codec
+ifdef CONFIG_SND_SOC_WSA883X
+	WSA883X_OBJS += wsa883x.o
+	WSA883X_OBJS += wsa883x-regmap.o
+	WSA883X_OBJS += wsa883x-tables.o
+	WSA883X_OBJS += wsa883x-temp-sensor.o
 endif
 
 LINUX_INC +=	-Iinclude/linux
@@ -106,11 +100,8 @@ KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module
 endif
 
 # Module information used by KBuild framework
-obj-$(CONFIG_SND_SOC_WCD938X) += wcd938x_dlkm.o
-wcd938x_dlkm-y := $(WCD938X_OBJS)
-
-obj-$(CONFIG_SND_SOC_WCD938X_SLAVE) += wcd938x_slave_dlkm.o
-wcd938x_slave_dlkm-y := $(WCD938X_SLAVE_OBJS)
+obj-$(CONFIG_SND_SOC_WSA883X) += wsa883x_dlkm.o
+wsa883x_dlkm-y := $(WSA883X_OBJS)
 
 # inject some build related information
 DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

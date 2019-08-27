@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/init.h>
@@ -415,7 +415,6 @@ static void wcd_mbhc_clr_and_turnon_hph_padac(struct wcd_mbhc *mbhc)
 			       &mbhc->hph_pa_dac_state)) {
 		pr_debug("%s: HPHR clear flag and enable PA\n", __func__);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHR_PA_EN, 1);
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHR_OCP_DET_EN, 1);
 		pa_turned_on = true;
 	}
 	mutex_unlock(&mbhc->hphr_pa_lock);
@@ -424,7 +423,6 @@ static void wcd_mbhc_clr_and_turnon_hph_padac(struct wcd_mbhc *mbhc)
 			       &mbhc->hph_pa_dac_state)) {
 		pr_debug("%s: HPHL clear flag and enable PA\n", __func__);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_PA_EN, 1);
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_OCP_DET_EN, 1);
 		pa_turned_on = true;
 	}
 	mutex_unlock(&mbhc->hphl_pa_lock);
@@ -634,11 +632,12 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			}
 			mbhc->hph_type = WCD_MBHC_HPH_NONE;
 			mbhc->zl = mbhc->zr = 0;
-			pr_debug("%s: Reporting removal (%x)\n",
-				 __func__, mbhc->hph_status);
-			wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
-					    0, WCD_MBHC_JACK_MASK);
-
+			if (!mbhc->force_linein) {
+				pr_debug("%s: Reporting removal (%x)\n",
+					 __func__, mbhc->hph_status);
+				wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
+					0, WCD_MBHC_JACK_MASK);
+			}
 			if (mbhc->hph_status == SND_JACK_LINEOUT) {
 
 				pr_debug("%s: Enable micbias\n", __func__);
@@ -731,6 +730,10 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		}
 
 		mbhc->hph_status |= jack_type;
+
+		if (jack_type == SND_JACK_HEADPHONE &&
+		    mbhc->mbhc_cb->mbhc_micb_ramp_control)
+			mbhc->mbhc_cb->mbhc_micb_ramp_control(component, false);
 
 		pr_debug("%s: Reporting insertion %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
@@ -883,7 +886,8 @@ static bool wcd_mbhc_moisture_detect(struct wcd_mbhc *mbhc, bool detection_type)
 					detection_type);
 		ret = true;
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_L_DET_EN, 1);
-		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_GND_DET_EN, 1);
+		if (mbhc->mbhc_cfg->gnd_det_en)
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_GND_DET_EN, 1);
 	} else {
 		mbhc->mbhc_cb->mbhc_moisture_polling_ctrl(mbhc, false);
 		mbhc->mbhc_cb->mbhc_moisture_detect_en(mbhc, false);
@@ -920,6 +924,10 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 						&mbhc->correct_plug_swch);
 	else
 		pr_info("%s: hs_detect_plug work not cancelled\n", __func__);
+
+	/* Enable micbias ramp */
+	if (mbhc->mbhc_cb->mbhc_micb_ramp_control)
+		mbhc->mbhc_cb->mbhc_micb_ramp_control(component, true);
 
 	if (mbhc->mbhc_cb->micbias_enable_status)
 		micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
@@ -1023,7 +1031,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 					mbhc->component, false);
 		}
 
-		if (mbhc->mbhc_cfg->moisture_en &&
+		if (mbhc->mbhc_cfg->moisture_en ||
 		    mbhc->mbhc_cfg->moisture_duty_cycle_en) {
 			if (mbhc->mbhc_cb->mbhc_moisture_polling_ctrl)
 				mbhc->mbhc_cb->mbhc_moisture_polling_ctrl(mbhc,
@@ -1055,6 +1063,10 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 	struct wcd_mbhc *mbhc = data;
 
 	pr_debug("%s: enter\n", __func__);
+	if (mbhc == NULL) {
+		pr_err("%s: NULL irq data\n", __func__);
+		return IRQ_NONE;
+	}
 	if (unlikely((mbhc->mbhc_cb->lock_sleep(mbhc, true)) == false)) {
 		pr_warn("%s: failed to hold suspend\n", __func__);
 		r = IRQ_NONE;
@@ -1364,8 +1376,7 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	if (mbhc->mbhc_cfg->moisture_en && mbhc->mbhc_cb->mbhc_moisture_config
 		&& !mbhc->mbhc_cfg->moisture_duty_cycle_en)
 		mbhc->mbhc_cb->mbhc_moisture_config(mbhc);
-	else if (mbhc->mbhc_cfg->moisture_duty_cycle_en &&
-		 mbhc->mbhc_cb->mbhc_moisture_detect_en)
+	else if (mbhc->mbhc_cb->mbhc_moisture_detect_en)
 		mbhc->mbhc_cb->mbhc_moisture_detect_en(mbhc, false);
 
 	/*
@@ -1412,9 +1423,6 @@ static int wcd_mbhc_initialise(struct wcd_mbhc *mbhc)
 	/* Button Debounce set to 16ms */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_DBNC, 2);
 
-	/* Enable micbias ramp */
-	if (mbhc->mbhc_cb->mbhc_micb_ramp_control)
-		mbhc->mbhc_cb->mbhc_micb_ramp_control(component, true);
 	/* enable bias */
 	mbhc->mbhc_cb->mbhc_bias(component, true);
 	/* enable MBHC clock */

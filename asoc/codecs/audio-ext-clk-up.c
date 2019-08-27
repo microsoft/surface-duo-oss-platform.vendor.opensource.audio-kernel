@@ -79,6 +79,8 @@ static int audio_ext_clk_prepare(struct clk_hw *hw)
 	    pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
 		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg,1);
 #else
+		trace_printk("%s: vote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
 #endif
 		if (ret < 0) {
@@ -128,6 +130,8 @@ static void audio_ext_clk_unprepare(struct clk_hw *hw)
 				clk_priv->prm_clk_cfg.clk_id);
 		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg,0);
 #else
+		trace_printk("%s: unvote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
 #endif
 		if (ret < 0)
@@ -168,6 +172,8 @@ static int lpass_hw_vote_prepare(struct clk_hw *hw)
 		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg, 
 			HW_CORE_ID_LPASS, 1);
 #else
+		trace_printk("%s: vote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_MACRO_BLOCK,
 			"LPASS_HW_MACRO",
 			&clk_priv->lpass_core_hwvote_client_handle);
@@ -185,6 +191,8 @@ static int lpass_hw_vote_prepare(struct clk_hw *hw)
 		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg, 
 			HW_CORE_ID_DCODEC, 1);
 #else
+		trace_printk("%s: vote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_DCODEC_BLOCK,
 			"LPASS_HW_DCODEC",
 			&clk_priv->lpass_audio_hwvote_client_handle);
@@ -211,6 +219,8 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
                         HW_CORE_ID_LPASS, 0);
 #else
 
+		trace_printk("%s: unvote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_unvote_lpass_core_hw(
 			AFE_LPASS_CORE_HW_MACRO_BLOCK,
 			clk_priv->lpass_core_hwvote_client_handle);
@@ -228,6 +238,8 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
                 ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
                         HW_CORE_ID_DCODEC, 0);
 #else
+		trace_printk("%s: unvote for %d clock\n",
+			__func__, clk_priv->clk_src);
 		ret = afe_unvote_lpass_core_hw(
 			AFE_LPASS_CORE_HW_DCODEC_BLOCK,
 			clk_priv->lpass_audio_hwvote_client_handle);

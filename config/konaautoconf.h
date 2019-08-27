@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #define CONFIG_PINCTRL_LPI 1
@@ -41,3 +41,4 @@
 #define CONFIG_MSM_QDSP6_GPR_RPMSG 1
 #define CONFIG_AUDIO_PKT 1
 #define CONFIG_VOICE_MHI 1
+#define CONFIG_DIGITAL_CDC_RSC_MGR 1

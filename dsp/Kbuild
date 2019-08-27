@@ -40,9 +40,9 @@ ifeq ($(KERNEL_BUILD), 0)
 		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_BENGAL), y)
-		include $(AUDIO_ROOT)/config/litoauto.conf
+		include $(AUDIO_ROOT)/config/bengalauto.conf
 		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_SM8150), y)
 		ifdef CONFIG_SND_SOC_SA8155
@@ -149,6 +149,9 @@ ifdef CONFIG_VOICE_MHI
 VOICE_MHI += voice_mhi.o
 endif
 
+ifdef CONFIG_DIGITAL_CDC_RSC_MGR
+GECKO_CORE_OBJS += digital-cdc-rsc-mgr.o
+endif
 
 LINUX_INC +=	-Iinclude/linux
 

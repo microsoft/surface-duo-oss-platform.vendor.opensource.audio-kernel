@@ -6,24 +6,21 @@ else
 	KERNEL_BUILD := 0
 endif
 
+
+
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-4.19
+	AUDIO_BLD_DIR := $(ANDROID_BUILD_TOP)/kernel/msm-4.19
 	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
-	ifeq ($(CONFIG_ARCH_KONA), y)
-		include $(AUDIO_ROOT)/config/konaauto.conf
-		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_LITO), y)
-		include $(AUDIO_ROOT)/config/litoauto.conf
+	ifeq ($(CONFIG_ARCH_BENGAL), y)
+		include $(AUDIO_ROOT)/config/bengalauto.conf
 		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
 	endif
-
 endif
 
 # As per target team, build is done as follows:
@@ -50,18 +47,22 @@ UAPI_INC :=	-I$(AUDIO_ROOT)/include/$(UAPI_DIR)
 COMMON_DIR :=	include
 COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
-############ WCD938X ############
+############ ROULEUR ############
 
-# for WCD938X Codec
-ifdef CONFIG_SND_SOC_WCD938X
-	WCD938X_OBJS += wcd938x.o
-	WCD938X_OBJS += wcd938x-regmap.o
-	WCD938X_OBJS += wcd938x-tables.o
-	WCD938X_OBJS += wcd938x-mbhc.o
+# for ROULEUR Codec
+ifdef CONFIG_SND_SOC_ROULEUR
+	ROULEUR_OBJS += rouleur.o
+	ROULEUR_OBJS += rouleur-regmap.o
+	ROULEUR_OBJS += rouleur-tables.o
+	ROULEUR_OBJS += rouleur-mbhc.o
 endif
 
-ifdef CONFIG_SND_SOC_WCD938X_SLAVE
-	WCD938X_SLAVE_OBJS += wcd938x-slave.o
+ifdef CONFIG_PM2250_SPMI
+	PM2250_SPMI_OBJS += pm2250_spmi.o
+endif
+
+ifdef CONFIG_SND_SOC_ROULEUR_SLAVE
+	ROULEUR_SLAVE_OBJS += rouleur_slave.o
 endif
 
 LINUX_INC +=	-Iinclude/linux
@@ -106,11 +107,14 @@ KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module
 endif
 
 # Module information used by KBuild framework
-obj-$(CONFIG_SND_SOC_WCD938X) += wcd938x_dlkm.o
-wcd938x_dlkm-y := $(WCD938X_OBJS)
+obj-$(CONFIG_SND_SOC_ROULEUR) += rouleur_dlkm.o
+rouleur_dlkm-y := $(ROULEUR_OBJS)
 
-obj-$(CONFIG_SND_SOC_WCD938X_SLAVE) += wcd938x_slave_dlkm.o
-wcd938x_slave_dlkm-y := $(WCD938X_SLAVE_OBJS)
+obj-$(CONFIG_SND_SOC_ROULEUR_SLAVE) += rouleur_slave_dlkm.o
+rouleur_slave_dlkm-y := $(ROULEUR_SLAVE_OBJS)
+
+obj-$(CONFIG_PM2250_SPMI) += pm2250_spmi_dlkm.o
+pm2250_spmi_dlkm-y := $(PM2250_SPMI_OBJS)
 
 # inject some build related information
 DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

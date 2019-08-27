@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _WCD938X_INTERNAL_H
@@ -70,6 +70,7 @@ struct wcd938x_priv {
 	bool comp1_enable;
 	bool comp2_enable;
 	bool ldoh;
+	bool bcs_dis;
 	struct irq_domain *virq;
 	struct wcd_irq_info irq_info;
 	u32 rx_clk_cnt;
@@ -149,12 +150,13 @@ enum {
 	WCD_BOLERO_EVT_IMPED_TRUE,	/* for imped true */
 	WCD_BOLERO_EVT_IMPED_FALSE,	/* for imped false */
 	WCD_BOLERO_EVT_RX_COMPANDER_SOFT_RST,
+	WCD_BOLERO_EVT_BCS_CLK_OFF,
 };
 
 enum {
 	/* INTR_CTRL_INT_MASK_0 */
-	WCD938X_IRQ_MBHC_BUTTON_RELEASE_DET = 0,
-	WCD938X_IRQ_MBHC_BUTTON_PRESS_DET,
+	WCD938X_IRQ_MBHC_BUTTON_PRESS_DET = 0,
+	WCD938X_IRQ_MBHC_BUTTON_RELEASE_DET,
 	WCD938X_IRQ_MBHC_ELECT_INS_REM_DET,
 	WCD938X_IRQ_MBHC_ELECT_INS_REM_LEG_DET,
 	WCD938X_IRQ_MBHC_SW_DET,
@@ -182,6 +184,9 @@ enum {
 
 extern struct wcd938x_mbhc *wcd938x_soc_get_mbhc(
 				struct snd_soc_component *component);
+extern void wcd938x_disable_bcs_before_slow_insert(
+				struct snd_soc_component *component,
+				bool bcs_disable);
 extern int wcd938x_mbhc_micb_adjust_voltage(struct snd_soc_component *component,
 					int volt, int micb_num);
 extern int wcd938x_get_micb_vout_ctl_val(u32 micb_mv);
