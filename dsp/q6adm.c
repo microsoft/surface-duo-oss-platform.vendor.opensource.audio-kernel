@@ -50,6 +50,8 @@
 #define DS2_ADM_COPP_TOPOLOGY_ID 0xFFFFFFFF
 #endif
 
+#define SESSION_TYPE_RX 0
+
 /* ENUM for adm_status */
 enum adm_cal_status {
 	ADM_STATUS_CALIBRATION_REQUIRED = 0,
@@ -674,7 +676,7 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 	adm_pspd_params[3] = ch_mixer->input_channels[channel_index];
 	index = 4;
 
-	path_type = (afe_get_port_type(port_id) == MSM_AFE_PORT_TYPE_RX) ?
+	path_type = (session_type == SESSION_TYPE_RX) ?
 				ADM_PATH_PLAYBACK : ADM_PATH_LIVE_REC;
 
 	if (ch_mixer->override_out_ch_map) {
@@ -3363,6 +3365,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 				if (this_adm.num_ec_ref_rx_chans != 0) {
 					open_v8.endpoint_id_2 =
 						this_adm.ec_ref_rx;
+					this_adm.ec_ref_rx = AFE_PORT_INVALID;
 				} else {
 					pr_err("%s: EC channels not set %d\n",
 						__func__,

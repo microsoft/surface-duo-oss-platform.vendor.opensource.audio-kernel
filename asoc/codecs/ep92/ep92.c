@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,6 +31,7 @@
 
 #define EP92_POLL_INTERVAL_OFF_MSEC 200
 #define EP92_POLL_INTERVAL_ON_MSEC  20
+#define EP92_POLL_RUNOUT_MSEC       5000
 #define EP92_SYSFS_ENTRY_MAX_LEN 64
 #define EP92_HYST_CNT 5
 
@@ -74,6 +75,9 @@ struct ep92_pdata {
 	struct timer_list    timer;
 	struct work_struct   read_status_worker;
 	int                  irq;
+	int                  poll_trig;
+	int                  poll_rem;
+	int                  force_inactive;
 
 	int                  hyst_tx_plug;
 	int                  hyst_link_on0;
@@ -560,15 +564,23 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 		send_uevent = true;
 	}
 
+	old = ep92->ai.cs[0];
+	ep92->ai.cs[0] = snd_soc_read(codec,
+		EP92_AUDIO_INFO_CHANNEL_STATUS_0);
+	if (ep92->ai.cs[0] == 0xff) {
+		dev_dbg(codec->dev, "ep92 EP92_AUDIO_INFO_CHANNEL_STATUS_0 read 0xff\n");
+		ep92->ai.cs[0] = old;
+	}
+	change = ep92->ai.cs[0] ^ old;
+	if (change & EP92_AI_PREEMPH_MASK) {
+		dev_dbg(codec->dev, "ep92 preemph changed to %d\n",
+			(ep92->ai.cs[0] & EP92_AI_PREEMPH_MASK) >>
+			EP92_AI_PREEMPH_SHIFT);
+		send_uevent = true;
+	}
+
 	new_mode = ep92->old_mode;
 	if (ep92->ai.audio_status & EP92_AI_STD_ADO_MASK) {
-		old = ep92->ai.cs[0];
-		ep92->ai.cs[0] = snd_soc_read(codec,
-			EP92_AUDIO_INFO_CHANNEL_STATUS_0);
-		if (ep92->ai.cs[0] == 0xff) {
-			dev_dbg(codec->dev, "ep92 EP92_AUDIO_INFO_CHANNEL_STATUS_0 read 0xff\n");
-			ep92->ai.cs[0] = old;
-		}
 		if (ep92->ai.cs[0] & EP92_AI_NPCM_MASK)
 			new_mode = 1; /* Compr */
 		else
@@ -645,10 +657,8 @@ static int ep92_probe(struct snd_soc_codec *codec)
 	ep92_init(codec, ep92);
 
 	/* start polling when codec is registered */
-	if (ep92->irq == 0) {
-		mod_timer(&ep92->timer, jiffies +
-			msecs_to_jiffies(EP92_POLL_INTERVAL_OFF_MSEC));
-	}
+	mod_timer(&ep92->timer, jiffies +
+		msecs_to_jiffies(EP92_POLL_INTERVAL_OFF_MSEC));
 
 	return 0;
 }
@@ -697,6 +707,9 @@ void ep92_read_status(struct work_struct *work)
 	if (codec == NULL)
 		return;
 
+	if (ep92->force_inactive)
+		return;
+
 	/* check ADO_CHF that is set when audio format has changed */
 	val = snd_soc_read(codec, EP92_BI_GENERAL_INFO_1);
 	if (val == 0xff) {
@@ -730,6 +743,10 @@ static irqreturn_t ep92_irq(int irq, void *data)
 
 	dev_dbg(codec->dev, "ep92_interrupt\n");
 
+	ep92->poll_trig = 1;
+	mod_timer(&ep92->timer, jiffies +
+		msecs_to_jiffies(EP92_POLL_INTERVAL_ON_MSEC));
+
 	schedule_work(&ep92->read_status_worker);
 
 	return IRQ_HANDLED;
@@ -738,14 +755,45 @@ static irqreturn_t ep92_irq(int irq, void *data)
 void ep92_poll_status(unsigned long data)
 {
 	struct ep92_pdata *ep92 = (struct ep92_pdata *)data;
-	u32 poll_msec;
+	struct snd_soc_codec *codec = ep92->codec;
 
-	if ((ep92->gc.ctl & EP92_GC_POWER_MASK) == 0)
-		poll_msec = EP92_POLL_INTERVAL_OFF_MSEC;
-	else
-		poll_msec = EP92_POLL_INTERVAL_ON_MSEC;
+	if (ep92->force_inactive)
+		return;
 
-	mod_timer(&ep92->timer, jiffies + msecs_to_jiffies(poll_msec));
+	/* if no IRQ is configured, always keep on polling */
+	if (ep92->irq == 0)
+		ep92->poll_rem = EP92_POLL_RUNOUT_MSEC;
+
+	/* on interrupt, start polling for some time */
+	if (ep92->poll_trig) {
+		if (ep92->poll_rem == 0)
+			dev_info(codec->dev, "status checking activated\n");
+
+		ep92->poll_trig = 0;
+		ep92->poll_rem = EP92_POLL_RUNOUT_MSEC;
+	}
+
+	/*
+	 * If power_on == 0, poll only until poll_rem reaches zero and stop.
+	 * This allows to system to go to low power sleep mode.
+	 * Otherwise (power_on == 1) always re-arm timer to keep on polling.
+	 */
+	if ((ep92->gc.ctl & EP92_GC_POWER_MASK) == 0) {
+		if (ep92->poll_rem) {
+			mod_timer(&ep92->timer, jiffies +
+				msecs_to_jiffies(EP92_POLL_INTERVAL_OFF_MSEC));
+			if (ep92->poll_rem > EP92_POLL_INTERVAL_OFF_MSEC) {
+				ep92->poll_rem -= EP92_POLL_INTERVAL_OFF_MSEC;
+			} else {
+				dev_info(codec->dev, "status checking stopped\n");
+				ep92->poll_rem = 0;
+			}
+		}
+	} else {
+		ep92->poll_rem = EP92_POLL_RUNOUT_MSEC;
+		mod_timer(&ep92->timer, jiffies +
+			msecs_to_jiffies(EP92_POLL_INTERVAL_ON_MSEC));
+	}
 
 	schedule_work(&ep92->read_status_worker);
 }
@@ -935,7 +983,7 @@ static ssize_t ep92_sysfs_rda_audio_ch_alloc(struct device *dev,
 	return ret;
 }
 
-static ssize_t ep92_sysfs_rda_avmute(struct device *dev,
+static ssize_t ep92_sysfs_rda_audio_preemph(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -947,6 +995,26 @@ static ssize_t ep92_sysfs_rda_avmute(struct device *dev,
 		return -ENODEV;
 	}
 
+	val = (ep92->ai.cs[0] & EP92_AI_PREEMPH_MASK) >>
+		EP92_AI_PREEMPH_SHIFT;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_rda_avmute(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
 
 	val = (ep92->ai.system_status_0 >> EP92_AI_AVMUTE_SHIFT) &
 		EP92_2CHOICE_MASK;
@@ -1163,6 +1231,11 @@ static ssize_t ep92_sysfs_wta_power(struct device *dev,
 	ep92->gc.ctl &= ~EP92_GC_POWER_MASK;
 	ep92->gc.ctl |= (val << EP92_GC_POWER_SHIFT) & EP92_GC_POWER_MASK;
 
+	if (val == 1) {
+		ep92->poll_trig = 1;
+		mod_timer(&ep92->timer, jiffies +
+			msecs_to_jiffies(EP92_POLL_INTERVAL_ON_MSEC));
+	}
 	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
 end:
 	return rc;
@@ -1320,12 +1393,12 @@ static ssize_t ep92_sysfs_wta_arc_enable(struct device *dev,
 	}
 
 	reg = snd_soc_read(ep92->codec, EP92_GENERAL_CONTROL_0);
-	reg &= ~EP92_GC_AUDIO_PATH_MASK;
-	reg |= (val << EP92_GC_AUDIO_PATH_SHIFT) & EP92_GC_AUDIO_PATH_MASK;
+	reg &= ~EP92_GC_ARC_EN_MASK;
+	reg |= (val << EP92_GC_ARC_EN_SHIFT) & EP92_GC_ARC_EN_MASK;
 	snd_soc_write(ep92->codec, EP92_GENERAL_CONTROL_0, reg);
-	ep92->gc.ctl &= ~EP92_GC_AUDIO_PATH_MASK;
-	ep92->gc.ctl |= (val << EP92_GC_AUDIO_PATH_SHIFT) &
-		EP92_GC_AUDIO_PATH_MASK;
+	ep92->gc.ctl &= ~EP92_GC_ARC_EN_MASK;
+	ep92->gc.ctl |= (val << EP92_GC_ARC_EN_SHIFT) &
+		EP92_GC_ARC_EN_MASK;
 
 	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
 end:
@@ -1439,6 +1512,83 @@ end:
 	return rc;
 }
 
+static ssize_t ep92_sysfs_rda_runout(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->poll_rem;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_rda_force_inactive(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->force_inactive;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_wta_force_inactive(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val, rc;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		dev_err(dev, "%s: kstrtoint failed. rc=%d\n", __func__, rc);
+		goto end;
+	}
+	if ((val < 0) || (val > 1)) {
+		dev_err(dev, "%s: value out of range.\n", __func__);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	if (val == 0) {
+		ep92->force_inactive = 0;
+		ep92->poll_trig = 1;
+		mod_timer(&ep92->timer, jiffies +
+			msecs_to_jiffies(EP92_POLL_INTERVAL_ON_MSEC));
+	} else {
+		ep92->force_inactive = 1;
+		ep92->poll_rem = 0;
+	}
+
+	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
+end:
+	return rc;
+}
+
 static DEVICE_ATTR(chipid, 0444, ep92_sysfs_rda_chipid, NULL);
 static DEVICE_ATTR(version, 0444, ep92_sysfs_rda_version, NULL);
 static DEVICE_ATTR(audio_state, 0444, ep92_sysfs_rda_audio_state, NULL);
@@ -1447,6 +1597,7 @@ static DEVICE_ATTR(audio_rate, 0444, ep92_sysfs_rda_audio_rate, NULL);
 static DEVICE_ATTR(audio_layout, 0444, ep92_sysfs_rda_audio_layout, NULL);
 static DEVICE_ATTR(audio_ch_count, 0444, ep92_sysfs_rda_audio_ch_count, NULL);
 static DEVICE_ATTR(audio_ch_alloc, 0444, ep92_sysfs_rda_audio_ch_alloc, NULL);
+static DEVICE_ATTR(audio_preemph, 0444, ep92_sysfs_rda_audio_preemph, NULL);
 static DEVICE_ATTR(audio_avmute, 0444, ep92_sysfs_rda_avmute, NULL);
 static DEVICE_ATTR(link_on0, 0444, ep92_sysfs_rda_link_on0, NULL);
 static DEVICE_ATTR(link_on1, 0444, ep92_sysfs_rda_link_on1, NULL);
@@ -1466,6 +1617,9 @@ static DEVICE_ATTR(cec_mute, 0644, ep92_sysfs_rda_cec_mute,
 	ep92_sysfs_wta_cec_mute);
 static DEVICE_ATTR(cec_volume, 0644, ep92_sysfs_rda_cec_volume,
 	ep92_sysfs_wta_cec_volume);
+static DEVICE_ATTR(runout, 0444, ep92_sysfs_rda_runout, NULL);
+static DEVICE_ATTR(force_inactive, 0644, ep92_sysfs_rda_force_inactive,
+	ep92_sysfs_wta_force_inactive);
 
 static struct attribute *ep92_fs_attrs[] = {
 	&dev_attr_chipid.attr,
@@ -1476,6 +1630,7 @@ static struct attribute *ep92_fs_attrs[] = {
 	&dev_attr_audio_layout.attr,
 	&dev_attr_audio_ch_count.attr,
 	&dev_attr_audio_ch_alloc.attr,
+	&dev_attr_audio_preemph.attr,
 	&dev_attr_audio_avmute.attr,
 	&dev_attr_link_on0.attr,
 	&dev_attr_link_on1.attr,
@@ -1489,6 +1644,8 @@ static struct attribute *ep92_fs_attrs[] = {
 	&dev_attr_arc_enable.attr,
 	&dev_attr_cec_mute.attr,
 	&dev_attr_cec_volume.attr,
+	&dev_attr_runout.attr,
+	&dev_attr_force_inactive.attr,
 	NULL,
 };
 
@@ -1551,11 +1708,10 @@ static int ep92_i2c_probe(struct i2c_client *client,
 			ep92->irq = 0;
 		}
 	}
-	/* poll status if IRQ is not configured */
-	if (ep92->irq == 0) {
-		setup_timer(&ep92->timer, ep92_poll_status,
-			(unsigned long)ep92);
-	}
+	/* prepare timer */
+	setup_timer(&ep92->timer, ep92_poll_status,
+		(unsigned long)ep92);
+	ep92->poll_rem = EP92_POLL_RUNOUT_MSEC;
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 	/* debugfs interface */
@@ -1611,8 +1767,7 @@ static int ep92_i2c_probe(struct i2c_client *client,
 err_sysfs:
 	snd_soc_unregister_codec(&client->dev);
 err_reg:
-	if (ep92->irq == 0)
-		del_timer(&ep92->timer);
+	del_timer(&ep92->timer);
 
 	return ret;
 }
@@ -1623,8 +1778,7 @@ static int ep92_i2c_remove(struct i2c_client *client)
 
 	ep92 = i2c_get_clientdata(client);
 	if (ep92) {
-		if (ep92->irq == 0)
-			del_timer(&ep92->timer);
+		del_timer(&ep92->timer);
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 		debugfs_remove_recursive(ep92->debugfs_dir);
