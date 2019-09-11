@@ -183,6 +183,10 @@ static struct reg_default ep92_reg_defaults[] = {
 #define EP92_AI_PREEMPH_MASK     0x38
 #define EP92_AI_CH_COUNT_MASK    0x07
 #define EP92_AI_CH_ALLOC_MASK    0xff
+#define EP92_AI_DSD_ADO_SHIFT    4
+#define EP92_AI_DSD_ADO_MASK     0x10
+#define EP92_AI_DSD_RATE_SHIFT   4
+#define EP92_AI_DSD_RATE_MASK    0x30
 
 #define EP92_2CHOICE_MASK        1
 #define EP92_GC_CEC_VOLUME_MIN   0
