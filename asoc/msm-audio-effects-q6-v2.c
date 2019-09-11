@@ -751,7 +751,8 @@ int msm_audio_effects_reverb_handler(struct audio_client *ac,
 			}
 			break;
 		default:
-			pr_err("%s: Invalid command to set config\n", __func__);
+			pr_err_ratelimited("%s: Invalid command to set config\n",
+					   __func__);
 			break;
 		}
 	}
