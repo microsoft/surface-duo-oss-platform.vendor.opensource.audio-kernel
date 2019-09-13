@@ -1292,7 +1292,7 @@ static int q6afe_get_params_v2(u16 port_id, int index,
 	afe_get_param.apr_hdr.hdr_field =
 		APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD, APR_HDR_LEN(APR_HDR_SIZE),
 			      APR_PKT_VER);
-	afe_get_param.apr_hdr.pkt_size = sizeof(afe_get_param) + param_size;
+	afe_get_param.apr_hdr.pkt_size = sizeof(afe_get_param);
 	afe_get_param.apr_hdr.src_port = 0;
 	afe_get_param.apr_hdr.dest_port = 0;
 	afe_get_param.apr_hdr.token = index;
@@ -3364,6 +3364,36 @@ int afe_send_slot_mapping_cfg(
 	return ret;
 }
 
+int afe_send_slot_mapping_cfg_v2(
+	struct afe_param_id_slot_mapping_cfg_v2 *slot_mapping_cfg,
+	u16 port_id)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+
+	if (!slot_mapping_cfg) {
+		pr_err("%s: Error, no configuration data\n", __func__);
+		return -EINVAL;
+	}
+
+	pr_debug("%s: port id: 0x%x\n", __func__, port_id);
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_TDM;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_PORT_SLOT_MAPPING_CONFIG;
+	param_hdr.param_size = sizeof(struct afe_param_id_slot_mapping_cfg_v2);
+
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+					       q6audio_get_port_index(port_id),
+					       param_hdr,
+					       (u8 *) slot_mapping_cfg);
+	if (ret < 0)
+		pr_err("%s: AFE send slot mapping for port 0x%x failed ret = %d\n",
+				__func__, port_id, ret);
+	return ret;
+}
+
 int afe_send_custom_tdm_header_cfg(
 	struct afe_param_id_custom_tdm_header_cfg *custom_tdm_header_cfg,
 	u16 port_id)
@@ -3503,8 +3533,15 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		goto fail_cmd;
 	}
 
-	ret = afe_send_slot_mapping_cfg(&tdm_port->slot_mapping,
-					port_id);
+	if (q6core_get_avcs_api_version_per_service(
+		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V3)
+		ret = afe_send_slot_mapping_cfg_v2(
+				&tdm_port->slot_mapping_v2, port_id);
+	else
+		ret = afe_send_slot_mapping_cfg(
+				&tdm_port->slot_mapping,
+				port_id);
+
 	if (ret < 0) {
 		pr_err("%s: afe send failed %d\n", __func__, ret);
 		goto fail_cmd;
