@@ -51,31 +51,26 @@ KBUILD_OPTIONS := AUDIO_ROOT=$(AUDIO_BLD_DIR)
 # requirement we are specifying <chipset>_audio.ko as LOCAL_MODULE.
 # This means we need to rename the module to <chipset>_audio.ko
 # after audio.ko is built.
-KBUILD_OPTIONS += MODNAME=apr_dlkm
+KBUILD_OPTIONS += MODNAME=gpr_dlkm
 KBUILD_OPTIONS += BOARD_PLATFORM=$(TARGET_BOARD_PLATFORM)
 KBUILD_OPTIONS += $(AUDIO_SELECT)
 
 ###########################################################
 include $(CLEAR_VARS)
-LOCAL_MODULE              := $(AUDIO_CHIPSET)_apr.ko
-LOCAL_MODULE_KBUILD_NAME  := apr_dlkm.ko
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_gpr.ko
+LOCAL_MODULE_KBUILD_NAME  := gpr_dlkm.ko
 LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
-ifeq ($(call is-board-platform-in-list,msmnile $(MSMSTEPPE) $(TRINKET) sdmshrike),true)
-ifneq ($(TARGET_BOARD_AUTO),true)
 include $(CLEAR_VARS)
-LOCAL_MODULE              := $(AUDIO_CHIPSET)_wglink.ko
-LOCAL_MODULE_KBUILD_NAME  := wglink_dlkm.ko
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_pkt.ko
+LOCAL_MODULE_KBUILD_NAME  := audio_pkt_dlkm.ko
 LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
-endif
-endif
 ###########################################################
-
 endif # DLKM check
 endif # supported target check
