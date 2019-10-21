@@ -65,14 +65,6 @@ LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
 include $(CLEAR_VARS)
-LOCAL_MODULE              := $(AUDIO_CHIPSET)_adsp_loader.ko
-LOCAL_MODULE_KBUILD_NAME  := adsp_loader_dlkm.ko
-LOCAL_MODULE_TAGS         := optional
-LOCAL_MODULE_DEBUG_ENABLE := true
-LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
-include $(DLKM_DIR)/AndroidKernelModule.mk
-###########################################################
-include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_q6_notifier.ko
 LOCAL_MODULE_KBUILD_NAME  := q6_notifier_dlkm.ko
 LOCAL_MODULE_TAGS         := optional
@@ -82,13 +74,6 @@ include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
 # target specific build
 ifneq ($(TARGET_BOARD_AUTO),true)
-include $(CLEAR_VARS)
-LOCAL_MODULE              := $(AUDIO_CHIPSET)_usf.ko
-LOCAL_MODULE_KBUILD_NAME  := usf_dlkm.ko
-LOCAL_MODULE_TAGS         := optional
-LOCAL_MODULE_DEBUG_ENABLE := true
-LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
-include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_q6_pdr.ko
@@ -99,5 +84,32 @@ LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
 endif # target specific build
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_gecko_core.ko
+LOCAL_MODULE_KBUILD_NAME  := gecko_core_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+###########################################################
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_prm.ko
+LOCAL_MODULE_KBUILD_NAME  := audio_prm_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+############################################################
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_audpkt_ion.ko
+LOCAL_MODULE_KBUILD_NAME  := audpkt_ion_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+###########################################################
+##########################################################
+###########################################################
+
 endif # DLKM check
 endif # supported target check
