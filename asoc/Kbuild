@@ -54,6 +54,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_MDM9607), y)
+		include $(AUDIO_ROOT)/config/mdm9607auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/mdm9607autoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -119,6 +124,11 @@ endif
 # for qcs405 sound card driver
 ifdef CONFIG_SND_SOC_QCS405
 	MACHINE_OBJS += qcs405.o
+endif
+
+# for mdm9607 sound card driver
+ifdef CONFIG_SND_SOC_MDM9607
+	MACHINE_OBJS += mdm9607.o
 endif
 
 ifdef CONFIG_SND_SOC_CPE
@@ -225,6 +235,9 @@ obj-$(CONFIG_SND_SOC_QCS405) += machine_dlkm.o
 machine_dlkm-y := $(MACHINE_OBJS)
 
 obj-$(CONFIG_SND_SOC_EXT_CODEC) += machine_dlkm.o
+machine_dlkm-y := $(MACHINE_OBJS)
+
+obj-$(CONFIG_SND_SOC_MDM9607) += machine_dlkm.o
 machine_dlkm-y := $(MACHINE_OBJS)
 
 obj-$(CONFIG_SND_SOC_INT_CODEC) += machine_dlkm.o

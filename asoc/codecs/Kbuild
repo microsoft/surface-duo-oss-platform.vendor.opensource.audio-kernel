@@ -54,6 +54,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_MDM9607), y)
+		include $(AUDIO_ROOT)/config/mdm9607auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/mdm9607autoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -90,6 +95,8 @@ ifdef CONFIG_WCD9XXX_CODEC_CORE
 	CORE_OBJS += wcd9xxx-utils.o
 	CORE_OBJS += wcd9335-regmap.o
 	CORE_OBJS += wcd9335-tables.o
+	CORE_OBJS += wcd9330-regmap.o
+	CORE_OBJS += wcd9330-tables.o
 	CORE_OBJS += msm-cdc-pinctrl.o
 	CORE_OBJS += msm-cdc-supply.o
 	CORE_OBJS += wcd934x/wcd934x-regmap.o
@@ -108,23 +115,20 @@ ifdef CONFIG_SND_SOC_WCD9XXX_V2
 	WCD9XXX_OBJS += audio-ext-clk-up.o
 endif
 
-ifdef CONFIG_SND_SOC_WCD9XXX_V1
-	#WCD9330_OBJS += wcd9xxx-rst.o
-	#WCD9330_OBJS += wcd9xxx-core-init.o
-	#WCD9330_OBJS += wcd9xxx-core.o
-	WCD9330_OBJS += wcdcal-hwdep.o
-	WCD9330_OBJS += wcd9xxx-irq.o
-	WCD9330_OBJS += wcd9xxx-slimslave.o
-	#WCD9330_OBJS += wcd9xxx-utils.o
-	WCD9330_OBJS += wcd9xxx-mbhc.o
-	WCD9330_OBJS += wcd9xxx-resmgr.o
-	WCD9330_OBJS += wcd9xxx-common.o
-	WCD9330_OBJS += msm-cdc-pinctrl.o
-	WCD9330_OBJS += msm-cdc-supply.o
-endif
 
 ifdef CONFIG_SND_SOC_WCD9335
 	WCD9335_OBJS += wcd9335.o
+endif
+
+ifdef CONFIG_SND_SOC_WCD9330
+	WCD9330_OBJS += wcd9330.o
+	WCD9330_OBJS += wcd9330-tables.o
+	WCD9330_OBJS += wcdcal-hwdep.o
+	WCD9330_OBJS += wcd9xxx-mbhc.o
+	WCD9330_OBJS += wcd9xxx-resmgr.o
+	WCD9330_OBJS += wcd9xxx-common.o
+	WCD9330_OBJS += wcd9xxx-common.o
+	WCD9330_OBJS += wcd9xxx-resmgr-v2.o
 endif
 
 ifdef CONFIG_SND_SOC_WSA881X
@@ -234,6 +238,9 @@ wcd9xxx_dlkm-y := $(WCD9XXX_OBJS)
 
 obj-$(CONFIG_SND_SOC_WCD9335) += wcd9335_dlkm.o
 wcd9335_dlkm-y := $(WCD9335_OBJS)
+
+obj-$(CONFIG_SND_SOC_WCD9330) += wcd9330_dlkm.o
+wcd9330_dlkm-y := $(WCD9330_OBJS)
 
 obj-$(CONFIG_SND_SOC_WSA881X) += wsa881x_dlkm.o
 wsa881x_dlkm-y := $(WSA881X_OBJS)

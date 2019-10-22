@@ -188,7 +188,6 @@ struct wcd9xxx_pdata {
 	struct slim_device slimbus_slave_device;
 	struct wcd9xxx_micbias_setting micbias;
 	struct wcd9xxx_ocp_setting ocp;
-	struct wcd9xxx_regulator wcdregulator[WCD9XXX_MAX_REGULATOR];
 	struct cdc_regulator *regulator;
 	int num_supplies;
 	u32 mclk_rate;

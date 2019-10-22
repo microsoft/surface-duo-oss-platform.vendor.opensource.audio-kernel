@@ -1,7 +1,7 @@
 # Android makefile for audio kernel modules
 MY_LOCAL_PATH := $(call my-dir)
 
-ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 msmnile $(MSMSTEPPE) $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 mdm9607 msmnile $(MSMSTEPPE) $(TRINKET)),true)
 UAPI_OUT := $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/include
 
 $(shell mkdir -p $(UAPI_OUT)/linux;)
