@@ -121,6 +121,10 @@ ifdef CONFIG_XT_LOGGING
 	Q6_OBJS += sp_params.o
 endif
 
+ifdef CONFIG_MSM_ADSP_LOADER
+ADSP_LOADER_OBJS += adsp-loader.o
+endif
+
 ifdef CONFIG_MSM_QDSP6_PDR
 QDSP6_PDR_OBJS += audio_pdr.o
 endif
@@ -198,6 +202,9 @@ q6_dlkm-y := $(Q6_OBJS)
 
 obj-$(CONFIG_SND_SOC_MSM_QDSP6V2_VM) += q6_dlkm.o
 q6_dlkm-y := $(Q6_OBJS)
+
+obj-$(CONFIG_MSM_ADSP_LOADER) += adsp_loader_dlkm.o
+adsp_loader_dlkm-y := $(ADSP_LOADER_OBJS)
 
 obj-$(CONFIG_MSM_QDSP6_PDR) += q6_pdr_dlkm.o
 q6_pdr_dlkm-y := $(QDSP6_PDR_OBJS)

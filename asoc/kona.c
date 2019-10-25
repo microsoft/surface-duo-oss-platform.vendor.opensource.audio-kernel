@@ -209,7 +209,7 @@ struct dev_config {
 	u32 bit_format;
 	u32 channels;
 };
-
+#if 0
 static struct clk_cfg mi2s_clk[MI2S_MAX] = {
         {
                 CLOCK_ID_PRI_MI2S_IBIT,
@@ -248,13 +248,13 @@ static struct clk_cfg mi2s_clk[MI2S_MAX] = {
                 CLOCK_ROOT_DEFAULT,
         },
 };
-
+#endif
 struct mi2s_conf {
 	struct mutex lock;
 	u32 ref_cnt;
 	u32 msm_is_mi2s_master;
 };
-
+#if 0
 static u32 mi2s_ebit_clk[MI2S_MAX] = {
         CLOCK_ID_PRI_MI2S_EBIT,
         CLOCK_ID_SEC_MI2S_EBIT,
@@ -281,32 +281,7 @@ static struct dev_config mi2s_tx_cfg[] = {
 	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[SEN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
-
-/* Default configuration of Codec DMA Interface RX */
-static struct dev_config cdc_dma_rx_cfg[] = {
-	[WSA_CDC_DMA_RX_0] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[WSA_CDC_DMA_RX_1] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[RX_CDC_DMA_RX_0] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[RX_CDC_DMA_RX_1] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[RX_CDC_DMA_RX_2] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[RX_CDC_DMA_RX_3] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[RX_CDC_DMA_RX_5] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-};
-
-/* Default configuration of Codec DMA Interface TX */
-static struct dev_config cdc_dma_tx_cfg[] = {
-	[WSA_CDC_DMA_TX_0] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[WSA_CDC_DMA_TX_1] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[WSA_CDC_DMA_TX_2] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[TX_CDC_DMA_TX_0] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[TX_CDC_DMA_TX_3] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[TX_CDC_DMA_TX_4] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[VA_CDC_DMA_TX_0] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 8},
-	[VA_CDC_DMA_TX_1] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 8},
-	[VA_CDC_DMA_TX_2] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 8},
-};
-
-static int msm_vi_feed_tx_ch = 2;
+#endif
 static const char *const vi_feed_ch_text[] = {"One", "Two"};
 static char const *bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE",
 					  "S32_LE"};
@@ -446,7 +421,7 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.enable_anc_mic_detect = false,
 	.moisture_duty_cycle_en = true,
 };
-
+#if 0
 static inline int param_is_mask(int p)
 {
 	return (p >= SNDRV_PCM_HW_PARAM_FIRST_MASK) &&
@@ -490,7 +465,6 @@ static u32 get_mi2s_bits_per_sample(u32 bit_format)
 
 	return bit_per_sample;
 }
-
 static void update_mi2s_clk_val(int dai_id, int stream)
 {
 	u32 bit_per_sample = 0;
@@ -541,7 +515,6 @@ static int msm_mi2s_set_sclk(struct snd_pcm_substream *substream, bool enable)
 err:
 	return ret;
 }
-
 static int msm_cdc_dma_get_idx_from_beid(int32_t be_id)
 {
 	int idx = 0;
@@ -602,62 +575,17 @@ static int msm_cdc_dma_get_idx_from_beid(int32_t be_id)
 
 	return idx;
 }
+#endif
 
 static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_dai_link *dai_link = rtd->dai_link;
-	struct snd_interval *rate = hw_param_interval(params,
-					SNDRV_PCM_HW_PARAM_RATE);
-	struct snd_interval *channels = hw_param_interval(params,
-					SNDRV_PCM_HW_PARAM_CHANNELS);
-	int idx = 0;
 	int rc = 0;
 
 	pr_debug("%s: dai_id= %d, format = %d, rate = %d\n",
 		  __func__, dai_link->id, params_format(params),
 		  params_rate(params));
-
-	switch (dai_link->id) {
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_0:
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_1:
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_0:
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_1:
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_2:
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_3:
-		idx = msm_cdc_dma_get_idx_from_beid(dai_link->id);
-		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-				cdc_dma_rx_cfg[idx].bit_format);
-		rate->min = rate->max = cdc_dma_rx_cfg[idx].sample_rate;
-		channels->min = channels->max = cdc_dma_rx_cfg[idx].channels;
-		break;
-
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_2:
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_0:
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_3:
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_4:
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_0:
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_1:
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_2:
-		idx = msm_cdc_dma_get_idx_from_beid(dai_link->id);
-		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-				cdc_dma_tx_cfg[idx].bit_format);
-		rate->min = rate->max = cdc_dma_tx_cfg[idx].sample_rate;
-		channels->min = channels->max = cdc_dma_tx_cfg[idx].channels;
-		break;
-
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_0:
-		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-				SNDRV_PCM_FORMAT_S32_LE);
-		rate->min = rate->max = SAMPLING_RATE_8KHZ;
-		channels->min = channels->max = msm_vi_feed_tx_ch;
-		break;
-
-	default:
-		rate->min = rate->max = SAMPLING_RATE_48KHZ;
-		break;
-	}
 
 	return rc;
 }
@@ -711,7 +639,7 @@ static bool msm_swap_gnd_mic(struct snd_soc_component *component, bool active)
 
 	return ret;
 }
-
+#if 0
 static int msm_snd_cdc_dma_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
@@ -916,16 +844,16 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 }
+#endif
+//static struct snd_soc_ops msm_mi2s_be_ops = {
+//	.startup = msm_mi2s_snd_startup,
+//	.shutdown = msm_mi2s_snd_shutdown,
+//};
 
-static struct snd_soc_ops msm_mi2s_be_ops = {
-	.startup = msm_mi2s_snd_startup,
-	.shutdown = msm_mi2s_snd_shutdown,
-};
-
-static struct snd_soc_ops msm_cdc_dma_be_ops = {
-	.startup = msm_snd_cdc_dma_startup,
-	.hw_params = msm_snd_cdc_dma_hw_params,
-};
+//static struct snd_soc_ops msm_cdc_dma_be_ops = {
+//	.startup = msm_snd_cdc_dma_startup,
+//	.hw_params = msm_snd_cdc_dma_hw_params,
+//};
 
 static int msm_dmic_event(struct snd_soc_dapm_widget *w,
 			  struct snd_kcontrol *kcontrol, int event)
@@ -1027,6 +955,105 @@ static const struct snd_soc_dapm_widget msm_int_dapm_widgets[] = {
 	SND_SOC_DAPM_MIC("Digital Mic7", NULL),
 };
 
+
+static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
+{
+	int ret = 0;
+	struct snd_soc_component *component;
+	struct snd_soc_dapm_context *dapm;
+	struct snd_card *card;
+	struct snd_info_entry *entry;
+	struct snd_soc_component *aux_comp;
+	struct msm_asoc_mach_data *pdata =
+				snd_soc_card_get_drvdata(rtd->card);
+
+	component = snd_soc_rtdcom_lookup(rtd, "bolero_codec");
+	if (!component) {
+		ret = -EINVAL;
+		pr_err("%s: could not find component for bolero_codec\n",
+			__func__);
+		return ret;
+	}
+
+	dapm = snd_soc_component_get_dapm(component);
+
+	snd_soc_dapm_new_controls(dapm, msm_int_dapm_widgets,
+				ARRAY_SIZE(msm_int_dapm_widgets));
+
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic0");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic1");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic2");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic3");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic4");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic5");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic6");
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic7");
+
+	snd_soc_dapm_ignore_suspend(dapm, "Analog Mic1");
+	snd_soc_dapm_ignore_suspend(dapm, "Analog Mic2");
+	snd_soc_dapm_ignore_suspend(dapm, "Analog Mic3");
+	snd_soc_dapm_ignore_suspend(dapm, "Analog Mic4");
+	snd_soc_dapm_ignore_suspend(dapm, "Analog Mic5");
+
+	snd_soc_dapm_ignore_suspend(dapm, "WSA_SPK1 OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "WSA_SPK2 OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "WSA AIF VI");
+	snd_soc_dapm_ignore_suspend(dapm, "VIINPUT_WSA");
+
+	snd_soc_dapm_sync(dapm);
+
+	/*
+	 * Send speaker configuration only for WSA8810.
+	 * Default configuration is for WSA8815.
+	 */
+	dev_dbg(component->dev, "%s: Number of aux devices: %d\n",
+		__func__, rtd->card->num_aux_devs);
+	if (rtd->card->num_aux_devs &&
+	    !list_empty(&rtd->card->component_dev_list)) {
+		list_for_each_entry(aux_comp,
+				&rtd->card->aux_comp_list,
+				card_aux_list) {
+			if (aux_comp->name != NULL && (
+				!strcmp(aux_comp->name, WSA8810_NAME_1) ||
+		    		!strcmp(aux_comp->name, WSA8810_NAME_2))) {
+				wsa_macro_set_spkr_mode(component,
+						WSA_MACRO_SPKR_MODE_1);
+				wsa_macro_set_spkr_gain_offset(component,
+						WSA_MACRO_GAIN_OFFSET_M1P5_DB);
+			}
+		}
+		if (pdata->lito_v2_enabled) {
+			/*
+			 * Enable tx data line3 for saipan version v2 amd
+			 * write corresponding lpi register.
+			 */
+			bolero_set_port_map(component, ARRAY_SIZE(sm_port_map_v2),
+					sm_port_map_v2);
+		} else {
+			bolero_set_port_map(component, ARRAY_SIZE(sm_port_map),
+					sm_port_map);
+		}
+	}
+	card = rtd->card->snd_card;
+	if (!pdata->codec_root) {
+		entry = snd_info_create_subdir(card->module, "codecs",
+						 card->proc_root);
+		if (!entry) {
+			pr_debug("%s: Cannot create codecs module entry\n",
+				 __func__);
+			ret = 0;
+			goto err;
+		}
+		pdata->codec_root = entry;
+	}
+	bolero_info_create_codec_entry(pdata->codec_root, component);
+	bolero_register_wake_irq(component, false);
+	codec_reg_done = true;
+	return 0;
+err:
+	return ret;
+}
+
 static void *def_wcd_mbhc_cal(void)
 {
 	void *wcd_mbhc_cal;
@@ -1058,111 +1085,191 @@ static void *def_wcd_mbhc_cal(void)
 
 /* Digital audio interface glue - connects codec <---> CPU */
 static struct snd_soc_dai_link msm_common_dai_links[] = {
-	{/* hw:x,5 */
-		.name = "MSM AFE-PCM RX",
-		.stream_name = "AFE-PROXY RX",
-		.cpu_dai_name = "msm-dai-q6-dev.241",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.platform_name = "msm-pcm-afe",
+	{
+		.name = LPASS_BE_WSA_CDC_DMA_RX_0,
+		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-0",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45056",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "wsa_macro_rx1",
+		.codec_name = "bolero_codec",
+		.init = &msm_int_audrx_init,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 		/* this dainlink has playback support */
 		.ignore_pmdown_time = 1,
 	},
-	{/* hw:x,6 */
-		.name = "MSM AFE-PCM TX",
-		.stream_name = "AFE-PROXY TX",
-		.cpu_dai_name = "msm-dai-q6-dev.240",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.platform_name  = "msm-pcm-afe",
-		.dpcm_capture = 1,
-		.ignore_suspend = 1,
-	},
-	{/* hw:x,30 */
-		.name = "CDC_DMA Hostless",
-		.stream_name = "CDC_DMA Hostless",
-		.cpu_dai_name = "CDC_DMA_HOSTLESS",
-		.platform_name = "msm-pcm-hostless",
-		.dynamic = 1,
+	{
+		.name = LPASS_BE_WSA_CDC_DMA_RX_1,
+		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-1",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45058",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
-		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			    SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		 /* this dailink has playback support */
-		.ignore_pmdown_time = 1,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-	},
-	{/* hw:x,31 */
-		.name = "TX3_CDC_DMA Hostless",
-		.stream_name = "TX3_CDC_DMA Hostless",
-		.cpu_dai_name = "TX3_CDC_DMA_HOSTLESS",
-		.platform_name = "msm-pcm-hostless",
-		.dynamic = 1,
-		.dpcm_capture = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			    SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-	},
-	{/* hw:x,32 */
-		.name = "Tertiary MI2S TX_Hostless",
-		.stream_name = "Tertiary MI2S_TX Hostless Capture",
-		.cpu_dai_name = "TERT_MI2S_TX_HOSTLESS",
-		.platform_name = "msm-pcm-hostless",
-		.dynamic = 1,
-		.dpcm_capture = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-				SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-	},
-        {
-                .name = LPASS_BE_PRI_MI2S_RX,
-                .stream_name = "MI2S-LPAIF_AXI-RX-PRIMARY",
-                .cpu_dai_name = "msm-dai-q6-mi2s.0",
-                .async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
-                .dpcm_playback = 1,
-                .trigger = {SND_SOC_DPCM_TRIGGER_POST,
-                        SND_SOC_DPCM_TRIGGER_POST},
-
-                .codec_name = "msm-stub-codec.1",
-                .codec_dai_name = "msm-stub-rx",
-                .ops = &msm_mi2s_be_ops,
-                .ignore_suspend = 1,
-                .ignore_pmdown_time = 1,
-        },
-};
-
-static struct snd_soc_dai_link msm_bolero_fe_dai_links[] = {
-	{/* hw:x,33 */
-		.name = LPASS_BE_WSA_CDC_DMA_TX_0,
-		.stream_name = "WSA CDC DMA0 Capture",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45057",
-		.platform_name = "msm-pcm-hostless",
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "wsa_macro_rx_mix",
 		.codec_name = "bolero_codec",
-		.codec_dai_name = "wsa_macro_vifeedback",
-		.id = MSM_BACKEND_DAI_WSA_CDC_DMA_TX_0,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ops = &msm_cdc_dma_be_ops,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
 	},
+    {
+		.name = LPASS_BE_WSA_CDC_DMA_TX_1,
+		.stream_name = "CODEC_DMA-LPAIF_WSA-TX-1",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45059",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "wsa_macro_echo",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_RX_CDC_DMA_RX_0,
+		.stream_name = "CODEC_DMA-LPAIF_RX-RX-0",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45104",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "rx_macro_rx1",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_RX_CDC_DMA_RX_1,
+		.stream_name = "CODEC_DMA-LPAIF_RX-RX-1",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45106",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "rx_macro_rx2",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_RX_CDC_DMA_RX_2,
+		.stream_name = "CODEC_DMA-LPAIF_RX-RX-2",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45108",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "rx_macro_rx3",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_RX_CDC_DMA_RX_3,
+		.stream_name = "CODEC_DMA-LPAIF_RX-RX-3",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45110",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "rx_macro_rx4",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_TX_CDC_DMA_TX_3,
+		.stream_name = "CODEC_DMA-LPAIF_TX-TX-3",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45111",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "tx_macro_tx1",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_TX_CDC_DMA_TX_4,
+		.stream_name = "CODEC_DMA-LPAIF_TX-TX-4",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45113",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "tx_macro_tx2",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_VA_CDC_DMA_TX_0,
+		.stream_name = "CODEC_DMA-LPAIF_VA-TX-0",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45089",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "va_macro_tx1",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_VA_CDC_DMA_TX_1,
+		.stream_name = "CODEC_DMA-LPAIF_VA-TX-1",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45091",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "va_macro_tx2",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
+    {
+		.name = LPASS_BE_VA_CDC_DMA_TX_2,
+		.stream_name = "CODEC_DMA-LPAIF_VA-TX-2",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45093",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "va_macro_tx3",
+		.codec_name = "bolero_codec",
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+    },
 };
 
 static struct snd_soc_dai_link msm_kona_dai_links[
-			ARRAY_SIZE(msm_common_dai_links) +
-			ARRAY_SIZE(msm_bolero_fe_dai_links)
-];
+			ARRAY_SIZE(msm_common_dai_links)];
 
 static int msm_populate_dai_link_component_of_node(
 					struct snd_soc_card *card)
@@ -1364,12 +1471,6 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		       msm_common_dai_links,
 		       sizeof(msm_common_dai_links));
 		total_links += ARRAY_SIZE(msm_common_dai_links);
-
-		memcpy(msm_kona_dai_links + total_links,
-		       msm_bolero_fe_dai_links,
-		       sizeof(msm_bolero_fe_dai_links));
-		total_links +=
-			ARRAY_SIZE(msm_bolero_fe_dai_links);
 
 		dailink = msm_kona_dai_links;
 	} else if(!strcmp(match->data, "stub_codec")) {
