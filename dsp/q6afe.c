@@ -7433,6 +7433,8 @@ int afe_enable_lpass_core_shared_clock(u16 port_id, u32 enable)
 	return ret;
 }
 
+EXPORT_SYMBOL(afe_enable_lpass_core_shared_clock);
+
 int q6afe_check_osr_clk_freq(u32 freq)
 {
 	int ret = 0;
@@ -7457,6 +7459,8 @@ int q6afe_check_osr_clk_freq(u32 freq)
 	}
 	return ret;
 }
+
+EXPORT_SYMBOL(q6afe_check_osr_clk_freq);
 
 static int afe_get_sp_th_vi_v_vali_data(
 		struct afe_sp_th_vi_v_vali_get_param *th_vi_v_vali)

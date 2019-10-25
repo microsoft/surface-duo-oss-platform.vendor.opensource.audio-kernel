@@ -108,6 +108,21 @@ ifdef CONFIG_SND_SOC_WCD9XXX_V2
 	WCD9XXX_OBJS += audio-ext-clk-up.o
 endif
 
+ifdef CONFIG_SND_SOC_WCD9XXX_V1
+	#WCD9330_OBJS += wcd9xxx-rst.o
+	#WCD9330_OBJS += wcd9xxx-core-init.o
+	#WCD9330_OBJS += wcd9xxx-core.o
+	WCD9330_OBJS += wcdcal-hwdep.o
+	WCD9330_OBJS += wcd9xxx-irq.o
+	WCD9330_OBJS += wcd9xxx-slimslave.o
+	#WCD9330_OBJS += wcd9xxx-utils.o
+	WCD9330_OBJS += wcd9xxx-mbhc.o
+	WCD9330_OBJS += wcd9xxx-resmgr.o
+	WCD9330_OBJS += wcd9xxx-common.o
+	WCD9330_OBJS += msm-cdc-pinctrl.o
+	WCD9330_OBJS += msm-cdc-supply.o
+endif
+
 ifdef CONFIG_SND_SOC_WCD9335
 	WCD9335_OBJS += wcd9335.o
 endif

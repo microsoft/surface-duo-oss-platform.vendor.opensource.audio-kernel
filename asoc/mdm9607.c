@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,9 +31,9 @@
 #include <dsp/q6afe-v2.h>
 #include <dsp/q6core.h>
 #include "msm-pcm-routing-v2.h"
-#include "codecs/wcd9330.h"
+#include "codecs/msm-cdc-pinctrl.h"
 #include "codecs/wcd9306.h"
-#include "codecs/wcd-mbhc-v2.h"
+#include "codecs/wcd9330.h"
 
 
 /* Spk control */
@@ -111,6 +111,7 @@ struct mdm_machine_data {
 	atomic_t prim_clk_usrs;
 	u16 prim_mi2s_mode;
 	u16 prim_auxpcm_mode;
+	struct device_node *prim_master_p;
 	atomic_t sec_clk_usrs;
 	u16 sec_mi2s_mode;
 	u16 sec_auxpcm_mode;
@@ -289,12 +290,21 @@ done:
 static void mdm_mi2s_shutdown(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *card = rtd->card;
+	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret;
 
 	if (atomic_dec_return(&mi2s_ref_count) == 0) {
 		ret = mdm_mi2s_clk_ctl(rtd, false, 0);
 		if (ret < 0)
 			pr_err("%s Clock disable failed\n", __func__);
+	}
+	if (pdata->prim_mi2s_mode == 1) {
+		ret = msm_cdc_pinctrl_select_sleep_state
+						(pdata->prim_master_p);
+		if (ret)
+			pr_err("%s: failed to set pri gpios to sleep: %d\n",
+				__func__, ret);
 	}
 }
 
@@ -352,6 +362,12 @@ static int mdm_mi2s_startup(struct snd_pcm_substream *substream)
 		 * 0 means external clock slave mode.
 		 */
 		if (pdata->prim_mi2s_mode == 1) {
+			ret = msm_cdc_pinctrl_select_active_state
+						(pdata->prim_master_p);
+			if (ret < 0) {
+				pr_err("%s pinctrl set failed\n", __func__);
+				goto err;
+			}
 			ret = mdm_mi2s_clk_ctl(rtd, true, mdm_mi2s_rate);
 			if (ret < 0) {
 				pr_err("%s clock enable failed\n", __func__);
@@ -792,11 +808,10 @@ static int mdm_mi2s_get_spk(struct snd_kcontrol *kcontrol,
 
 static void mdm_ext_control(struct snd_soc_codec *codec)
 {
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 
 	pr_debug("%s mdm_spk_control %d", __func__, mdm_spk_control);
 
-	mutex_lock(&codec->mutex);
 	if (mdm_spk_control == MDM_SPK_ON) {
 		snd_soc_dapm_enable_pin(dapm, "Ext Spk Bottom Pos");
 		snd_soc_dapm_enable_pin(dapm, "Ext Spk Bottom Neg");
@@ -809,7 +824,6 @@ static void mdm_ext_control(struct snd_soc_codec *codec)
 		snd_soc_dapm_disable_pin(dapm, "Ext Spk Top Neg");
 	}
 	snd_soc_dapm_sync(dapm);
-	mutex_unlock(&codec->mutex);
 }
 
 static int mdm_mi2s_set_spk(struct snd_kcontrol *kcontrol,
@@ -888,13 +902,14 @@ err:
 static int mdm_mclk_event(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event)
 {
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	pr_debug("%s event %d\n", __func__, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
-		return mdm_enable_codec_ext_clk(w->codec, 1, true);
+		return mdm_enable_codec_ext_clk(codec, 1, true);
 	case SND_SOC_DAPM_POST_PMD:
-		return mdm_enable_codec_ext_clk(w->codec, 0, true);
+		return mdm_enable_codec_ext_clk(codec, 0, true);
 	}
 	return 0;
 }
@@ -1127,7 +1142,7 @@ static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
 	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_card *card = rtd->card;
 	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
@@ -1156,7 +1171,6 @@ static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_ignore_suspend(dapm, "Lineout_3 amp");
 	snd_soc_dapm_ignore_suspend(dapm, "Lineout_2 amp");
 	snd_soc_dapm_ignore_suspend(dapm, "Lineout_4 amp");
-	snd_soc_dapm_ignore_suspend(dapm, "ultrasound amp");
 	snd_soc_dapm_ignore_suspend(dapm, "Handset Mic");
 	snd_soc_dapm_ignore_suspend(dapm, "Headset Mic");
 	snd_soc_dapm_ignore_suspend(dapm, "ANCRight Headset Mic");
@@ -1336,7 +1350,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* This dainlink has playback support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA1
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA1
 	},
 	{
 		.name = "MSM VoIP",
@@ -1353,7 +1367,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* This dainlink has VOIP support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_VOIP,
+		.id = MSM_FRONTEND_DAI_VOIP,
 	},
 	{
 		.name = "Circuit-Switch Voice",
@@ -1371,7 +1385,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* This dainlink has Voice support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_CS_VOICE,
+		.id = MSM_FRONTEND_DAI_CS_VOICE,
 	},
 	{
 		.name = "Primary MI2S RX Hostless",
@@ -1405,7 +1419,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
-		.be_id = MSM_FRONTEND_DAI_VOLTE,
+		.id = MSM_FRONTEND_DAI_VOLTE,
 	},
 	{	.name = "MSM AFE-PCM RX",
 		.stream_name = "AFE-PROXY RX",
@@ -1439,7 +1453,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 				SND_SOC_DPCM_TRIGGER_POST},
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_DTMF_RX,
+		.id = MSM_FRONTEND_DAI_DTMF_RX,
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 	},
 	{
@@ -1508,7 +1522,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		/* this dainlink has playback support */
-		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
 	},
 	{
 		.name = "MDM Media6",
@@ -1526,11 +1540,11 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		/* this dainlink has playback support */
-		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA6,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA6,
 	},
 	{
 		.name = "Primary MI2S TX Hostless",
-		.stream_name = "Primary MI2S_TX Hostless Playback",
+		.stream_name = "Primary MI2S_TX Hostless Capture",
 		.cpu_dai_name = "PRI_MI2S_TX_HOSTLESS",
 		.platform_name  = "msm-pcm-hostless",
 		.dynamic = 1,
@@ -1558,7 +1572,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* this dainlink has playback support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA5,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA5,
 	},
 	{
 		.name = "MDM VoiceMMode1",
@@ -1576,7 +1590,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* This dainlink has Voice support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_VOICEMMODE1,
+		.id = MSM_FRONTEND_DAI_VOICEMMODE1,
 	},
 	{
 		.name = "MDM VoiceMMode2",
@@ -1594,7 +1608,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		/* This dainlink has Voice support */
 		.ignore_pmdown_time = 1,
-		.be_id = MSM_FRONTEND_DAI_VOICEMMODE2,
+		.id = MSM_FRONTEND_DAI_VOICEMMODE2,
 	},
 	{
 		.name = "VoiceMMode1 HOST RX CAPTURE",
@@ -1695,7 +1709,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		/* this dainlink has playback support */
-		.be_id = MSM_FRONTEND_DAI_MULTIMEDIA4,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA4,
 	},
 	{
 		.name = "QCHAT",
@@ -1713,7 +1727,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
-		.be_id = MSM_FRONTEND_DAI_QCHAT,
+		.id = MSM_FRONTEND_DAI_QCHAT,
 	},
 	/* Backend DAI Links */
 	{
@@ -1725,7 +1739,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-rx",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_AFE_PCM_RX,
+		.id = MSM_BACKEND_DAI_AFE_PCM_RX,
 		.ignore_suspend = 1,
 	},
 	{
@@ -1737,7 +1751,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_AFE_PCM_TX,
+		.id = MSM_BACKEND_DAI_AFE_PCM_TX,
 		.ignore_suspend = 1,
 	},
 	{
@@ -1749,7 +1763,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-rx",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_AUXPCM_RX,
+		.id = MSM_BACKEND_DAI_AUXPCM_RX,
 		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
 		.ops = &mdm_auxpcm_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1764,7 +1778,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_AUXPCM_TX,
+		.id = MSM_BACKEND_DAI_AUXPCM_TX,
 		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
 		.ops = &mdm_auxpcm_be_ops,
 		.ignore_suspend = 1,
@@ -1779,7 +1793,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_INCALL_RECORD_TX,
+		.id = MSM_BACKEND_DAI_INCALL_RECORD_TX,
 		.be_hw_params_fixup = mdm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
@@ -1793,7 +1807,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_INCALL_RECORD_RX,
+		.id = MSM_BACKEND_DAI_INCALL_RECORD_RX,
 		.be_hw_params_fixup = mdm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
@@ -1807,7 +1821,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-rx",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_VOICE_PLAYBACK_TX,
+		.id = MSM_BACKEND_DAI_VOICE_PLAYBACK_TX,
 		.be_hw_params_fixup = mdm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
@@ -1820,7 +1834,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-rx",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
+		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
 		.be_hw_params_fixup = &mdm_sec_mi2s_rx_be_hw_params_fixup,
 		.ops = &mdm_sec_mi2s_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1835,7 +1849,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_SECONDARY_MI2S_TX,
+		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_TX,
 		.be_hw_params_fixup = &mdm_sec_mi2s_tx_be_hw_params_fixup,
 		.ops = &mdm_sec_mi2s_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1850,7 +1864,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-rx",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_SEC_AUXPCM_RX,
+		.id = MSM_BACKEND_DAI_SEC_AUXPCM_RX,
 		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
 		.ops = &mdm_sec_auxpcm_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1865,7 +1879,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_SEC_AUXPCM_TX,
+		.id = MSM_BACKEND_DAI_SEC_AUXPCM_TX,
 		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
 		.ops = &mdm_sec_auxpcm_be_ops,
 		.ignore_suspend = 1,
@@ -1883,7 +1897,7 @@ static struct snd_soc_dai_link mdm_9330_dai[] = {
 		.codec_dai_name = "tomtom_i2s_rx1",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_PRI_MI2S_RX,
+		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
 		.init  = &mdm_mi2s_audrx_init,
 		.be_hw_params_fixup = &mdm_mi2s_rx_be_hw_params_fixup,
 		.ops = &mdm_mi2s_be_ops,
@@ -1899,7 +1913,7 @@ static struct snd_soc_dai_link mdm_9330_dai[] = {
 		.codec_dai_name = "tomtom_i2s_tx1",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_PRI_MI2S_TX,
+		.id = MSM_BACKEND_DAI_PRI_MI2S_TX,
 		.be_hw_params_fixup = &mdm_mi2s_tx_be_hw_params_fixup,
 		.ops = &mdm_mi2s_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1918,7 +1932,7 @@ static struct snd_soc_dai_link mdm_9306_dai[] = {
 		.codec_dai_name = "tapan_i2s_rx1",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.be_id = MSM_BACKEND_DAI_PRI_MI2S_RX,
+		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
 		.init  = &mdm_mi2s_audrx_init,
 		.be_hw_params_fixup = &mdm_mi2s_rx_be_hw_params_fixup,
 		.ops = &mdm_mi2s_be_ops,
@@ -1934,7 +1948,7 @@ static struct snd_soc_dai_link mdm_9306_dai[] = {
 		.codec_dai_name = "tapan_i2s_tx1",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.be_id = MSM_BACKEND_DAI_PRI_MI2S_TX,
+		.id = MSM_BACKEND_DAI_PRI_MI2S_TX,
 		.be_hw_params_fixup = &mdm_mi2s_tx_be_hw_params_fixup,
 		.ops = &mdm_mi2s_be_ops,
 		.ignore_pmdown_time = 1,
@@ -1965,8 +1979,6 @@ static struct snd_soc_card snd_soc_card_mdm_9306 = {
 static const struct of_device_id mdm_asoc_machine_of_match[]  = {
 	{ .compatible = "qcom,mdm9607-audio-tomtom",
 	  .data = "tomtom_codec"},
-	{ .compatible = "qcom,mdm9607-audio-tapan",
-	  .data = "tapan_codec"},
 	{},
 };
 
@@ -2238,6 +2250,10 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err;
 	}
+
+	pdata->prim_master_p = of_parse_phandle(pdev->dev.of_node,
+						"qcom,prim_mi2s_aux_master",
+						0);
 	mutex_init(&cdc_mclk_mutex);
 	atomic_set(&aux_ref_count, 0);
 	atomic_set(&sec_aux_ref_count, 0);
@@ -2252,14 +2268,10 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err;
 	}
-	if (!strcmp(card->name, "mdm9607-tapan-i2s-snd-card")) {
-		pdata->mdm9607_codec_fn.mclk_enable_fn = tapan_mclk_enable;
-		pdata->mdm9607_codec_fn.mbhc_hs_detect = tapan_hs_detect;
-	} else if (!strcmp(card->name, "mdm9607-tomtom-i2s-snd-card")) {
+	if (!strcmp(card->name, "mdm9607-tomtom-i2s-snd-card")) {
 		pdata->mdm9607_codec_fn.mclk_enable_fn = tomtom_mclk_enable;
 		pdata->mdm9607_codec_fn.mbhc_hs_detect = tomtom_hs_detect;
 	}
-
 	card->dev = &pdev->dev;
 	platform_set_drvdata(pdev, card);
 	snd_soc_card_set_drvdata(card, pdata);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014, 2020 The Linux Foundation. All rights reserved.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -10,7 +10,7 @@
 * GNU General Public License for more details.
 */
 
-#include <linux/mfd/wcd9xxx/wcd9330_registers.h>
+#include "wcd9330_registers.h"
 #include "wcd9330.h"
 
 const u8 tomtom_reg_readable[WCD9330_MAX_REGISTER + 1] = {
