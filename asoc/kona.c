@@ -1133,7 +1133,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_0,
-		.stream_name = "CODEC_DMA-LPAIF_RX-RX-0",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-0",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45104",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -1148,7 +1148,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_1,
-		.stream_name = "CODEC_DMA-LPAIF_RX-RX-1",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-1",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45106",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -1163,7 +1163,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_2,
-		.stream_name = "CODEC_DMA-LPAIF_RX-RX-2",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-2",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45108",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -1178,7 +1178,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_3,
-		.stream_name = "CODEC_DMA-LPAIF_RX-RX-3",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-3",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45110",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -1193,7 +1193,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_3,
-		.stream_name = "CODEC_DMA-LPAIF_TX-TX-3",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-3",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45111",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -1208,7 +1208,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_4,
-		.stream_name = "CODEC_DMA-LPAIF_TX-TX-4",
+		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-4",
 		.cpu_dai_name = "msm-dai-cdc-dma-dev.45113",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
