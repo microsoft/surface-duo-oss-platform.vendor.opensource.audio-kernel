@@ -11426,7 +11426,7 @@ static int tasha_set_prim_interpolator_rate(struct snd_soc_dai *dai,
 					__func__, j, sample_rate);
 				/* sample_rate is in Hz */
 				if ((j == 0) && (sample_rate == 44100)) {
-					pr_info("%s: Cannot set 44.1KHz on INT0\n",
+					pr_debug("%s: Cannot set 44.1KHz on INT0\n",
 						__func__);
 				} else
 					snd_soc_update_bits(codec, int_fs_reg,
@@ -12804,13 +12804,13 @@ static int tasha_handle_pdata(struct tasha_priv *tasha,
 
 	if (pdata->dmic_sample_rate ==
 	    WCD9XXX_DMIC_SAMPLE_RATE_UNDEFINED) {
-		dev_info(codec->dev, "%s: dmic_rate invalid default = %d\n",
+		dev_dbg(codec->dev, "%s: dmic_rate invalid default = %d\n",
 			__func__, def_dmic_rate);
 		pdata->dmic_sample_rate = def_dmic_rate;
 	}
 	if (pdata->mad_dmic_sample_rate ==
 	    WCD9XXX_DMIC_SAMPLE_RATE_UNDEFINED) {
-		dev_info(codec->dev, "%s: mad_dmic_rate invalid default = %d\n",
+		dev_dbg(codec->dev, "%s: mad_dmic_rate invalid default = %d\n",
 			__func__, def_dmic_rate);
 		/*
 		 * use dmic_sample_rate as the default for MAD
@@ -12820,7 +12820,7 @@ static int tasha_handle_pdata(struct tasha_priv *tasha,
 	}
 	if (pdata->ecpp_dmic_sample_rate ==
 	    WCD9XXX_DMIC_SAMPLE_RATE_UNDEFINED) {
-		dev_info(codec->dev,
+		dev_dbg(codec->dev,
 			 "%s: ecpp_dmic_rate invalid default = %d\n",
 			 __func__, def_dmic_rate);
 		/*
@@ -12833,7 +12833,7 @@ static int tasha_handle_pdata(struct tasha_priv *tasha,
 	if (pdata->dmic_clk_drv ==
 	    WCD9XXX_DMIC_CLK_DRIVE_UNDEFINED) {
 		pdata->dmic_clk_drv = WCD9335_DMIC_CLK_DRIVE_DEFAULT;
-		dev_info(codec->dev,
+		dev_dbg(codec->dev,
 			 "%s: dmic_clk_strength invalid, default = %d\n",
 			 __func__, pdata->dmic_clk_drv);
 	}
@@ -13476,7 +13476,7 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
 
 	control = dev_get_drvdata(codec->dev->parent);
 
-	dev_info(codec->dev, "%s()\n", __func__);
+	dev_dbg(codec->dev, "%s()\n", __func__);
 	tasha = snd_soc_codec_get_drvdata(codec);
 	tasha->intf_type = wcd9xxx_get_intf_type();
 
@@ -14281,7 +14281,7 @@ static int tasha_probe(struct platform_device *pdev)
 	schedule_work(&tasha->tasha_add_child_devices_work);
 	tasha_get_codec_ver(tasha);
 
-	dev_info(&pdev->dev, "%s: Tasha driver probe done\n", __func__);
+	dev_dbg(&pdev->dev, "%s: Tasha driver probe done\n", __func__);
 	return ret;
 
 err_cdc_reg:

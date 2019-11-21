@@ -1400,7 +1400,7 @@ static void msm_dai_q6_spdif_shutdown(struct snd_pcm_substream *substream,
 	int rc = 0;
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		pr_info("%s:  afe port not started. dai_data->status_mask = %ld\n",
+		pr_debug("%s:  afe port not started. dai_data->status_mask = %ld\n",
 				__func__, *dai_data->status_mask);
 		return;
 	}
@@ -5456,7 +5456,7 @@ static int msm_dai_tdm_q6_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "%s: Group ID from DT file 0x%x\n",
 		__func__, tdm_group_cfg.group_id);
 
-	dev_info(&pdev->dev, "%s: dev_name: %s group_id: 0x%x\n",
+	dev_dbg(&pdev->dev, "%s: dev_name: %s group_id: 0x%x\n",
 		__func__, dev_name(&pdev->dev), tdm_group_cfg.group_id);
 
 	rc = of_property_read_u32(pdev->dev.of_node,
@@ -9153,7 +9153,7 @@ static int msm_dai_q6_tdm_dev_probe(struct platform_device *pdev)
 	}
 	pdev->id = tdm_dev_id;
 
-	dev_info(&pdev->dev, "%s: dev_name: %s dev_id: 0x%x\n",
+	dev_dbg(&pdev->dev, "%s: dev_name: %s dev_id: 0x%x\n",
 		__func__, dev_name(&pdev->dev), tdm_dev_id);
 
 	dai_data = kzalloc(sizeof(struct msm_dai_q6_tdm_dai_data),
@@ -9296,7 +9296,7 @@ static int msm_dai_q6_tdm_dev_probe(struct platform_device *pdev)
 		custom_tdm_header->header_type =
 			AFE_CUSTOM_TDM_HEADER_TYPE_INVALID;
 	} else {
-		dev_info(&pdev->dev,
+		dev_dbg(&pdev->dev,
 			"%s: Custom tdm header not supported\n", __func__);
 		/* CUSTOM TDM HEADER CFG -- set default */
 		custom_tdm_header->header_type =

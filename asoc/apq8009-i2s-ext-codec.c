@@ -2922,13 +2922,13 @@ static int apq8009_asoc_machine_probe(struct platform_device *pdev)
 
 	ret = of_property_read_u32(pdev->dev.of_node, mclk, &id);
 	if (ret) {
-		dev_info(&pdev->dev,
+		dev_dbg(&pdev->dev,
 			 "%s: missing %s in dt node\n", __func__, mclk);
 		id = DEFAULT_MCLK_RATE;
 	}
 	pdata->mclk_freq = id;
 
-	dev_info(&pdev->dev, "external codec is configured\n");
+	dev_dbg(&pdev->dev, "external codec is configured\n");
 
 	pdata->mi2s_gpio_p[PRIM_MI2S] = of_parse_phandle(pdev->dev.of_node,
 					"qcom,pri-mi2s-gpios", 0);

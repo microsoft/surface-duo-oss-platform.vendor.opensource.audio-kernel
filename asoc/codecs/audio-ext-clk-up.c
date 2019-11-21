@@ -185,7 +185,7 @@ static int audio_ext_lpass_mclk_prepare(struct clk_hw *hw)
 			msecs_to_jiffies(2 * 100);
 		while (!time_after(jiffies, timeout)) {
 			if (!q6core_is_adsp_ready()) {
-				pr_info("ADSP isn't ready\n");
+				pr_debug("ADSP isn't ready\n");
 			} else {
 				pr_debug("ADSP is ready\n");
 			}

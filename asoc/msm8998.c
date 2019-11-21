@@ -3538,7 +3538,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 						    138, 139, 140, 141, 142,
 						    143};
 
-	pr_info("%s: dev_name%s\n", __func__, dev_name(cpu_dai->dev));
+	pr_debug("%s: dev_name%s\n", __func__, dev_name(cpu_dai->dev));
 
 	rtd->pmdown_time = 0;
 
@@ -7117,7 +7117,7 @@ static int msm_init_wsa_dev(struct platform_device *pdev,
 			__func__, wsa_max_devs, found);
 		return -EPROBE_DEFER;
 	}
-	dev_info(&pdev->dev,
+	dev_dbg(&pdev->dev,
 		"%s: found %d wsa881x devices registered with ALSA core\n",
 		__func__, found);
 
@@ -7346,7 +7346,7 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 			ret);
 		goto err;
 	}
-	dev_info(&pdev->dev, "Sound card %s registered\n", card->name);
+	dev_dbg(&pdev->dev, "Sound card %s registered\n", card->name);
 	spdev = pdev;
 
 	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);

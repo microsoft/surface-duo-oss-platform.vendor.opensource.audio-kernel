@@ -740,7 +740,7 @@ void wcd_mbhc_elec_hs_report_unplug(struct wcd_mbhc *mbhc)
 		mbhc->mbhc_fn->wcd_cancel_hs_detect_plug(mbhc,
 						&mbhc->correct_plug_swch);
 	else
-		pr_info("%s: hs_detect_plug work not cancelled\n", __func__);
+		pr_debug("%s: hs_detect_plug work not cancelled\n", __func__);
 
 	pr_debug("%s: Report extension cable\n", __func__);
 	wcd_mbhc_report_plug(mbhc, 1, SND_JACK_LINEOUT);
@@ -871,7 +871,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		mbhc->mbhc_fn->wcd_cancel_hs_detect_plug(mbhc,
 						&mbhc->correct_plug_swch);
 	else
-		pr_info("%s: hs_detect_plug work not cancelled\n", __func__);
+		pr_debug("%s: hs_detect_plug work not cancelled\n", __func__);
 
 	if (mbhc->mbhc_cb->micbias_enable_status)
 		micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
@@ -948,7 +948,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			jack_type = SND_JACK_ANC_HEADPHONE;
 			break;
 		default:
-			pr_info("%s: Invalid current plug: %d\n",
+			pr_debug("%s: Invalid current plug: %d\n",
 				__func__, mbhc->current_plug);
 			jack_type = SND_JACK_UNSUPPORTED;
 			break;
@@ -1494,7 +1494,7 @@ static int wcd_mbhc_usb_c_analog_setup_gpios(struct wcd_mbhc *mbhc,
 		pval.intval = POWER_SUPPLY_TYPEC_PR_SOURCE;
 		if (power_supply_set_property(mbhc->usb_psy,
 				POWER_SUPPLY_PROP_TYPEC_POWER_ROLE, &pval))
-			dev_info(mbhc->codec->dev, "%s: force PR_SOURCE mode unsuccessful\n",
+			dev_dbg(mbhc->codec->dev, "%s: force PR_SOURCE mode unsuccessful\n",
 				 __func__);
 		else
 			mbhc->usbc_force_pr_mode = true;
@@ -1519,7 +1519,7 @@ static int wcd_mbhc_usb_c_analog_setup_gpios(struct wcd_mbhc *mbhc,
 			pval.intval = POWER_SUPPLY_TYPEC_PR_DUAL;
 			if (power_supply_set_property(mbhc->usb_psy,
 				POWER_SUPPLY_PROP_TYPEC_POWER_ROLE, &pval))
-				dev_info(mbhc->codec->dev, "%s: force PR_DUAL mode unsuccessful\n",
+				dev_dbg(mbhc->codec->dev, "%s: force PR_DUAL mode unsuccessful\n",
 					 __func__);
 
 			mbhc->usbc_force_pr_mode = false;
@@ -1701,10 +1701,10 @@ int wcd_mbhc_start(struct wcd_mbhc *mbhc, struct wcd_mbhc_config *mbhc_cfg)
 				&mbhc_cfg->enable_usbc_analog);
 	}
 	if (mbhc_cfg->enable_usbc_analog == 0 || rc != 0) {
-		dev_info(card->dev,
+		dev_dbg(card->dev,
 				"%s: %s in dt node is missing or false\n",
 				__func__, usb_c_dt);
-		dev_info(card->dev,
+		dev_dbg(card->dev,
 			"%s: skipping USB c analog configuration\n", __func__);
 	}
 

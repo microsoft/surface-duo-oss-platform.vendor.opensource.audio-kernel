@@ -1009,9 +1009,9 @@ static int bg_cdc_adsp_device_up(struct bg_cdc_priv *bg_cdc)
 			  msecs_to_jiffies(ADSP_STATE_READY_TIMEOUT_MS);
 		while (!(timedout = time_after(jiffies, timeout))) {
 			if (!q6core_is_adsp_ready()) {
-				dev_info(bg_cdc->dev, "%s: ADSP isn't ready\n", __func__);
+				dev_dbg(bg_cdc->dev, "%s: ADSP isn't ready\n", __func__);
 			} else {
-				dev_info(bg_cdc->dev, "%s: ADSP is ready\n", __func__);
+				dev_dbg(bg_cdc->dev, "%s: ADSP is ready\n", __func__);
 				break;
 			}
 		}
@@ -1272,7 +1272,7 @@ static int bg_cdc_probe(struct platform_device *pdev)
 	bg_cdc->bg_spk_connected = of_property_read_bool(pdev->dev.of_node,
 						"qcom,bg-speaker-connected");
 	if (!bg_cdc->bg_spk_connected)
-		dev_info(&pdev->dev, "%s: speaker not connected to target %d\n",
+		dev_dbg(&pdev->dev, "%s: speaker not connected to target %d\n",
 			__func__, bg_cdc->bg_spk_connected);
 
 	ret = snd_soc_register_codec(&pdev->dev, &soc_codec_dev_bg_cdc,

@@ -335,7 +335,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 					     &asm_mtmx_strtr_window,
 					     param_id);
 	}
-	dev_info(rtd->platform->dev, "%s: Instance = %d, Stream ID = %s\n",
+	dev_dbg(rtd->platform->dev, "%s: Instance = %d, Stream ID = %s\n",
 			__func__, pcm->instance, substream->pcm->id);
 	runtime->private_data = pcm;
 

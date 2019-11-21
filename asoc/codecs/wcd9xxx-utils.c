@@ -110,7 +110,7 @@ static void wcd9xxx_dt_parse_micbias_info(struct device *dev,
 		if (!rc)
 			mb->micb1_mv = prop_val;
 	} else {
-		dev_info(dev, "%s: Micbias1 DT property not found\n",
+		dev_dbg(dev, "%s: Micbias1 DT property not found\n",
 			__func__);
 	}
 
@@ -137,7 +137,7 @@ static void wcd9xxx_dt_parse_micbias_info(struct device *dev,
 		if (!rc)
 			mb->micb2_mv = prop_val;
 	} else {
-		dev_info(dev, "%s: Micbias2 DT property not found\n",
+		dev_dbg(dev, "%s: Micbias2 DT property not found\n",
 			__func__);
 	}
 
@@ -164,7 +164,7 @@ static void wcd9xxx_dt_parse_micbias_info(struct device *dev,
 		if (!rc)
 			mb->micb3_mv = prop_val;
 	} else {
-		dev_info(dev, "%s: Micbias3 DT property not found\n",
+		dev_dbg(dev, "%s: Micbias3 DT property not found\n",
 			__func__);
 	}
 
@@ -185,7 +185,7 @@ static void wcd9xxx_dt_parse_micbias_info(struct device *dev,
 		if (!rc)
 			mb->micb4_mv = prop_val;
 	} else {
-		dev_info(dev, "%s: Micbias4 DT property not found\n",
+		dev_dbg(dev, "%s: Micbias4 DT property not found\n",
 			__func__);
 	}
 
@@ -325,7 +325,7 @@ struct wcd9xxx_pdata *wcd9xxx_populate_dt_data(struct device *dev)
 	msm_cdc_get_power_supplies(dev, &pdata->regulator,
 				   &pdata->num_supplies);
 	if (!pdata->regulator || (pdata->num_supplies <= 0)) {
-		dev_info(dev, "%s: no power supplies defined for codec\n",
+		dev_dbg(dev, "%s: no power supplies defined for codec\n",
 			__func__);
 	}
 
@@ -965,7 +965,7 @@ int wcd9xxx_core_res_init(
 	wcd9xxx_core_res->num_irq_regs = num_irq_regs;
 	wcd9xxx_core_res->wcd_core_regmap = wcd_regmap;
 
-	pr_info("%s: num_irqs = %d, num_irq_regs = %d\n",
+	pr_debug("%s: num_irqs = %d, num_irq_regs = %d\n",
 			__func__, wcd9xxx_core_res->num_irqs,
 			wcd9xxx_core_res->num_irq_regs);
 
