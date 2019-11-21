@@ -760,7 +760,7 @@ static int msm_pcm_routing_get_app_type_idx(int app_type)
 		if (app_type_cfg[idx].app_type == app_type)
 			return idx;
 	}
-	pr_info("%s: App type not available, fallback to default\n", __func__);
+	pr_debug("%s: App type not available, fallback to default\n", __func__);
 	return 0;
 }
 
@@ -3827,7 +3827,7 @@ static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
 	"QUAT_TDM_RX_0", "QUAT_TDM_RX_1", "QUAT_TDM_RX_2", "SLIM_6_RX",
 	"TERT_MI2S_RX", "QUAT_MI2S_RX", "TERT_TDM_TX_0", "USB_AUDIO_RX",
 	"INT0_MI2S_RX", "INT4_MI2S_RX", "INT3_MI2S_TX", "DISPLAY_PORT",
-	"PRI_TDM_RX_1"};
+	"PRI_TDM_RX_1", "PRI_TDM_TX_2", "PRI_TDM_TX_3"};
 
 static const struct soc_enum msm_route_ec_ref_rx_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ec_ref_rx), ec_ref_rx),
@@ -9140,6 +9140,10 @@ static const struct snd_kcontrol_new mmul8_mixer_controls[] = {
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("USB_AUDIO_TX", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_USB_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("AFE_LOOPBACK_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 };
@@ -19718,7 +19722,7 @@ static int msm_routing_put_device_pp_params_mixer(struct snd_kcontrol *kcontrol,
 					idx, latency);
 			break;
 		default:
-			pr_info("%s, device pp param %d not supported\n",
+			pr_debug("%s, device pp param %d not supported\n",
 				__func__, pp_id);
 			break;
 		}
@@ -19964,16 +19968,23 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 	snd_soc_add_platform_controls(platform, channel_mixer_controls,
 				ARRAY_SIZE(channel_mixer_controls));
 
+#ifdef CONFIG_QTI_PP
 	msm_qti_pp_add_controls(platform);
+#endif
 
+#ifdef CONFIG_DTS_SRS_TM
 	msm_dts_srs_tm_add_controls(platform);
+#endif
 
+#ifdef CONFIG_DOLBY_DAP
 	msm_dolby_dap_add_controls(platform);
+#endif
 
+#ifdef CONFIG_DOLBY_DS2
 	snd_soc_add_platform_controls(platform,
 			use_ds1_or_ds2_controls,
 			ARRAY_SIZE(use_ds1_or_ds2_controls));
-
+#endif
 	snd_soc_add_platform_controls(platform,
 				device_pp_params_mixer_controls,
 				ARRAY_SIZE(device_pp_params_mixer_controls));

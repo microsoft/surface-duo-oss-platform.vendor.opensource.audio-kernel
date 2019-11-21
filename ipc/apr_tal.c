@@ -242,7 +242,7 @@ static int apr_smd_probe(struct platform_device *pdev)
 	int clnt;
 
 	if (pdev->id == APR_DEST_MODEM) {
-		pr_info("apr_tal:Modem Is Up\n");
+		pr_debug("apr_tal:Modem Is Up\n");
 		dest = APR_DEST_MODEM;
 		if (!strcmp(pdev->name, "apr_audio_svc"))
 			clnt = APR_CLIENT_AUDIO;
@@ -251,7 +251,7 @@ static int apr_smd_probe(struct platform_device *pdev)
 		apr_svc_ch[APR_DL_SMD][dest][clnt].dest_state = 1;
 		wake_up(&apr_svc_ch[APR_DL_SMD][dest][clnt].dest);
 	} else if (pdev->id == APR_DEST_QDSP6) {
-		pr_info("apr_tal:Q6 Is Up\n");
+		pr_debug("apr_tal:Q6 Is Up\n");
 		dest = APR_DEST_QDSP6;
 		clnt = APR_CLIENT_AUDIO;
 		apr_svc_ch[APR_DL_SMD][dest][clnt].dest_state = 1;

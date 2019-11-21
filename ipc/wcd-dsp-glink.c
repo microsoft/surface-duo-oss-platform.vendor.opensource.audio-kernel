@@ -353,7 +353,7 @@ static void wdsp_glink_notify_state(void *handle, const void *priv,
 	mutex_lock(&ch->mutex);
 	ch->channel_state = event;
 	if (event == GLINK_CONNECTED) {
-		dev_info_ratelimited(wpriv->dev, "%s: glink channel: %s connected\n",
+		dev_dbg_ratelimited(wpriv->dev, "%s: glink channel: %s connected\n",
 				     __func__, ch->ch_cfg.name);
 
 		for (i = 0; i < ch->ch_cfg.no_of_intents; i++) {
@@ -380,7 +380,7 @@ static void wdsp_glink_notify_state(void *handle, const void *priv,
 		 * Don't use dev_dbg here as dev may not be valid if channel
 		 * closed from driver close.
 		 */
-		pr_info_ratelimited("%s: channel: %s disconnected locally\n",
+		pr_debug_ratelimited("%s: channel: %s disconnected locally\n",
 			 __func__, ch->ch_cfg.name);
 		mutex_unlock(&ch->mutex);
 
@@ -388,7 +388,7 @@ static void wdsp_glink_notify_state(void *handle, const void *priv,
 		wake_up(&ch->ch_free_wait);
 		return;
 	} else if (event == GLINK_REMOTE_DISCONNECTED) {
-		pr_info_ratelimited("%s: remote channel: %s disconnected remotely\n",
+		pr_debug_ratelimited("%s: remote channel: %s disconnected remotely\n",
 			 __func__, ch->ch_cfg.name);
 		/*
 		 * If remote disconnect happens, local side also has
@@ -526,12 +526,12 @@ static void wdsp_glink_ch_open_cls_wrk(struct work_struct *work)
 			     ch_open_cls_wrk);
 
 	if (wpriv->glink_state.link_state == GLINK_LINK_STATE_DOWN) {
-		dev_info(wpriv->dev, "%s: GLINK_LINK_STATE_DOWN\n",
+		dev_dbg(wpriv->dev, "%s: GLINK_LINK_STATE_DOWN\n",
 			 __func__);
 
 		wdsp_glink_close_all_ch(wpriv);
 	} else if (wpriv->glink_state.link_state == GLINK_LINK_STATE_UP) {
-		dev_info(wpriv->dev, "%s: GLINK_LINK_STATE_UP\n",
+		dev_dbg(wpriv->dev, "%s: GLINK_LINK_STATE_UP\n",
 			 __func__);
 
 		wdsp_glink_open_all_ch(wpriv);
@@ -776,7 +776,7 @@ static ssize_t wdsp_glink_read(struct file *file, char __user *buf,
 	}
 
 	if (count > WDSP_MAX_READ_SIZE) {
-		dev_info_ratelimited(wpriv->dev, "%s: count = %zd is more than WDSP_MAX_READ_SIZE\n",
+		dev_dbg_ratelimited(wpriv->dev, "%s: count = %zd is more than WDSP_MAX_READ_SIZE\n",
 			__func__, count);
 		count = WDSP_MAX_READ_SIZE;
 	}
@@ -1077,7 +1077,7 @@ static int wdsp_glink_release(struct inode *inode, struct file *file)
 		goto done;
 	}
 
-	dev_info_ratelimited(wpriv->dev, "%s: closing wdsp_glink driver\n", __func__);
+	dev_dbg_ratelimited(wpriv->dev, "%s: closing wdsp_glink driver\n", __func__);
 	if (wpriv->glink_state.handle)
 		glink_unregister_link_state_cb(wpriv->glink_state.handle);
 
@@ -1191,13 +1191,13 @@ static int wdsp_glink_probe(struct platform_device *pdev)
 			"qcom,msm-codec-glink-edge", &str);
 	if (ret < 0) {
 		strlcpy(wdev->glink_edge, WDSP_EDGE, GLINK_EDGE_MAX);
-		dev_info(&pdev->dev,
+		dev_dbg(&pdev->dev,
 			"%s: qcom,msm-codec-glink-edge not set use default %s\n",
 			__func__, wdev->glink_edge);
 		ret = 0;
 	} else {
 		strlcpy(wdev->glink_edge, str, GLINK_EDGE_MAX);
-		dev_info(&pdev->dev, "%s: glink edge is %s\n", __func__,
+		dev_dbg(&pdev->dev, "%s: glink edge is %s\n", __func__,
 				wdev->glink_edge);
 	}
 

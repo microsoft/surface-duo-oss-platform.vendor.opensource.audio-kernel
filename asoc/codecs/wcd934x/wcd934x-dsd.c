@@ -691,7 +691,7 @@ struct tavil_dsd_config *tavil_dsd_init(struct snd_soc_codec *codec)
 	/* Read efuse register to check if DSD is supported */
 	val = snd_soc_read(codec, WCD934X_CHIP_TIER_CTRL_EFUSE_VAL_OUT14);
 	if (val & 0x80) {
-		dev_info(codec->dev, "%s: DSD unsupported for this codec version\n",
+		dev_dbg(codec->dev, "%s: DSD unsupported for this codec version\n",
 			 __func__);
 		return NULL;
 	}

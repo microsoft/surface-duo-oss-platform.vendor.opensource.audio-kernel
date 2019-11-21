@@ -67,7 +67,7 @@ static int msm_cdc_dt_parse_vreg_info(struct device *dev,
 	}
 	cdc_vreg->optimum_uA = prop_val;
 
-	dev_info(dev, "%s: %s: vol=[%d %d]uV, curr=[%d]uA, ond %d\n",
+	dev_dbg(dev, "%s: %s: vol=[%d %d]uV, curr=[%d]uA, ond %d\n",
 		 __func__, cdc_vreg->name, cdc_vreg->min_uV, cdc_vreg->max_uV,
 		 cdc_vreg->optimum_uA, cdc_vreg->ondemand);
 
@@ -387,7 +387,7 @@ int msm_cdc_get_power_supplies(struct device *dev,
 	static_sup_cnt = of_property_count_strings(dev->of_node,
 						   static_prop_name);
 	if (static_sup_cnt < 0) {
-		dev_info(dev, "%s: Failed to get static supplies(%d)\n",
+		dev_err(dev, "%s: Failed to get static supplies(%d)\n",
 			__func__, static_sup_cnt);
 		rc = static_sup_cnt;
 		goto err_supply_cnt;

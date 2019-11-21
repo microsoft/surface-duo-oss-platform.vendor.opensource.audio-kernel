@@ -1331,7 +1331,7 @@ static int swrm_get_logical_dev_num(struct swr_master *mstr, u64 dev_id,
 		}
 	}
 	if (ret)
-		dev_err(swrm->dev, "%s: device 0x%llx is not ready\n",
+		dev_dbg(swrm->dev, "%s: device 0x%llx is not ready\n",
 			__func__, dev_id);
 
 	pm_runtime_mark_last_busy(&swrm->pdev->dev);

@@ -229,7 +229,7 @@ void apr_tal_notify_state(void *handle, const void *priv, unsigned int event)
 	}
 
 	apr_ch->channel_state = event;
-	pr_info("%s: Channel state[%d]\n", __func__, event);
+	pr_debug("%s: Channel state[%d]\n", __func__, event);
 
 	if (event == GLINK_CONNECTED)
 		wake_up(&apr_ch->wait);
@@ -428,7 +428,7 @@ static void apr_tal_link_state_cb(struct glink_link_state_cb_info *cb_info,
 		return;
 	}
 
-	pr_info("%s: edge[%s] link state[%d]\n", __func__, cb_info->edge,
+	pr_debug("%s: edge[%s] link state[%d]\n", __func__, cb_info->edge,
 		cb_info->link_state);
 
 	link_state[dest].link_state = cb_info->link_state;

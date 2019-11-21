@@ -3334,7 +3334,7 @@ static int msm_init_wsa_dev(struct platform_device *pdev,
 			__func__, wsa_max_devs, found);
 		return -EPROBE_DEFER;
 	}
-	dev_info(&pdev->dev,
+	dev_dbg(&pdev->dev,
 		"%s: found %d wsa881x devices registered with ALSA core\n",
 		__func__, found);
 

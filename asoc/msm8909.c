@@ -987,7 +987,7 @@ static int msm_sec_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				substream->name, substream->stream);
 
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
-		pr_info("%s: Secondary Mi2s does not support capture\n",
+		pr_debug("%s: Secondary Mi2s does not support capture\n",
 					__func__);
 		return 0;
 	}
@@ -2540,7 +2540,7 @@ parse_mclk_freq:
 	}
 	pdata->mclk_freq = id;
 	card = msm8909_populate_sndcard_dailinks(&pdev->dev);
-	dev_info(&pdev->dev, "default codec configured\n");
+	dev_dbg(&pdev->dev, "default codec configured\n");
 	num_strings = of_property_count_strings(pdev->dev.of_node,
 			ext_pa);
 	if (num_strings < 0) {
