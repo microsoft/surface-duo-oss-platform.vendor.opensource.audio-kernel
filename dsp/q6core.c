@@ -36,7 +36,7 @@
  * Sub System Restart design and 100 milliseconds timeout
  * is sufficient to make sure the Q6 will be ready.
  */
-#define Q6_READY_TIMEOUT_MS 100
+#define Q6_READY_TIMEOUT_MS 1000
 
 #define ADSP_STATE_READY_TIMEOUT_MS 3000
 
@@ -1695,6 +1695,7 @@ int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 	int ret = 0, sz;
 
 	memset(&mem_pool, 0, sizeof(mem_pool));
+	mutex_lock(&(q6core_lcl.cmd_lock));
 
 	if (add_pages)
 		mem_pool.hdr.opcode = AVCS_CMD_ADD_POOL_PAGES;
@@ -1737,6 +1738,7 @@ int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 	}
 	ret = 0;
 done:
+	mutex_unlock(&(q6core_lcl.cmd_lock));
 	return ret;
 }
 EXPORT_SYMBOL(q6core_add_remove_pool_pages);
