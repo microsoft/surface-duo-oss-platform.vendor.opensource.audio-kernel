@@ -4801,11 +4801,13 @@ static int sa6155_tdm_snd_startup(struct snd_pcm_substream *substream)
 		if (index == TDM_TERT || index == TDM_QUAT ||
 			index == TDM_QUIN) {
 			pinctrl_info = &pdata->pinctrl_info[index];
-			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-						      STATE_ACTIVE);
-			if (ret_pinctrl)
-				pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
-					__func__, ret_pinctrl);
+			if (pinctrl_info->pinctrl) {
+				ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+							      STATE_ACTIVE);
+				if (ret_pinctrl)
+					pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+						__func__, ret_pinctrl);
+			}
 		}
 	}
 	mutex_unlock(&intf_conf->lock);
@@ -4841,11 +4843,13 @@ static void sa6155_tdm_snd_shutdown(struct snd_pcm_substream *substream)
 		if (index == TDM_TERT || index == TDM_QUAT ||
 			index == TDM_QUIN) {
 			pinctrl_info = &pdata->pinctrl_info[index];
-			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-						      STATE_SLEEP);
-			if (ret_pinctrl)
-				pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
-					__func__, ret_pinctrl);
+			if (pinctrl_info->pinctrl) {
+				ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+							      STATE_SLEEP);
+				if (ret_pinctrl)
+					pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+						__func__, ret_pinctrl);
+			}
 		}
 	}
 	mutex_unlock(&intf_conf->lock);
@@ -4935,11 +4939,13 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		}
 
 		pinctrl_info = &pdata->pinctrl_info[index];
-		ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-					      STATE_ACTIVE);
-		if (ret_pinctrl)
-			pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
-				__func__, ret_pinctrl);
+		if (pinctrl_info->pinctrl) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+						      STATE_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
 	}
 clk_off:
 	if (ret < 0)
@@ -4979,11 +4985,13 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 				__func__, index, ret);
 
 		pinctrl_info = &pdata->pinctrl_info[index];
-		ret_pinctrl = msm_set_pinctrl(pinctrl_info,
-					      STATE_SLEEP);
-		if (ret_pinctrl)
-			pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
-				__func__, ret_pinctrl);
+		if (pinctrl_info->pinctrl) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+						      STATE_SLEEP);
+			if (ret_pinctrl)
+				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
 	}
 	mutex_unlock(&intf_conf->lock);
 }
@@ -5884,6 +5892,23 @@ static struct snd_soc_dai_link msm_auto_fe_dai_links[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA22
+	},
+	{
+		.name = MSM_DAILINK_NAME(Media23),
+		.stream_name = "MultiMedia23",
+		.cpu_dai_name = "MultiMedia23",
+		.platform_name = "msm-pcm-dsp.1",
+		.dynamic = 1,
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA23
 	},
 };
 
