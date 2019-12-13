@@ -36,7 +36,7 @@
  * Sub System Restart design and 100 milliseconds timeout
  * is sufficient to make sure the Q6 will be ready.
  */
-#define Q6_READY_TIMEOUT_MS 100
+#define Q6_READY_TIMEOUT_MS 1000
 
 #define ADSP_STATE_READY_TIMEOUT_MS 3000
 
@@ -610,6 +610,7 @@ static int q6core_send_get_avcs_fwk_ver_cmd(void)
 	struct apr_hdr avcs_ver_cmd;
 	int ret;
 
+	mutex_lock(&q6core_lcl.cmd_lock);
 	avcs_ver_cmd.hdr_field =
 		APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD, APR_HDR_LEN(APR_HDR_SIZE),
 			      APR_PKT_VER);
@@ -656,6 +657,7 @@ static int q6core_send_get_avcs_fwk_ver_cmd(void)
 	ret = 0;
 
 done:
+	mutex_unlock(&q6core_lcl.cmd_lock);
 	return ret;
 }
 
@@ -1536,14 +1538,16 @@ int q6core_map_mdf_shared_memory(uint32_t map_handle, uint64_t *buf_add,
 	int i = 0;
 	int cmd_size = 0;
 
+	mutex_lock(&q6core_lcl.cmd_lock);
 	cmd_size = sizeof(struct avs_cmd_map_mdf_shared_memory)
 			+ sizeof(struct avs_shared_map_region_payload)
 			* bufcnt;
 
 	mmap_region_cmd = kzalloc(cmd_size, GFP_KERNEL);
-	if (mmap_region_cmd == NULL)
+	if (mmap_region_cmd == NULL) {
+		mutex_unlock(&q6core_lcl.cmd_lock);
 		return -ENOMEM;
-
+	}
 	mmap_regions = (struct avs_cmd_map_mdf_shared_memory *)mmap_region_cmd;
 	mmap_regions->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 						APR_HDR_LEN(APR_HDR_SIZE),
@@ -1610,6 +1614,7 @@ int q6core_map_mdf_shared_memory(uint32_t map_handle, uint64_t *buf_add,
 
 done:
 	kfree(mmap_region_cmd);
+        mutex_unlock(&q6core_lcl.cmd_lock);
 	return ret;
 }
 
@@ -1690,6 +1695,7 @@ int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 	int ret = 0, sz;
 
 	memset(&mem_pool, 0, sizeof(mem_pool));
+	mutex_lock(&(q6core_lcl.cmd_lock));
 
 	if (add_pages)
 		mem_pool.hdr.opcode = AVCS_CMD_ADD_POOL_PAGES;
@@ -1732,6 +1738,7 @@ int q6core_add_remove_pool_pages(dma_addr_t buf_add, uint32_t bufsz,
 	}
 	ret = 0;
 done:
+	mutex_unlock(&(q6core_lcl.cmd_lock));
 	return ret;
 }
 EXPORT_SYMBOL(q6core_add_remove_pool_pages);
