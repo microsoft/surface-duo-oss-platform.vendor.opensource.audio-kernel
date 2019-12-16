@@ -15,6 +15,7 @@
 #include <ipc/apr.h>
 #include <dsp/rtac.h>
 #include <dsp/apr_audio-v2.h>
+#include <dsp/msm_audio_ion.h>
 #include <linux/list.h>
 #include <linux/msm_ion.h>
 
@@ -166,15 +167,6 @@ enum {
 
 typedef void (*app_cb)(uint32_t opcode, uint32_t token,
 			uint32_t *payload, void *priv);
-
-struct audio_buffer {
-	dma_addr_t phys;
-	void       *data;
-	uint32_t   used;
-	uint32_t   size;/* size of buffer */
-	uint32_t   actual_size; /* actual number of bytes read by DSP */
-	void       *mem_handle;
-};
 
 struct audio_aio_write_param {
 	phys_addr_t   paddr;

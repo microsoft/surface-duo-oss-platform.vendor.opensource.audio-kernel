@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017, 2019 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,6 @@
 #include <linux/uaccess.h>
 #include <linux/debugfs.h>
 #include <dsp/apr_audio-v2.h>
-
 
 /* ERROR STRING */
 /* Success. The operation completed with no errors. */

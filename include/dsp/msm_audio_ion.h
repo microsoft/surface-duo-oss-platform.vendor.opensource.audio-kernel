@@ -13,7 +13,6 @@
 
 #ifndef _LINUX_MSM_AUDIO_ION_H
 #define _LINUX_MSM_AUDIO_ION_H
-#include <dsp/q6asm-v2.h>
 #include <sound/pcm.h>
 #include <linux/msm_ion.h>
 #include <linux/dma-mapping.h>
@@ -26,6 +25,15 @@ enum {
 enum {
 	MSM_AUDIO_ION_INV_CACHES = 0,
 	MSM_AUDIO_ION_CLEAN_CACHES,
+};
+
+struct audio_buffer {
+	dma_addr_t phys;
+	void       *data;
+	uint32_t   used;
+	uint32_t   size;/* size of buffer */
+	uint32_t   actual_size; /* actual number of bytes read by DSP */
+	void       *mem_handle;
 };
 
 int msm_audio_ion_alloc(void **handle, size_t bufsz,
@@ -48,4 +56,6 @@ int msm_audio_ion_phys_assign(void **mem_hdl, int fd, dma_addr_t *paddr,
 int msm_audio_ion_phys_free(void *mem_hdl, dma_addr_t *paddr,
 			size_t *pa_len, u8 assign_type, int id, int key);
 bool msm_audio_is_hypervisor_supported(void);
+int msm_audio_get_phy_addr(int fd, dma_addr_t *paddr);
+void msm_audio_ion_crash_handler(void);
 #endif /* _LINUX_MSM_AUDIO_ION_H */
