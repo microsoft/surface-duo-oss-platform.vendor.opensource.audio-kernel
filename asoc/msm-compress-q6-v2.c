@@ -4224,6 +4224,7 @@ static int msm_compr_probe(struct snd_soc_platform *platform)
 	 * Gapless is disabled by default.
 	 */
 	pdata->use_dsp_gapless_mode = false;
+	mutex_init(&pdata->lock);
 	return 0;
 }
 
