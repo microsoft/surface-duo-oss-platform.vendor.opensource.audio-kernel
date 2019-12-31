@@ -2477,6 +2477,11 @@ static void send_adm_cal(int port_id, int copp_idx, int path, int perf_mode,
 	if (passthr_mode != LISTEN) {
 		send_adm_cal_type(ADM_AUDPROC_CAL, path, port_id, copp_idx,
 				perf_mode, app_type, acdb_id, sample_rate);
+		/* send persistent cal only in case of record */
+		if (path == TX_DEVICE)
+			send_adm_cal_type(ADM_LSM_AUDPROC_PERSISTENT_CAL, path,
+				  port_id, copp_idx, perf_mode, app_type,
+				  acdb_id, sample_rate);
 	} else {
 		send_adm_cal_type(ADM_LSM_AUDPROC_CAL, path, port_id, copp_idx,
 				  perf_mode, app_type, acdb_id, sample_rate);
@@ -5363,6 +5368,10 @@ done:
 }
 EXPORT_SYMBOL(adm_get_sound_focus);
 
+/**
+ * address returned for fd i/p is physical and for sharing
+ * physical address with ADSP, SID bit is not set in this function.
+ */
 int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
 				   int port_id, int copp_idx)
 {
@@ -5381,7 +5390,7 @@ int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
 		return ret;
 	}
 	params.shm_buf_addr_lsw    = lower_32_bits(paddr);
-	params.shm_buf_addr_msw    = msm_audio_populate_upper_32_bits(paddr);
+	params.shm_buf_addr_msw    = upper_32_bits(paddr);
 	params.buf_size            = pa_len;
 	params.shm_buf_num_regions = 1;
 	params.shm_buf_mem_pool_id = ADSP_MEMORY_MAP_SHMEM8_4K_POOL;
