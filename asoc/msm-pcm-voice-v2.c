@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -79,6 +79,43 @@ static int is_valid_session_id(uint32_t session_id)
 		pr_debug("%s: Invalid session_id : %x\n", __func__, session_id);
 		break;
 	}
+	return idx;
+}
+
+static int get_idx_for_session(uint32_t session_id)
+{
+	int idx = 0;
+
+	switch (session_id) {
+	case VOICE_SESSION_VSID:
+		idx = VOICE_SESSION_INDEX;
+		break;
+	case VOICE2_SESSION_VSID:
+		idx = VOICE2_SESSION_INDEX;
+		break;
+	case VOLTE_SESSION_VSID:
+		idx = VOLTE_SESSION_INDEX;
+		break;
+	case QCHAT_SESSION_VSID:
+		idx = QCHAT_SESSION_INDEX;
+		break;
+	case VOWLAN_SESSION_VSID:
+		idx = VOWLAN_SESSION_INDEX;
+		break;
+	case VOICEMMODE1_VSID:
+		idx = VOICEMMODE1_INDEX;
+		break;
+	case VOICEMMODE2_VSID:
+		idx = VOICEMMODE2_INDEX;
+		break;
+	case ALL_SESSION_VSID:
+		idx = VOICE_SESSION_INDEX_MAX - 1;
+		break;
+	default:
+		pr_err("%s: Invalid session_id : %x\n", __func__, session_id);
+		break;
+	}
+
 	return idx;
 }
 
@@ -710,7 +747,7 @@ static int msm_dtmf_detect_rx_vsid_cb_put(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: enable dtmf detect cb =%d for session_id=%d\n",
 		__func__, enable, session_id);
 
-	dtmf_voice_info = &voice_info[voice_get_idx_for_session(session_id)];
+	dtmf_voice_info = &voice_info[get_idx_for_session(session_id)];
 	voc_register_dtmf_rx_detection_cb
 		((dtmf_rx_det_cb_fn) dtmf_rx_detected_evt_hdlr,
 		(void *) dtmf_voice_info->capture_substream->private_data);
