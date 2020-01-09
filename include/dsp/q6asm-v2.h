@@ -742,9 +742,13 @@ int q6asm_send_mtmx_strtr_window(struct audio_client *ac,
 		struct asm_session_mtmx_strtr_param_window_v2_t *window_param,
 		uint32_t param_id);
 
+int q6asm_send_mtmx_strtr_ttp_offset(struct audio_client *ac,
+		struct asm_session_mtmx_strtr_param_ttp_offset_t *ttp_offset,
+		uint32_t param_id, int dir);
+
 /* Configure DSP render mode */
 int q6asm_send_mtmx_strtr_render_mode(struct audio_client *ac,
-		uint32_t render_mode);
+		uint32_t render_mode, int dir);
 
 /* Configure DSP clock recovery mode */
 int q6asm_send_mtmx_strtr_clk_rec_mode(struct audio_client *ac,

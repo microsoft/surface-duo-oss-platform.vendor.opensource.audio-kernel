@@ -18,6 +18,7 @@
 #include <linux/time.h>
 #include <linux/math64.h>
 #include <linux/wait.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <sound/core.h>
@@ -113,6 +114,7 @@ struct msm_compr_pdata {
 	struct msm_compr_ch_map *ch_map[MSM_FRONTEND_DAI_MAX];
 	bool is_in_use[MSM_FRONTEND_DAI_MAX];
 	struct msm_pcm_channel_mixer *chmixer_pspd[MSM_FRONTEND_DAI_MM_SIZE];
+	struct mutex lock;
 };
 
 struct msm_compr_audio {
@@ -227,7 +229,7 @@ static int msm_compr_send_dec_params(struct snd_compr_stream *cstream,
 				     int stream_id);
 
 static int msm_compr_set_render_mode(struct msm_compr_audio *prtd,
-				     uint32_t render_mode) {
+				     uint32_t render_mode, int dir) {
 	int ret = -EINVAL;
 	struct audio_client *ac = prtd->audio_client;
 
@@ -252,7 +254,7 @@ static int msm_compr_set_render_mode(struct msm_compr_audio *prtd,
 		goto exit;
 	}
 
-	ret = q6asm_send_mtmx_strtr_render_mode(ac, render_mode);
+	ret = q6asm_send_mtmx_strtr_render_mode(ac, render_mode, dir);
 	if (ret) {
 		pr_err("%s, Render mode can't be set error %d\n", __func__,
 			ret);
@@ -323,6 +325,29 @@ static int msm_compr_set_render_window(struct audio_client *ac,
 	}
 
 exit:
+	return ret;
+}
+
+static int msm_compr_set_ttp_offset(struct audio_client *ac,
+		uint32_t offset_lsw, uint32_t offset_msw, int dir)
+{
+	int ret = -EINVAL;
+	struct asm_session_mtmx_strtr_param_ttp_offset_t ttp_offset;
+	uint32_t param_id;
+
+	pr_debug("%s, ttp offset lsw 0x%x  ttp offset msw 0x%x\n",
+		 __func__, offset_lsw, offset_msw);
+
+	memset(&ttp_offset, 0,
+	       sizeof(struct asm_session_mtmx_strtr_param_ttp_offset_t));
+	ttp_offset.ttp_offset_lsw = offset_lsw;
+	ttp_offset.ttp_offset_msw = offset_msw;
+	param_id = ASM_SESSION_MTMX_STRTR_PARAM_TTP_OFFSET;
+	ret = q6asm_send_mtmx_strtr_ttp_offset(ac, &ttp_offset, param_id, dir);
+	if (ret)
+		pr_err("%s, ttp offset can't be set error %d\n", __func__,
+			ret);
+
 	return ret;
 }
 
@@ -412,8 +437,8 @@ static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 		gain_list[0] = volume_l;
 		gain_list[1] = volume_r;
 		gain_list[2] = volume_l;
-		num_channels = 3;
-		use_default = true;
+		if (use_default)
+			num_channels = 3;
 		rc = q6asm_set_multich_gain(prtd->audio_client, num_channels,
 					gain_list, chmap, use_default);
 	}
@@ -1515,6 +1540,7 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 	struct audio_client *ac = prtd->audio_client;
 	uint32_t stream_index;
 	uint32_t enc_cfg_id = ENC_CFG_ID_NONE;
+	bool compress_ts = false;
 
 	switch (prtd->codec_param.codec.format) {
 	case SNDRV_PCM_FORMAT_S24_LE:
@@ -1564,22 +1590,19 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 			return ret;
 		}
 	} else {
-		if (prtd->codec_param.codec.flags & COMPRESSED_TIMESTAMP_FLAG) {
+		if (prtd->codec_param.codec.flags & COMPRESSED_TIMESTAMP_FLAG)
+			compress_ts = true;
+
+		if (q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+				ADSP_ASM_API_VERSION_V2)
+			ret = q6asm_open_read_v5(prtd->audio_client,
+					prtd->codec, bits_per_sample,
+					compress_ts, enc_cfg_id);
+		else
 			ret = q6asm_open_read_v4(prtd->audio_client,
-					prtd->codec,
-					bits_per_sample, true, enc_cfg_id);
-		} else {
-			if (q6core_get_avcs_api_version_per_service(
-					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
-					ADSP_ASM_API_VERSION_V2)
-				ret = q6asm_open_read_v5(prtd->audio_client,
-						prtd->codec, bits_per_sample,
-						false, enc_cfg_id);
-			else
-				ret = q6asm_open_read_v4(prtd->audio_client,
-						prtd->codec, bits_per_sample,
-						false, enc_cfg_id);
-		}
+					prtd->codec, bits_per_sample,
+					compress_ts, enc_cfg_id);
 		if (ret < 0) {
 			pr_err("%s: q6asm_open_read failed:%d\n",
 					__func__, ret);
@@ -1944,6 +1967,7 @@ static int msm_compr_playback_free(struct snd_compr_stream *cstream)
 	}
 	spin_unlock_irqrestore(&prtd->lock, flags);
 
+	mutex_lock(&pdata->lock);
 	pdata->cstream[soc_prtd->dai_link->id] = NULL;
 	if (cstream->direction == SND_COMPRESS_PLAYBACK) {
 		msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->id,
@@ -1985,6 +2009,7 @@ shm_ion_free_done:
 	pdata->is_in_use[soc_prtd->dai_link->id] = false;
 	kfree(prtd);
 	runtime->private_data = NULL;
+	mutex_unlock(&pdata->lock);
 
 	return 0;
 }
@@ -2035,6 +2060,7 @@ static int msm_compr_capture_free(struct snd_compr_stream *cstream)
 	}
 	spin_unlock_irqrestore(&prtd->lock, flags);
 
+	mutex_lock(&pdata->lock);
 	pdata->cstream[soc_prtd->dai_link->id] = NULL;
 	msm_pcm_routing_dereg_phy_stream(soc_prtd->dai_link->id,
 					SNDRV_PCM_STREAM_CAPTURE);
@@ -2045,6 +2071,7 @@ static int msm_compr_capture_free(struct snd_compr_stream *cstream)
 
 	kfree(prtd);
 	runtime->private_data = NULL;
+	mutex_unlock(&pdata->lock);
 
 	return 0;
 }
@@ -3178,7 +3205,8 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 			 __func__, metadata->value[0]);
 		prtd->gapless_state.initial_samples_drop = metadata->value[0];
 	} else if (metadata->key == SNDRV_COMPRESS_RENDER_MODE) {
-		return msm_compr_set_render_mode(prtd, metadata->value[0]);
+		return msm_compr_set_render_mode(prtd, metadata->value[0],
+				cstream->direction);
 	} else if (metadata->key == SNDRV_COMPRESS_CLK_REC_MODE) {
 		return msm_compr_set_clk_rec_mode(ac, metadata->value[0]);
 	} else if (metadata->key == SNDRV_COMPRESS_RENDER_WINDOW) {
@@ -3199,6 +3227,9 @@ static int msm_compr_set_metadata(struct snd_compr_stream *cstream,
 		return msm_compr_adjust_session_clock(ac,
 				metadata->value[0],
 				metadata->value[1]);
+	} else if (metadata->key == SNDRV_COMPRESS_IN_TTP_OFFSET) {
+		return msm_compr_set_ttp_offset(ac, metadata->value[0],
+				metadata->value[1], cstream->direction);
 	}
 
 	return 0;
@@ -3390,6 +3421,7 @@ static int msm_compr_audio_effects_config_put(struct snd_kcontrol *kcontrol,
 	struct snd_compr_stream *cstream = NULL;
 	struct msm_compr_audio *prtd = NULL;
 	long *values = &(ucontrol->value.integer.value[0]);
+	int ret = 0;
 	int effects_module;
 
 	pr_debug("%s\n", __func__);
@@ -3398,21 +3430,25 @@ static int msm_compr_audio_effects_config_put(struct snd_kcontrol *kcontrol,
 			__func__, fe_id);
 		return -EINVAL;
 	}
+
+	mutex_lock(&pdata->lock);
 	cstream = pdata->cstream[fe_id];
 	audio_effects = pdata->audio_effects[fe_id];
 	if (!cstream || !audio_effects) {
 		pr_err("%s: stream or effects inactive\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: cannot set audio effects\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	if (prtd->compr_passthr != LEGACY_PCM) {
 		pr_debug("%s: No effects for compr_type[%d]\n",
 			__func__, prtd->compr_passthr);
-		return 0;
+		goto done;
 	}
 	pr_debug("%s: Effects supported for compr_type[%d]\n",
 		 __func__, prtd->compr_passthr);
@@ -3473,9 +3509,11 @@ static int msm_compr_audio_effects_config_put(struct snd_kcontrol *kcontrol,
 		break;
 	default:
 		pr_err("%s Invalid effects config module\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
 	}
-	return 0;
+done:
+	mutex_unlock(&pdata->lock);
+	return ret;
 }
 
 static int msm_compr_audio_effects_config_get(struct snd_kcontrol *kcontrol,
@@ -3487,6 +3525,7 @@ static int msm_compr_audio_effects_config_get(struct snd_kcontrol *kcontrol,
 			snd_soc_component_get_drvdata(comp);
 	struct msm_compr_audio_effects *audio_effects = NULL;
 	struct snd_compr_stream *cstream = NULL;
+	int ret = 0;
 	struct msm_compr_audio *prtd = NULL;
 
 	pr_debug("%s\n", __func__);
@@ -3495,19 +3534,23 @@ static int msm_compr_audio_effects_config_get(struct snd_kcontrol *kcontrol,
 			__func__, fe_id);
 		return -EINVAL;
 	}
+
+	mutex_lock(&pdata->lock);
 	cstream = pdata->cstream[fe_id];
 	audio_effects = pdata->audio_effects[fe_id];
 	if (!cstream || !audio_effects) {
 		pr_debug("%s: stream or effects inactive\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: cannot set audio effects\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
 	}
-
-	return 0;
+done:
+	mutex_unlock(&pdata->lock);
+	return ret;
 }
 
 static int msm_compr_query_audio_effect_put(struct snd_kcontrol *kcontrol,
@@ -3520,6 +3563,7 @@ static int msm_compr_query_audio_effect_put(struct snd_kcontrol *kcontrol,
 	struct msm_compr_audio_effects *audio_effects = NULL;
 	struct snd_compr_stream *cstream = NULL;
 	struct msm_compr_audio *prtd = NULL;
+	int ret = 0;
 	long *values = &(ucontrol->value.integer.value[0]);
 
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
@@ -3527,28 +3571,37 @@ static int msm_compr_query_audio_effect_put(struct snd_kcontrol *kcontrol,
 			__func__, fe_id);
 		return -EINVAL;
 	}
+
+	mutex_lock(&pdata->lock);
+
 	cstream = pdata->cstream[fe_id];
 	audio_effects = pdata->audio_effects[fe_id];
 	if (!cstream || !audio_effects) {
 		pr_err("%s: stream or effects inactive\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: cannot set audio effects\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	if (prtd->compr_passthr != LEGACY_PCM) {
 		pr_err("%s: No effects for compr_type[%d]\n",
 			__func__, prtd->compr_passthr);
-		return -EPERM;
+		ret = -EPERM;
+		goto done;
 	}
 	audio_effects->query.mod_id = (u32)*values++;
 	audio_effects->query.parm_id = (u32)*values++;
 	audio_effects->query.size = (u32)*values++;
 	audio_effects->query.offset = (u32)*values++;
 	audio_effects->query.device = (u32)*values++;
-	return 0;
+
+done:
+	mutex_unlock(&pdata->lock);
+	return ret;
 }
 
 static int msm_compr_query_audio_effect_get(struct snd_kcontrol *kcontrol,
@@ -3561,6 +3614,7 @@ static int msm_compr_query_audio_effect_get(struct snd_kcontrol *kcontrol,
 	struct msm_compr_audio_effects *audio_effects = NULL;
 	struct snd_compr_stream *cstream = NULL;
 	struct msm_compr_audio *prtd = NULL;
+	int ret = 0;
 	long *values = &(ucontrol->value.integer.value[0]);
 
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
@@ -3568,23 +3622,29 @@ static int msm_compr_query_audio_effect_get(struct snd_kcontrol *kcontrol,
 			__func__, fe_id);
 		return -EINVAL;
 	}
+
+	mutex_lock(&pdata->lock);
 	cstream = pdata->cstream[fe_id];
 	audio_effects = pdata->audio_effects[fe_id];
 	if (!cstream || !audio_effects) {
 		pr_debug("%s: stream or effects inactive\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: cannot set audio effects\n", __func__);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto done;
 	}
 	values[0] = (long)audio_effects->query.mod_id;
 	values[1] = (long)audio_effects->query.parm_id;
 	values[2] = (long)audio_effects->query.size;
 	values[3] = (long)audio_effects->query.offset;
 	values[4] = (long)audio_effects->query.device;
-	return 0;
+done:
+	mutex_unlock(&pdata->lock);
+	return ret;
 }
 
 static int msm_compr_send_dec_params(struct snd_compr_stream *cstream,
@@ -3658,8 +3718,7 @@ static int msm_compr_dec_params_put(struct snd_kcontrol *kcontrol,
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
 		pr_err("%s Received out of bounds fe_id %lu\n",
 			__func__, fe_id);
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
 	cstream = pdata->cstream[fe_id];
@@ -3667,16 +3726,15 @@ static int msm_compr_dec_params_put(struct snd_kcontrol *kcontrol,
 
 	if (!cstream || !dec_params) {
 		pr_err("%s: stream or dec_params inactive\n", __func__);
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: cannot set dec_params\n", __func__);
-		rc = -EINVAL;
-		goto end;
+		return -EINVAL;
 	}
 
+	mutex_lock(&pdata->lock);
 	switch (prtd->codec) {
 	case FORMAT_MP3:
 	case FORMAT_MPEG4_AAC:
@@ -3755,6 +3813,7 @@ static int msm_compr_dec_params_put(struct snd_kcontrol *kcontrol,
 	}
 end:
 	pr_debug("%s: ret %d\n", __func__, rc);
+	mutex_unlock(&pdata->lock);
 	return rc;
 }
 
@@ -3956,24 +4015,22 @@ static int msm_compr_adsp_stream_cmd_put(struct snd_kcontrol *kcontrol,
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
 		pr_err("%s Received invalid fe_id %lu\n",
 			__func__, fe_id);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
 	cstream = pdata->cstream[fe_id];
 	if (cstream == NULL) {
 		pr_err("%s cstream is null\n", __func__);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: prtd is null\n", __func__);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
+	mutex_lock(&pdata->lock);
 	if (prtd->audio_client == NULL) {
 		pr_err("%s: audio_client is null\n", __func__);
 		ret = -EINVAL;
@@ -4002,6 +4059,7 @@ static int msm_compr_adsp_stream_cmd_put(struct snd_kcontrol *kcontrol,
 		pr_err("%s: failed to send stream event cmd, err = %d\n",
 			__func__, ret);
 done:
+	mutex_unlock(&pdata->lock);
 	return ret;
 }
 
@@ -4019,24 +4077,22 @@ static int msm_compr_shm_ion_fd_map_put(struct snd_kcontrol *kcontrol,
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
 		pr_err("%s Received out of bounds invalid fe_id %lu\n",
 			__func__, fe_id);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
 	cstream = pdata->cstream[fe_id];
 	if (cstream == NULL) {
 		pr_err("%s cstream is null\n", __func__);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
 	prtd = cstream->runtime->private_data;
 	if (!prtd) {
 		pr_err("%s: prtd is null\n", __func__);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
+	mutex_lock(&pdata->lock);
 	if (prtd->audio_client == NULL) {
 		pr_err("%s: audio_client is null\n", __func__);
 		ret = -EINVAL;
@@ -4050,6 +4106,7 @@ static int msm_compr_shm_ion_fd_map_put(struct snd_kcontrol *kcontrol,
 	if (ret < 0)
 		pr_err("%s: failed to map shm ion fd\n", __func__);
 done:
+	mutex_unlock(&pdata->lock);
 	return ret;
 }
 
@@ -4068,10 +4125,10 @@ static int msm_compr_rtic_event_ack_put(struct snd_kcontrol *kcontrol,
 	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
 		pr_err("%s Received invalid fe_id %lu\n",
 			__func__, fe_id);
-		ret = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
+	mutex_lock(&pdata->lock);
 	cstream = pdata->cstream[fe_id];
 	if (cstream == NULL) {
 		pr_err("%s cstream is null\n", __func__);
@@ -4109,6 +4166,7 @@ static int msm_compr_rtic_event_ack_put(struct snd_kcontrol *kcontrol,
 		pr_err("%s: failed to send rtic event ack, err = %d\n",
 			__func__, ret);
 done:
+	mutex_unlock(&pdata->lock);
 	return ret;
 }
 
@@ -4158,6 +4216,7 @@ static int msm_compr_probe(struct snd_soc_platform *platform)
 		return -EINVAL;
 	}
 
+	mutex_init(&pdata->lock);
 	snd_soc_platform_set_drvdata(platform, pdata);
 
 	for (i = 0; i < MSM_FRONTEND_DAI_MAX; i++) {
@@ -4191,6 +4250,22 @@ static int msm_compr_probe(struct snd_soc_platform *platform)
 	 * Gapless is disabled by default.
 	 */
 	pdata->use_dsp_gapless_mode = false;
+	return 0;
+}
+
+static int msm_compr_remove(struct snd_soc_platform *platform)
+{
+
+	struct msm_compr_pdata *pdata = (struct msm_compr_pdata *)
+		snd_soc_platform_get_drvdata(platform);
+	if (!pdata) {
+		pr_err("%s pdata is null\n", __func__);
+		return -ENOMEM;
+	}
+
+	mutex_destroy(&pdata->lock);
+	kfree(pdata);
+
 	return 0;
 }
 
@@ -5403,6 +5478,7 @@ static struct snd_soc_platform_driver msm_soc_platform = {
 	.probe		= msm_compr_probe,
 	.compr_ops	= &msm_compr_ops,
 	.pcm_new	= msm_compr_new,
+	.remove		= msm_compr_remove,
 };
 
 static int msm_compr_dev_probe(struct platform_device *pdev)
@@ -5421,7 +5497,7 @@ static int msm_compr_dev_probe(struct platform_device *pdev)
 					&msm_soc_platform);
 }
 
-static int msm_compr_remove(struct platform_device *pdev)
+static int msm_compr_dev_remove(struct platform_device *pdev)
 {
 	int i = 0;
 	struct msm_compr_pdata *pdata = NULL;
@@ -5451,7 +5527,7 @@ static struct platform_driver msm_compr_driver = {
 		.suppress_bind_attrs = true,
 	},
 	.probe = msm_compr_dev_probe,
-	.remove = msm_compr_remove,
+	.remove = msm_compr_dev_remove,
 };
 
 int __init msm_compress_dsp_init(void)
