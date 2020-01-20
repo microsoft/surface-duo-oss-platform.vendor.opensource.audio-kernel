@@ -315,7 +315,8 @@ static const char *const mi2s_format[] = {
 	"NA6",
 	"NA7",
 	"NA8",
-	"DSD_DOP_W_MARKER"
+	"DSD_DOP_W_MARKER",
+	"NATIVE_DSD_DATA"
 };
 
 static const char *const mi2s_vi_feed_mono[] = {
@@ -324,7 +325,7 @@ static const char *const mi2s_vi_feed_mono[] = {
 };
 
 static const struct soc_enum mi2s_config_enum[] = {
-	SOC_ENUM_SINGLE_EXT(10, mi2s_format),
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mi2s_format), mi2s_format),
 	SOC_ENUM_SINGLE_EXT(2, mi2s_vi_feed_mono),
 };
 
@@ -5381,6 +5382,10 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		dai_data->port_config.i2s.bit_width = 24;
 		dai_data->bitwidth = 24;
 		break;
+	case SNDRV_PCM_FORMAT_S32_LE:
+		dai_data->port_config.i2s.bit_width = 32;
+		dai_data->bitwidth = 32;
+		break;
 	default:
 		pr_err("%s: format %d\n",
 			__func__, params_format(params));
@@ -5447,6 +5452,7 @@ static int msm_dai_q6_mi2s_set_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 
 	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
 	case SND_SOC_DAIFMT_CBS_CFS:
+	case SND_SOC_DAIFMT_CBM_CFS:
 		mi2s_dai_data->rx_dai.mi2s_dai_data.port_config.i2s.ws_src = 1;
 		mi2s_dai_data->tx_dai.mi2s_dai_data.port_config.i2s.ws_src = 1;
 		break;
