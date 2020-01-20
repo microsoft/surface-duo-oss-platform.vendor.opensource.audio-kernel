@@ -614,7 +614,7 @@ struct adm_cmd_device_open_v8 {
  * In all other use cases this should be set to 0xffff
  */
 
-	u16                  reserved;
+	u16 compressed_data_type;
 } __packed;
 
 /*
@@ -886,6 +886,7 @@ struct audproc_softvolume_params {
  */
 #define AUDPROC_MODULE_ID_MFC_EC_REF                        0x0001092C
 
+#define PARAM_ID_FFV_SPF_FREEZE                             0x00010960
 
 struct adm_cmd_set_pp_params_v5 {
 	struct apr_hdr hdr;
@@ -2542,6 +2543,7 @@ struct afe_port_data_cmd_rt_proxy_port_read_v2 {
 #define AFE_GENERIC_COMPRESSED           0x8
 #define AFE_LINEAR_PCM_DATA_PACKED_16BIT 0X6
 #define AFE_DSD_DOP_W_MARKER_DATA        0x9
+#define AFE_DSD_DATA					0xA
 
 /* This param id is used to configure I2S interface */
 #define AFE_PARAM_ID_I2S_CONFIG	0x0001020D
@@ -8878,6 +8880,13 @@ struct asm_data_cmd_remove_silence {
 /* Shift value for the IEC 61937 to 61937 pass-through capture. */
 #define ASM_SHIFT_IEC_61937_PASS_THROUGH_FLAG           0
 
+/* Bitmask for the DSD pass-through capture. */
+#define ASM_BIT_MASK_COMPRESSED_FORMAT_FLAG			(0x00000003UL)
+
+/* Shift value for the DSD pass-through capture. */
+#define ASM_SHIFT_DSD_COMPRESSED_FORMAT_FLAG		0
+
+#define ASM_DSD_FORMAT_FLAG				2
 struct asm_stream_cmd_open_read_compressed {
 	struct apr_hdr hdr;
 	u32                    mode_flags;
@@ -8889,6 +8898,12 @@ struct asm_stream_cmd_open_read_compressed {
  * - Use #ASM_BIT_MASK_IEC_61937_PASS_THROUGH_FLAG to set the bitmask
  *   and #ASM_SHIFT_IEC_61937_PASS_THROUGH_FLAG to set the shift value
  *   for this bit.
+ * Supported values for bit 1: (DSD native pass-through mode)
+ * 0 -- non DSD operation
+ * 1 -- Pass-through transfer of the DSD format stream
+ * To set this bit, use #ASM_BIT_MASK_DSD_PASS_THROUGH_FLAG and
+ * use #ASM_SHIFT_DSD_PASS_THROUGH_FLAG to set the shift value for
+ * this bit
  * Supported values for bit 4:
  * - 0 -- Return data buffer contains all encoded frames only; it does
  *      not contain frame metadata.
@@ -8905,6 +8920,9 @@ struct asm_stream_cmd_open_read_compressed {
  * Supported values: should be greater than 0 for IEC to RAW compressed
  *                   unpack mode.
  *                   Value is don't care for IEC 61937 pass-through mode.
+ * @values
+ * - >0 -- For IEC 61937-to-RAW Compressed Unpack mode
+ * - 1  -- For IEC 61937 or DSD Pass-through mode
  */
 
 } __packed;
@@ -12289,6 +12307,12 @@ struct afe_av_dev_drift_get_param_resp {
  */
 #define ASM_SESSION_MTMX_STRTR_PARAM_RENDER_WINDOW_END_V2   0x00010DD2
 
+/* Parameter used by #ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC to specify the
+ * ttp offset value. This parameter is supported only for a Set
+ * command (not a Get command) in the Tx direction
+ */
+#define ASM_SESSION_MTMX_STRTR_PARAM_TTP_OFFSET 0x00013228
+
 /* Generic payload of the window parameters in the
  * #ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC module.
  * This payload is supported only for a Set command
@@ -12397,6 +12421,26 @@ struct asm_session_mtmx_strtr_param_render_mode_t {
 	u32                  flags;
 } __packed;
 
+struct asm_session_mtmx_strtr_param_ttp_offset_t {
+	uint32_t                  ttp_offset_lsw;
+	/* Lower 32 bits of the ttp_offset in microseconds. */
+
+	uint32_t                  ttp_offset_msw;
+	/* Upper 32 bits of the ttp_offset in microseconds.
+	 *
+	 * Internal default value is 0 for both values. The 64-bit number
+	 * formed by ttp_offset_lsw and ttp_offset_lsw is treated as unsigned.
+	 * In case of local DSP loopback when using start flag
+	 * ASM_SESSION_CMD_RUN_START_TIME_RUN_WITH_TTP the max. ttp_offset
+	 * value is limited by internal buffer constraints. Currently the
+	 * limit is 200ms.
+
+	 * This parameter can be set before or while an ASM stream is running,
+	 * allowing “at-run-time” changes of the overall latency.
+	 */
+
+} __packed;
+
 /* Parameter used by #ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC which allows the
  * audio client to specify the clock recovery mechanism that the audio DSP
  * should use.
@@ -12468,6 +12512,7 @@ union asm_session_mtmx_strtr_param_config {
 	struct asm_session_mtmx_strtr_param_render_mode_t render_param;
 	struct asm_session_mtmx_strtr_param_clk_rec_t clk_rec_param;
 	struct asm_session_mtmx_param_adjust_session_time_ctl_t adj_time_param;
+	struct asm_session_mtmx_strtr_param_ttp_offset_t ttp_offset;
 } __packed;
 
 struct asm_mtmx_strtr_params {
