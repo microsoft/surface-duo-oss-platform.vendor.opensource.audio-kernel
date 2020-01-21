@@ -2060,7 +2060,7 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 				chmixer_pspd->output_channel);
 		return -EINVAL;
 	}
-
+	mutex_lock(&pdata->lock);
 	prtd = substream->runtime ? substream->runtime->private_data : NULL;
 	if (chmixer_pspd->enable && prtd) {
 		if (session_type == SESSION_TYPE_RX &&
@@ -2112,7 +2112,7 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 		chmixer_pspd->override_out_ch_map = false;
 	if (reset_override_in_ch_map)
 		chmixer_pspd->override_in_ch_map = false;
-
+	mutex_unlock(&pdata->lock);
 	return ret;
 }
 
