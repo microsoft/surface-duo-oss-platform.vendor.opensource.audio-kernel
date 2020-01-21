@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -266,7 +266,7 @@ static struct dev_config tdm_tx_cfg[TDM_INTERFACE_MAX][TDM_PORT_MAX] = {
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_7 */
 	},
 	{ /* QUAT TDM */
-		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 16}, /* TX_0 */
+		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 8}, /* TX_0 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_1 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_2 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_3 */
@@ -276,7 +276,7 @@ static struct dev_config tdm_tx_cfg[TDM_INTERFACE_MAX][TDM_PORT_MAX] = {
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_7 */
 	},
 	{ /* QUIN TDM */
-		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 16}, /* TX_0 */
+		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 8}, /* TX_0 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_1 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_2 */
 		{SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1}, /* TX_3 */
@@ -425,8 +425,8 @@ static unsigned int tdm_rx_slot_offset
 		{60,0xFFFF},
 	},
 	{/* QUIN TDM */
-		{0, 8, 16, 24, 32, 40, 48, 56,
-			4, 12, 20, 28, 36, 44, 52, 60, 0xFFFF}, /*16 CH SPKR*/
+		{0, 4, 8, 12, 16, 20, 24, 28,
+			32, 36, 40, 44, 48, 52, 56, 60, 0xFFFF}, /*16 CH SPKR*/
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
@@ -470,8 +470,7 @@ static unsigned int tdm_tx_slot_offset
 		{28, 0xFFFF},
 	},
 	{/* QUAT TDM */
-		{0, 4, 8, 12, 16, 20, 24, 28,
-			32, 36, 40, 44, 48, 52, 56, 60, 0xFFFF},/*16 CH MIC ARR1*/
+		{0, 8, 16, 24, 4, 12, 20, 28, 0xFFFF}, /*8 CH MIC ARR1*/
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
@@ -481,8 +480,7 @@ static unsigned int tdm_tx_slot_offset
 		{60,0xFFFF},
 	},
 	{/* QUIN TDM */
-		{0, 4, 8, 12, 16, 20, 24, 28,
-			32, 36, 40, 44, 48, 52, 56, 60, 0xFFFF},/*16 CH MIC ARR2*/
+		{0, 4, 8, 12, 16, 20, 24, 28, 0xFFFF}, /*8 CH MIC ARR2*/
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
 		{0xFFFF}, /* not used */
