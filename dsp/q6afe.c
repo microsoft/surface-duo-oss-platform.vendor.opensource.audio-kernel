@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3199,6 +3199,8 @@ int afe_spdif_port_start(u16 port_id, struct afe_spdif_port_config *spdif_port,
 		return -EINVAL;
 	}
 
+	afe_send_custom_topology();
+	afe_send_port_topology_id(port_id);
 	afe_send_cal(port_id);
 	afe_send_hw_delay(port_id, rate);
 
