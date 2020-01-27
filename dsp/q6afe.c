@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -137,6 +137,8 @@ static struct afe_ctl this_afe;
 static int pcm_afe_instance[2];
 static int proxy_afe_instance[2];
 bool afe_close_done[2] = {true, true};
+
+static int pseudo_afe_instance = 0;
 
 #define SIZEOF_CFG_CMD(y) \
 		(sizeof(struct apr_hdr) + sizeof(u16) + (sizeof(struct y)))
@@ -3475,6 +3477,17 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		afe_close_done[port_id & 0x1] = false;
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	}
+	if ((port_id == VOICE_RECORD_RX) ||
+			(port_id == VOICE_PLAYBACK_DL_TX)) {
+		pr_debug("port_id 0x%x \n", port_id);
+		port_id = VOICE_RECORD_RX;
+		pseudo_afe_instance++;
+		if (pseudo_afe_instance > 1)
+		{
+			pr_debug("afe instance greater than one");
+			return 0;
+		}
+	}
 
 	pr_debug("%s: port id: 0x%x\n", __func__, port_id);
 
@@ -6290,6 +6303,20 @@ int afe_close(int port_id)
 			return 0;
 
 		afe_close_done[port_id & 0x1] = true;
+	}
+
+	if ((port_id == VOICE_RECORD_RX) ||
+		(port_id == VOICE_PLAYBACK_DL_TX)) {
+		port_id = VOICE_RECORD_RX;
+		pseudo_afe_instance --;
+		if (pseudo_afe_instance > 0)
+		{
+			pr_debug("%s: port_id 0x%x, afe_instance %d\n",
+				 __func__, port_id,pseudo_afe_instance);
+			return 0;
+
+		}
+
 	}
 
 	port_id = q6audio_convert_virtual_to_portid(port_id);
