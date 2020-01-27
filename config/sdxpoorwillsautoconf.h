@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,3 +40,10 @@
 #define CONFIG_SND_HWDEP_ROUTING 1
 #define CONFIG_SND_SOC_MACHINE_SDXPOORWILLS 1
 #define CONFIG_SND_SOC_MSM_STUB 1
+#define CONFIG_SLIM_DISABLED 1
+#define CONFIG_LSM_DISABLED 1
+#define CONFIG_APTX_DEC_DISABLED 1
+#define CONFIG_DOLBY_DS2_DISABLED 1
+#define CONFIG_DTS_SRS_TM_DISABLED 1
+#define CONFIG_SOURCE_TRACKING_DISABLED 1
+#define CONFIG_DOLBY_DAP_DISABLED 1
