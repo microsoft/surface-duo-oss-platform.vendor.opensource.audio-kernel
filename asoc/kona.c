@@ -48,6 +48,9 @@
 #define WSA8810_NAME_1 "wsa881x.20170211"
 #define WSA8810_NAME_2 "wsa881x.20170212"
 
+#define WCN_CDC_SLIM_RX_CH_MAX 2
+#define WCN_CDC_SLIM_TX_CH_MAX 2
+
 struct msm_asoc_mach_data {
 	struct snd_info_entry *codec_root;
 	int lito_v2_enabled;
@@ -400,6 +403,16 @@ static void *def_wcd_mbhc_cal(void)
 	return wcd_mbhc_cal;
 }
 
+static int msm_wcn_init(struct snd_soc_pcm_runtime *rtd)
+{
+	unsigned int rx_ch[WCN_CDC_SLIM_RX_CH_MAX] = {157, 158};
+	unsigned int tx_ch[WCN_CDC_SLIM_TX_CH_MAX]  = {159, 160};
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+
+	return snd_soc_dai_set_channel_map(codec_dai, ARRAY_SIZE(tx_ch),
+			tx_ch, ARRAY_SIZE(rx_ch), rx_ch);
+}
+
 /* Digital audio interface glue - connects codec <---> CPU */
 static struct snd_soc_dai_link msm_common_dai_links[] = {
 	{
@@ -582,6 +595,34 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.ignore_suspend = 1,
 		/* this dainlink has playback support */
 		.ignore_pmdown_time = 1,
+    },
+    {
+	    .name = LPASS_BE_SLIMBUS_7_RX,
+	    .stream_name = LPASS_BE_SLIMBUS_7_RX,
+	    .cpu_dai_name = "snd-soc-dummy-dai",
+	    .async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+	    .dpcm_playback = 1,
+	    .trigger = {SND_SOC_DPCM_TRIGGER_POST,
+		    SND_SOC_DPCM_TRIGGER_POST},
+	    .codec_name = "btfmslim_slave",
+	    .codec_dai_name = "btfm_bt_sco_a2dp_slim_rx",
+	    .ignore_suspend = 1,
+	    /* this dainlink has playback support */
+	    .ignore_pmdown_time = 1,
+    },
+    {
+	    .name = LPASS_BE_SLIMBUS_7_TX,
+	    .stream_name = LPASS_BE_SLIMBUS_7_TX,
+	    .cpu_dai_name = "snd-soc-dummy-dai",
+	    .async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+	    .dpcm_capture = 1,
+	    .trigger = {SND_SOC_DPCM_TRIGGER_POST,
+		    SND_SOC_DPCM_TRIGGER_POST},
+	    .codec_name = "btfmslim_slave",
+	    .codec_dai_name = "btfm_bt_sco_slim_tx",
+	    .ignore_suspend = 1,
+	    .ignore_pmdown_time = 1,
+	    .init = &msm_wcn_init,
     },
 };
 
