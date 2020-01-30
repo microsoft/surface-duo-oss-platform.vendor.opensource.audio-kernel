@@ -209,79 +209,13 @@ struct dev_config {
 	u32 bit_format;
 	u32 channels;
 };
-#if 0
-static struct clk_cfg mi2s_clk[MI2S_MAX] = {
-        {
-                CLOCK_ID_PRI_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-        {
-                CLOCK_ID_SEC_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-        {
-                CLOCK_ID_TER_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-        {
-                CLOCK_ID_QUAD_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-        {
-                CLOCK_ID_QUI_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-        {
-                CLOCK_ID_SEN_MI2S_IBIT,
-                IBIT_CLOCK_1_P536_MHZ,
-                CLOCK_ATTRIBUTE_COUPLE_NO,
-                CLOCK_ROOT_DEFAULT,
-        },
-};
-#endif
+
 struct mi2s_conf {
 	struct mutex lock;
 	u32 ref_cnt;
 	u32 msm_is_mi2s_master;
 };
-#if 0
-static u32 mi2s_ebit_clk[MI2S_MAX] = {
-        CLOCK_ID_PRI_MI2S_EBIT,
-        CLOCK_ID_SEC_MI2S_EBIT,
-        CLOCK_ID_TER_MI2S_EBIT,
-};
 
-static struct mi2s_conf mi2s_intf_conf[MI2S_MAX];
-
-/* Default configuration of MI2S channels */
-static struct dev_config mi2s_rx_cfg[] = {
-	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-	[SEN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-};
-
-static struct dev_config mi2s_tx_cfg[] = {
-	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-	[SEN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-};
-#endif
 static const char *const vi_feed_ch_text[] = {"One", "Two"};
 static char const *bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE",
 					  "S32_LE"};
@@ -421,161 +355,6 @@ static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.enable_anc_mic_detect = false,
 	.moisture_duty_cycle_en = true,
 };
-#if 0
-static inline int param_is_mask(int p)
-{
-	return (p >= SNDRV_PCM_HW_PARAM_FIRST_MASK) &&
-			(p <= SNDRV_PCM_HW_PARAM_LAST_MASK);
-}
-
-static inline struct snd_mask *param_to_mask(struct snd_pcm_hw_params *p,
-					     int n)
-{
-	return &(p->masks[n - SNDRV_PCM_HW_PARAM_FIRST_MASK]);
-}
-static void param_set_mask(struct snd_pcm_hw_params *p, int n,
-			   unsigned int bit)
-{
-	if (bit >= SNDRV_MASK_MAX)
-		return;
-	if (param_is_mask(n)) {
-		struct snd_mask *m = param_to_mask(p, n);
-
-		m->bits[0] = 0;
-		m->bits[1] = 0;
-		m->bits[bit >> 5] |= (1 << (bit & 31));
-	}
-}
-
-static u32 get_mi2s_bits_per_sample(u32 bit_format)
-{
-	u32 bit_per_sample = 0;
-
-	switch (bit_format) {
-	case SNDRV_PCM_FORMAT_S32_LE:
-	case SNDRV_PCM_FORMAT_S24_3LE:
-	case SNDRV_PCM_FORMAT_S24_LE:
-		bit_per_sample = 32;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		bit_per_sample = 16;
-		break;
-	}
-
-	return bit_per_sample;
-}
-static void update_mi2s_clk_val(int dai_id, int stream)
-{
-	u32 bit_per_sample = 0;
-
-	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		bit_per_sample =
-		    get_mi2s_bits_per_sample(mi2s_rx_cfg[dai_id].bit_format);
-		mi2s_clk[dai_id].clk_freq_in_hz =
-		    mi2s_rx_cfg[dai_id].sample_rate * 2 * bit_per_sample;
-	} else {
-		bit_per_sample =
-		    get_mi2s_bits_per_sample(mi2s_tx_cfg[dai_id].bit_format);
-		mi2s_clk[dai_id].clk_freq_in_hz =
-		    mi2s_tx_cfg[dai_id].sample_rate * 2 * bit_per_sample;
-	}
-}
-
-static int msm_mi2s_set_sclk(struct snd_pcm_substream *substream, bool enable)
-{
-	int ret = 0;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	int port_id = 0;
-	int index = cpu_dai->id;
-
-//	port_id = msm_get_port_id(rtd->dai_link->id);
-	if (port_id < 0) {
-		dev_err(rtd->card->dev, "%s: Invalid port_id\n", __func__);
-		ret = port_id;
-		goto err;
-	}
-
-	if (enable) {
-		update_mi2s_clk_val(index, substream->stream);
-		dev_dbg(rtd->card->dev, "%s: clock rate %ul\n", __func__,
-			mi2s_clk[index].clk_freq_in_hz);
-	}
-
-//	mi2s_clk[index].enable = enable;
-        ret = audio_prm_set_lpass_clk_cfg(&mi2s_clk[index], enable);
-        if (ret < 0) {
-                dev_err(rtd->card->dev,
-                        "%s: prm set lpass clock failed for port 0x%x , err:%d\n",
-                        __func__, port_id, ret);
-                goto err;
-        }
-
-err:
-	return ret;
-}
-static int msm_cdc_dma_get_idx_from_beid(int32_t be_id)
-{
-	int idx = 0;
-
-	switch (be_id) {
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_0:
-		idx = WSA_CDC_DMA_RX_0;
-		break;
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_0:
-		idx = WSA_CDC_DMA_TX_0;
-		break;
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_1:
-		idx = WSA_CDC_DMA_RX_1;
-		break;
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
-		idx = WSA_CDC_DMA_TX_1;
-		break;
-	case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_2:
-		idx = WSA_CDC_DMA_TX_2;
-		break;
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_0:
-		idx = RX_CDC_DMA_RX_0;
-		break;
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_1:
-		idx = RX_CDC_DMA_RX_1;
-		break;
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_2:
-		idx = RX_CDC_DMA_RX_2;
-		break;
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_3:
-		idx = RX_CDC_DMA_RX_3;
-		break;
-	case MSM_BACKEND_DAI_RX_CDC_DMA_RX_5:
-		idx = RX_CDC_DMA_RX_5;
-		break;
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_0:
-		idx = TX_CDC_DMA_TX_0;
-		break;
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_3:
-		idx = TX_CDC_DMA_TX_3;
-		break;
-	case MSM_BACKEND_DAI_TX_CDC_DMA_TX_4:
-		idx = TX_CDC_DMA_TX_4;
-		break;
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_0:
-		idx = VA_CDC_DMA_TX_0;
-		break;
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_1:
-		idx = VA_CDC_DMA_TX_1;
-		break;
-	case MSM_BACKEND_DAI_VA_CDC_DMA_TX_2:
-		idx = VA_CDC_DMA_TX_2;
-		break;
-	default:
-		idx = RX_CDC_DMA_RX_0;
-		break;
-	}
-
-	return idx;
-}
-#endif
 
 static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				struct snd_pcm_hw_params *params)
@@ -639,221 +418,6 @@ static bool msm_swap_gnd_mic(struct snd_soc_component *component, bool active)
 
 	return ret;
 }
-#if 0
-static int msm_snd_cdc_dma_startup(struct snd_pcm_substream *substream)
-{
-	int ret = 0;
-
-	return ret;
-}
-
-static int msm_snd_cdc_dma_hw_params(struct snd_pcm_substream *substream,
-			     struct snd_pcm_hw_params *params)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	struct snd_soc_dai_link *dai_link = rtd->dai_link;
-
-	int ret = 0;
-	u32 rx_ch_cdc_dma, tx_ch_cdc_dma;
-	u32 rx_ch_cnt = 0, tx_ch_cnt = 0;
-	u32 user_set_tx_ch = 0;
-	u32 user_set_rx_ch = 0;
-	u32 ch_id;
-
-	ret = snd_soc_dai_get_channel_map(codec_dai,
-				&tx_ch_cnt, &tx_ch_cdc_dma, &rx_ch_cnt,
-				&rx_ch_cdc_dma);
-	if (ret < 0) {
-		pr_err("%s: failed to get codec chan map, err:%d\n",
-			__func__, ret);
-		goto err;
-	}
-
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		switch (dai_link->id) {
-		case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_0:
-		case MSM_BACKEND_DAI_WSA_CDC_DMA_RX_1:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_0:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_1:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_2:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_3:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_4:
-		case MSM_BACKEND_DAI_RX_CDC_DMA_RX_5:
-		{
-			ch_id = msm_cdc_dma_get_idx_from_beid(dai_link->id);
-			pr_debug("%s: id %d rx_ch=%d\n", __func__,
-				ch_id, cdc_dma_rx_cfg[ch_id].channels);
-			user_set_rx_ch = cdc_dma_rx_cfg[ch_id].channels;
-			ret = snd_soc_dai_set_channel_map(cpu_dai, 0, 0,
-					  user_set_rx_ch, &rx_ch_cdc_dma);
-			if (ret < 0) {
-				pr_err("%s: failed to set cpu chan map, err:%d\n",
-				__func__, ret);
-				goto err;
-			}
-
-		}
-		break;
-		}
-	} else {
-		switch (dai_link->id) {
-		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_0:
-		{
-			user_set_tx_ch = msm_vi_feed_tx_ch;
-		}
-		break;
-		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
-		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_2:
-		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_0:
-		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_3:
-		case MSM_BACKEND_DAI_TX_CDC_DMA_TX_4:
-		case MSM_BACKEND_DAI_VA_CDC_DMA_TX_0:
-		case MSM_BACKEND_DAI_VA_CDC_DMA_TX_1:
-		case MSM_BACKEND_DAI_VA_CDC_DMA_TX_2:
-		{
-			ch_id = msm_cdc_dma_get_idx_from_beid(dai_link->id);
-			pr_debug("%s: id %d tx_ch=%d\n", __func__,
-				ch_id, cdc_dma_tx_cfg[ch_id].channels);
-			user_set_tx_ch = cdc_dma_tx_cfg[ch_id].channels;
-		}
-		break;
-		}
-
-		ret = snd_soc_dai_set_channel_map(cpu_dai, user_set_tx_ch,
-					&tx_ch_cdc_dma, 0, 0);
-		if (ret < 0) {
-			pr_err("%s: failed to set cpu chan map, err:%d\n",
-			__func__, ret);
-			goto err;
-		}
-	}
-
-err:
-	return ret;
-}
-
-static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
-{
-	int ret = 0;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	int index = cpu_dai->id;
-	unsigned int fmt = SND_SOC_DAIFMT_CBS_CFS;
-	struct snd_soc_card *card = rtd->card;
-	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-
-	dev_dbg(rtd->card->dev,
-		"%s: substream = %s  stream = %d, dai name %s, dai ID %d\n",
-		__func__, substream->name, substream->stream,
-		cpu_dai->name, cpu_dai->id);
-
-	if (index < PRIM_MI2S || index >= MI2S_MAX) {
-		ret = -EINVAL;
-		dev_err(rtd->card->dev,
-			"%s: CPU DAI id (%d) out of range\n",
-			__func__, cpu_dai->id);
-		goto err;
-	}
-	/*
-	 * Mutex protection in case the same MI2S
-	 * interface using for both TX and RX so
-	 * that the same clock won't be enable twice.
-	 */
-	mutex_lock(&mi2s_intf_conf[index].lock);
-	if (++mi2s_intf_conf[index].ref_cnt == 1) {
-		/* Check if msm needs to provide the clock to the interface */
-		if (!mi2s_intf_conf[index].msm_is_mi2s_master) {
-			mi2s_clk[index].clk_id = mi2s_ebit_clk[index];
-			fmt = SND_SOC_DAIFMT_CBM_CFM;
-		}
-		ret = msm_mi2s_set_sclk(substream, true);
-		if (ret < 0) {
-			dev_err(rtd->card->dev,
-				"%s: afe lpass clock failed to enable MI2S clock, err:%d\n",
-				__func__, ret);
-			goto clean_up;
-		}
-
-		ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
-		if (ret < 0) {
-			pr_err("%s: set fmt cpu dai failed for MI2S (%d), err:%d\n",
-				__func__, index, ret);
-			goto clk_off;
-		}
-		if (pdata->mi2s_gpio_p[index]) {
-			if (atomic_read(&(pdata->mi2s_gpio_ref_count[index]))
-									== 0) {
-				ret = msm_cdc_pinctrl_select_active_state(
-						pdata->mi2s_gpio_p[index]);
-				if (ret) {
-					pr_err("%s: MI2S GPIO pinctrl set active failed with %d\n",
-						__func__, ret);
-					goto clk_off;
-				}
-			}
-			atomic_inc(&(pdata->mi2s_gpio_ref_count[index]));
-		}
-	}
-clk_off:
-	if (ret < 0)
-		msm_mi2s_set_sclk(substream, false);
-clean_up:
-	if (ret < 0)
-		mi2s_intf_conf[index].ref_cnt--;
-
-	mutex_unlock(&mi2s_intf_conf[index].lock);
-err:
-	return ret;
-}
-
-static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
-{
-	int ret = 0;
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	int index = rtd->cpu_dai->id;
-	struct snd_soc_card *card = rtd->card;
-	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-
-	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
-		 substream->name, substream->stream);
-	if (index < PRIM_MI2S || index >= MI2S_MAX) {
-		pr_err("%s:invalid MI2S DAI(%d)\n", __func__, index);
-		return;
-	}
-
-	mutex_lock(&mi2s_intf_conf[index].lock);
-	if (--mi2s_intf_conf[index].ref_cnt == 0) {
-		if (pdata->mi2s_gpio_p[index]) {
-			atomic_dec(&(pdata->mi2s_gpio_ref_count[index]));
-			if (atomic_read(&(pdata->mi2s_gpio_ref_count[index]))
-									== 0) {
-				ret = msm_cdc_pinctrl_select_sleep_state(
-						pdata->mi2s_gpio_p[index]);
-				if (ret)
-					pr_err("%s: MI2S GPIO pinctrl set sleep failed with %d\n",
-						__func__, ret);
-			}
-		}
-
-		ret = msm_mi2s_set_sclk(substream, false);
-		if (ret < 0)
-			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
-				__func__, index, ret);
-	}
-	mutex_unlock(&mi2s_intf_conf[index].lock);
-}
-#endif
-//static struct snd_soc_ops msm_mi2s_be_ops = {
-//	.startup = msm_mi2s_snd_startup,
-//	.shutdown = msm_mi2s_snd_shutdown,
-//};
-
-//static struct snd_soc_ops msm_cdc_dma_be_ops = {
-//	.startup = msm_snd_cdc_dma_startup,
-//	.hw_params = msm_snd_cdc_dma_hw_params,
-//};
 
 static int msm_dmic_event(struct snd_soc_dapm_widget *w,
 			  struct snd_kcontrol *kcontrol, int event)
@@ -1088,7 +652,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 	{
 		.name = LPASS_BE_WSA_CDC_DMA_RX_0,
 		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-0",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45056",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1104,7 +668,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 	{
 		.name = LPASS_BE_WSA_CDC_DMA_RX_1,
 		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-1",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45058",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1119,7 +683,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_WSA_CDC_DMA_TX_1,
 		.stream_name = "CODEC_DMA-LPAIF_WSA-TX-1",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45059",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1134,7 +698,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_0,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-0",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45104",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1149,7 +713,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_1,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-1",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45106",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1164,7 +728,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_2,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-2",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45108",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1179,7 +743,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_3,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-3",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45110",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1194,7 +758,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_3,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-3",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45111",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1209,7 +773,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_4,
 		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-4",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45113",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1224,7 +788,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_0,
 		.stream_name = "CODEC_DMA-LPAIF_VA-TX-0",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45089",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1239,7 +803,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_1,
 		.stream_name = "CODEC_DMA-LPAIF_VA-TX-1",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45091",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1254,7 +818,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_2,
 		.stream_name = "CODEC_DMA-LPAIF_VA-TX-2",
-		.cpu_dai_name = "msm-dai-cdc-dma-dev.45093",
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
 		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
@@ -1451,11 +1015,6 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	int len_1 = 0;
 	int len_2 = 0;
 	int total_links = 0;
-//	int rc = 0;
-//	u32 mi2s_audio_intf = 0;
-//	u32 auxpcm_audio_intf = 0;
-//	u32 val = 0;
-//	u32 wcn_btfm_intf = 0;
 	const struct of_device_id *match;
 
 	match = of_match_node(kona_asoc_machine_of_match, dev->of_node);
@@ -2125,7 +1684,6 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "property %s not detected in node %s\n",
 			"fsa4480-i2c-handle", pdev->dev.of_node->full_name);
 
-//	msm_i2s_auxpcm_init(pdev);
 	pdata->dmic01_gpio_p = of_parse_phandle(pdev->dev.of_node,
 					      "qcom,cdc-dmic01-gpios",
 					       0);
