@@ -33,7 +33,7 @@
 #include <dt-bindings/sound/audio-codec-port-types.h>
 #include "codecs/bolero/wsa-macro.h"
 #include "kona-port-config.h"
-#include "msm-audio-defs-v2.h"
+#include "msm-audio-defs.h"
 
 #define DRV_NAME "kona-asoc-snd"
 #define __CHIPSET__ "KONA "
@@ -651,7 +651,7 @@ static void *def_wcd_mbhc_cal(void)
 static struct snd_soc_dai_link msm_common_dai_links[] = {
 	{
 		.name = LPASS_BE_WSA_CDC_DMA_RX_0,
-		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-0",
+		.stream_name = LPASS_BE_WSA_CDC_DMA_RX_0,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -667,7 +667,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 	},
 	{
 		.name = LPASS_BE_WSA_CDC_DMA_RX_1,
-		.stream_name = "CODEC_DMA-LPAIF_WSA-RX-1",
+		.stream_name = LPASS_BE_WSA_CDC_DMA_RX_1,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -682,7 +682,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 	},
     {
 		.name = LPASS_BE_WSA_CDC_DMA_TX_1,
-		.stream_name = "CODEC_DMA-LPAIF_WSA-TX-1",
+		.stream_name = LPASS_BE_WSA_CDC_DMA_TX_1,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -697,7 +697,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_0,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-0",
+		.stream_name = LPASS_BE_RX_CDC_DMA_RX_0,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -712,7 +712,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_1,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-1",
+		.stream_name = LPASS_BE_RX_CDC_DMA_RX_1,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -727,7 +727,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_2,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-2",
+		.stream_name = LPASS_BE_RX_CDC_DMA_RX_2,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -742,7 +742,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_RX_CDC_DMA_RX_3,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-RX-3",
+		.stream_name = LPASS_BE_RX_CDC_DMA_RX_3,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_playback = 1,
@@ -757,7 +757,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_3,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-3",
+		.stream_name = LPASS_BE_TX_CDC_DMA_TX_3,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -772,7 +772,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_TX_CDC_DMA_TX_4,
-		.stream_name = "CODEC_DMA-LPAIF_RXTX-TX-4",
+		.stream_name = LPASS_BE_TX_CDC_DMA_TX_4,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -787,7 +787,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_0,
-		.stream_name = "CODEC_DMA-LPAIF_VA-TX-0",
+		.stream_name = LPASS_BE_VA_CDC_DMA_TX_0,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -802,7 +802,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_1,
-		.stream_name = "CODEC_DMA-LPAIF_VA-TX-1",
+		.stream_name = LPASS_BE_VA_CDC_DMA_TX_1,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -817,7 +817,7 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
     },
     {
 		.name = LPASS_BE_VA_CDC_DMA_TX_2,
-		.stream_name = "CODEC_DMA-LPAIF_VA-TX-2",
+		.stream_name = LPASS_BE_VA_CDC_DMA_TX_2,
 		.cpu_dai_name = "snd-soc-dummy-dai",
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
 		.dpcm_capture = 1,
@@ -940,40 +940,15 @@ struct snd_soc_card snd_soc_card_stub_msm = {
 	.name		= "kona-stub-snd-card",
 };
 
-static struct snd_soc_dai_link msm_stub_fe_dai_links[] = {
-	/* FrontEnd DAI Links */
-	{
-		.name = "MSMSTUB Media1",
-		.stream_name = "MultiMedia1",
-		.cpu_dai_name = "MultiMedia1",
-		.platform_name = "msm-pcm-dsp.0",
-		.dynamic = 1,
-		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
-		.dpcm_playback = 1,
-		.dpcm_capture = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			SND_SOC_DPCM_TRIGGER_POST},
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.codec_name = "snd-soc-dummy",
-		.ignore_suspend = 1,
-		/* this dainlink has playback support */
-		.ignore_pmdown_time = 1,
-		.id = MSM_FRONTEND_DAI_MULTIMEDIA1
-	},
-};
-
 static struct snd_soc_dai_link msm_stub_be_dai_links[] = {
 	/* Backend DAI Links */
 	{
-		.name = LPASS_BE_AUXPCM_RX,
-		.stream_name = "AUX PCM Playback",
-		.cpu_dai_name = "msm-dai-q6-auxpcm.1",
-		.platform_name = "msm-pcm-routing",
+		.name = LPASS_BE_PRI_AUXPCM_RX,
+		.stream_name = LPASS_BE_PRI_AUXPCM_RX,
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
 		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_AUXPCM_RX,
 		.init = &msm_audrx_stub_init,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_pmdown_time = 1,
@@ -981,15 +956,12 @@ static struct snd_soc_dai_link msm_stub_be_dai_links[] = {
 		.ops = &msm_stub_be_ops,
 	},
 	{
-		.name = LPASS_BE_AUXPCM_TX,
-		.stream_name = "AUX PCM Capture",
-		.cpu_dai_name = "msm-dai-q6-auxpcm.1",
-		.platform_name = "msm-pcm-routing",
+		.name = LPASS_BE_PRI_AUXPCM_TX,
+		.stream_name = LPASS_BE_PRI_AUXPCM_RX,
+		.cpu_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-tx",
-		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_AUXPCM_TX,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 		.ops = &msm_stub_be_ops,
@@ -997,7 +969,6 @@ static struct snd_soc_dai_link msm_stub_be_dai_links[] = {
 };
 
 static struct snd_soc_dai_link msm_stub_dai_links[
-			 ARRAY_SIZE(msm_stub_fe_dai_links) +
 			 ARRAY_SIZE(msm_stub_be_dai_links)];
 
 static const struct of_device_id kona_asoc_machine_of_match[]  = {
@@ -1012,8 +983,6 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 {
 	struct snd_soc_card *card = NULL;
 	struct snd_soc_dai_link *dailink = NULL;
-	int len_1 = 0;
-	int len_2 = 0;
 	int total_links = 0;
 	const struct of_device_id *match;
 
@@ -1026,7 +995,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 
 	if (!strcmp(match->data, "codec")) {
 		card = &snd_soc_card_kona_msm;
-		memcpy(msm_kona_dai_links + total_links,
+		memcpy(msm_kona_dai_links,
 		       msm_common_dai_links,
 		       sizeof(msm_common_dai_links));
 		total_links += ARRAY_SIZE(msm_common_dai_links);
@@ -1034,18 +1003,12 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		dailink = msm_kona_dai_links;
 	} else if(!strcmp(match->data, "stub_codec")) {
 		card = &snd_soc_card_stub_msm;
-		len_1 = ARRAY_SIZE(msm_stub_fe_dai_links);
-		len_2 = len_1 + ARRAY_SIZE(msm_stub_be_dai_links);
-
 		memcpy(msm_stub_dai_links,
-		       msm_stub_fe_dai_links,
-		       sizeof(msm_stub_fe_dai_links));
-		memcpy(msm_stub_dai_links + len_1,
 		       msm_stub_be_dai_links,
 		       sizeof(msm_stub_be_dai_links));
+		total_links = ARRAY_SIZE(msm_stub_be_dai_links);
 
 		dailink = msm_stub_dai_links;
-		total_links = len_2;
 	}
 
 	if (card) {
