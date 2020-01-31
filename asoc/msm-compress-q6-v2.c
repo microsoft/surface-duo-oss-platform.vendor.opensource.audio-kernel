@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -670,8 +670,6 @@ static void compr_event_handler(uint32_t opcode,
 				prtd->drain_ready = 1;
 				wake_up(&prtd->drain_wait);
 				prtd->last_buffer = 0;
-			} else {
-				atomic_set(&prtd->start, 0);
 			}
 		} else {
 			pr_debug("ASM_DATA_EVENT_WRITE_DONE_V2 offset %d, length %d\n",
