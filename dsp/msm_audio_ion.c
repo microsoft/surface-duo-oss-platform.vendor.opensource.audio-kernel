@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,6 +21,7 @@
 #include <linux/list.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
+#include <linux/cma.h>
 #include <linux/dma-buf.h>
 #include <linux/iommu.h>
 #include <linux/platform_device.h>
@@ -31,6 +32,7 @@
 #include <asm/dma-iommu.h>
 #include <dsp/msm_audio_ion.h>
 #include <soc/qcom/secure_buffer.h>
+#include <soc/qcom/scm.h>
 
 #define MSM_AUDIO_ION_PROBED (1 << 0)
 
@@ -41,6 +43,11 @@
 #define MSM_AUDIO_ION_VA_LEN 0x0FFFFFFF
 
 #define MSM_AUDIO_SMMU_SID_OFFSET 32
+
+#ifdef CONFIG_SND_SOC_MDM9607
+#define TZBSP_MEM_PROTECT_AUDIO_CMD_ID 0x00000005
+#define TZBSP_MEM_PROTECT_AUDIO_CMD_ID_2 0x00000006
+#endif
 
 enum msm_audio_mem_type{
 	MSM_AUDIO_MEM_TYPE_ION,
@@ -69,6 +76,17 @@ struct msm_audio_alloc_data {
 	dma_addr_t *paddr;
 	enum msm_audio_mem_type type;
 };
+
+#ifdef CONFIG_SND_SOC_MDM9607
+struct tz_mem_protect_cmd_buf {
+	phys_addr_t phys_addr;
+	unsigned long size;
+};
+
+struct tz_resp {
+	int32_t ret;
+};
+#endif
 
 static struct msm_audio_ion_private msm_audio_ion_data = {0,};
 
@@ -794,16 +812,49 @@ MODULE_DEVICE_TABLE(of, msm_audio_ion_dt_match);
 static void msm_audio_protect_memory_region(struct device *dev)
 {
 	int ret = 0;
+#ifdef CONFIG_SND_SOC_MDM9607
+	unsigned long size = 0;
+	phys_addr_t phys_addr = 0;
+	struct scm_desc desc2 = {0};
+	struct tz_mem_protect_cmd_buf desc = {0};
+	struct tz_resp resp = {0};
+#else
 	int srcVM[1] = {VMID_HLOS};
 	int destVM[2] = {VMID_MSS_MSA, VMID_HLOS};
 	int destVMperm[2] = {PERM_READ | PERM_WRITE,
 	                     PERM_READ | PERM_WRITE};
+#endif
 
+#ifdef CONFIG_SND_SOC_MDM9607
+	phys_addr = cma_get_base(dev->cma_area);
+	size = cma_get_size(dev->cma_area);
+
+	pr_debug("%s: cma_audio_mem_addr %pK with size %lu\n",
+			 __func__, &phys_addr, size);
+
+	desc2.args[0] = desc.phys_addr = phys_addr;
+	desc2.args[1] = desc.size = size;
+	desc2.arginfo = SCM_ARGS(2);
+	if (!is_scm_armv8()) {
+		ret = scm_call(SCM_SVC_MP, TZBSP_MEM_PROTECT_AUDIO_CMD_ID,
+				(void *)&desc , sizeof(desc),
+				(void *)&resp, sizeof(resp));
+	} else {
+		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
+			TZBSP_MEM_PROTECT_AUDIO_CMD_ID_2), &desc2);
+		resp.ret = desc2.ret[0];
+	}
+	if (ret < 0)
+		pr_err("%s: SCM call failed, scm_call_ret %d tz_resp %d\n",
+			__func__, ret, resp.ret);
+#else
 	ret = cma_hyp_assign_phys(dev, srcVM, 1, destVM, destVMperm, 2);
 
 	if (ret < 0)
 		pr_err("%s: cma_hyp_assign_phys failed, ret %d\n",
 		       __func__, ret);
+#endif
+
 }
 
 static int msm_audio_ion_probe(struct platform_device *pdev)
