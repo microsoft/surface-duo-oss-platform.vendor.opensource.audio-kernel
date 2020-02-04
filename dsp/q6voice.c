@@ -1,4 +1,4 @@
-/*  Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/*  Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -99,7 +99,9 @@ static int voice_send_cvp_topology_commit_cmd(struct voice_data *v);
 static int voice_send_cvp_channel_info_cmd(struct voice_data *v);
 static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 					  uint32_t param_type);
+#ifndef CONFIG_SND_SOC_MDM9607
 static int voice_get_avcs_version_per_service(uint32_t service_id);
+#endif
 
 static void voice_load_topo_modules(int cal_index);
 static void voice_unload_topo_modules(void);
@@ -4292,6 +4294,7 @@ static int voice_send_cvp_mfc_config_cmd(struct voice_data *v)
 	return ret;
 }
 
+#ifndef CONFIG_SND_SOC_MDM9607
 static int voice_get_avcs_version_per_service(uint32_t service_id)
 {
 	int ret = 0;
@@ -4320,6 +4323,7 @@ done:
 	kfree(ver_info);
 	return ret;
 }
+#endif
 
 static void voice_mic_break_work_fn(struct work_struct *work)
 {
@@ -4350,6 +4354,7 @@ static int voice_setup_vocproc(struct voice_data *v)
 		goto fail;
 	}
 
+#ifndef CONFIG_SND_SOC_MDM9607
 	if (common.is_avcs_version_queried == false)
 		common.cvp_version = voice_get_avcs_version_per_service(
 				     APRV2_IDS_SERVICE_ID_ADSP_CVP_V);
@@ -4369,13 +4374,6 @@ static int voice_setup_vocproc(struct voice_data *v)
 		goto fail;
 	}
 
-	ret = voice_send_cvp_topology_commit_cmd(v);
-	if (ret < 0) {
-		pr_err("%s: Set topology commit failed err:%d\n",
-		       __func__, ret);
-		goto fail;
-	}
-
 	/* Send MFC config only when the no of channels are more than 1 */
 	if (v->dev_rx.no_of_channels > NUM_CHANNELS_MONO) {
 		ret = voice_send_cvp_mfc_config_cmd(v);
@@ -4387,6 +4385,14 @@ static int voice_setup_vocproc(struct voice_data *v)
 
 	mod_inst_info.module_id = MODULE_ID_VOICE_MODULE_ST;
 	mod_inst_info.instance_id = INSTANCE_ID_0;
+#endif
+
+	ret = voice_send_cvp_topology_commit_cmd(v);
+	if (ret < 0) {
+		pr_err("%s: Set topology commit failed err:%d\n",
+			__func__, ret);
+		goto fail;
+	}
 
 	voice_send_cvs_register_cal_cmd(v);
 	voice_send_cvp_register_dev_cfg_cmd(v);
