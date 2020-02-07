@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -269,9 +269,10 @@ enum {
 	IDX_AFE_PORT_ID_SENARY_PCM_RX,
 	IDX_AFE_PORT_ID_SENARY_PCM_TX,
 	IDX_AFE_LOOPBACK_TX,
-	/* IDX 190-> 191 */
+	/* IDX 190-> 192 */
 	IDX_AFE_PORT_ID_PRIMARY_META_MI2S_RX,
 	IDX_AFE_PORT_ID_SECONDARY_META_MI2S_RX,
+	IDX_HDMI_RX_MS,
 	AFE_MAX_PORTS
 };
 

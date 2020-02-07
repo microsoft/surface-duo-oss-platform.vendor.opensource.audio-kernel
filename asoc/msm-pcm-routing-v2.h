@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,7 @@
 #define LPASS_BE_SLIMBUS_0_RX "SLIMBUS_0_RX"
 #define LPASS_BE_SLIMBUS_0_TX "SLIMBUS_0_TX"
 #define LPASS_BE_HDMI "HDMI"
+#define LPASS_BE_HDMI_MS "HDMI_MS"
 #define LPASS_BE_DISPLAY_PORT "DISPLAY_PORT"
 #define LPASS_BE_DISPLAY_PORT1 "DISPLAY_PORT1"
 #define LPASS_BE_INT_BT_SCO_RX "INT_BT_SCO_RX"
@@ -474,6 +475,7 @@ enum {
 	MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
 	MSM_BACKEND_DAI_PRI_META_MI2S_RX,
 	MSM_BACKEND_DAI_SEC_META_MI2S_RX,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
 	MSM_BACKEND_DAI_MAX,
 };
 
@@ -504,7 +506,7 @@ enum {
 #define RELEASE_LOCK	0
 #define ACQUIRE_LOCK	1
 
-#define MSM_BACKEND_DAI_PP_PARAMS_REQ_MAX	2
+#define MSM_BACKEND_DAI_PP_PARAMS_REQ_MAX	3
 #define HDMI_RX_ID				0x8001
 #define ADM_PP_PARAM_MUTE_ID			0
 #define ADM_PP_PARAM_MUTE_BIT			1
