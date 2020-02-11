@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,15 +15,53 @@
 #include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/delay.h>
+#include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
 #include "core.h"
 #include "pdata.h"
 #include "wcd9xxx-utils.h"
+#include "wcd9330_registers.h"
 #include "wcd9335_registers.h"
 #include "wcd9335_irq.h"
 #include <asoc/wcd934x_registers.h>
 #include "wcd934x/wcd934x_irq.h"
 #include <asoc/wcd9360-registers.h>
 #include "wcd9360/wcd9360-irq.h"
+
+/* wcd9330 interrupt table  */
+static const struct intr_data wcd9330_intr_table[] = {
+       {WCD9XXX_IRQ_SLIMBUS, false},
+       {WCD9XXX_IRQ_MBHC_INSERTION, true},
+       {WCD9XXX_IRQ_MBHC_POTENTIAL, true},
+       {WCD9XXX_IRQ_MBHC_RELEASE, true},
+       {WCD9XXX_IRQ_MBHC_PRESS, true},
+       {WCD9XXX_IRQ_MBHC_SHORT_TERM, true},
+       {WCD9XXX_IRQ_MBHC_REMOVAL, true},
+       {WCD9330_IRQ_MBHC_JACK_SWITCH, true},
+       {WCD9XXX_IRQ_BG_PRECHARGE, false},
+       {WCD9XXX_IRQ_PA1_STARTUP, false},
+       {WCD9XXX_IRQ_PA2_STARTUP, false},
+       {WCD9XXX_IRQ_PA3_STARTUP, false},
+       {WCD9XXX_IRQ_PA4_STARTUP, false},
+       {WCD9XXX_IRQ_PA5_STARTUP, false},
+       {WCD9XXX_IRQ_MICBIAS1_PRECHARGE, false},
+       {WCD9XXX_IRQ_MICBIAS2_PRECHARGE, false},
+       {WCD9XXX_IRQ_MICBIAS3_PRECHARGE, false},
+       {WCD9XXX_IRQ_HPH_PA_OCPL_FAULT, false},
+       {WCD9XXX_IRQ_HPH_PA_OCPR_FAULT, false},
+       {WCD9XXX_IRQ_EAR_PA_OCPL_FAULT, false},
+       {WCD9XXX_IRQ_HPH_L_PA_STARTUP, false},
+       {WCD9XXX_IRQ_HPH_R_PA_STARTUP, false},
+       {WCD9320_IRQ_EAR_PA_STARTUP, false},
+       {WCD9330_IRQ_SVASS_ERR_EXCEPTION, false},
+       {WCD9330_IRQ_SVASS_ENGINE, true},
+       {WCD9330_IRQ_MAD_AUDIO, false},
+       {WCD9330_IRQ_MAD_BEACON, false},
+       {WCD9330_IRQ_MAD_ULTRASOUND, false},
+       {WCD9330_IRQ_SPEAKER1_CLIPPING, false},
+       {WCD9330_IRQ_SPEAKER2_CLIPPING, false},
+       {WCD9330_IRQ_VBAT_MONITOR_ATTACK, false},
+       {WCD9330_IRQ_VBAT_MONITOR_RELEASE, false},
+};
 
 /* wcd9335 interrupt table  */
 static const struct intr_data wcd9335_intr_table[] = {
@@ -106,6 +144,127 @@ static const struct intr_data wcd9360_intr_table[] = {
 	{WCD9360_IRQ_RESERVED_4, false},
 	{WCD9360_IRQ_MAD_ULTRASOUND, false},
 };
+
+
+/*
+ * wcd9330_bring_down: Bringdown WCD Codec
+ *
+ * @wcd9xxx: Pointer to wcd9xxx structure
+ *
+ * Returns 0 for success or negative error code for failure
+ */
+static int wcd9330_bring_down(struct wcd9xxx *wcd9xxx)
+{
+       if (!wcd9xxx || !wcd9xxx->regmap)
+               return -EINVAL;
+       regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0x7);
+       regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0x6);
+       regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0xe);
+       regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0x8);
+       return 0;
+}
+
+/*
+ * wcd9330_bring_up: Bringup WCD Codec
+ *
+ * @wcd9xxx: Pointer to the wcd9xxx structure
+ *
+ * Returns 0 for success or negative error code for failure
+ */
+static int wcd9330_bring_up(struct wcd9xxx *wcd9xxx)
+{
+       int ret = 0;
+       struct regmap *wcd_regmap;
+
+       if (!wcd9xxx)
+               return -EINVAL;
+
+       if (!wcd9xxx->regmap) {
+               dev_err(wcd9xxx->dev, "%s: wcd9xxx regmap is null!\n",
+                       __func__);
+               return -EINVAL;
+       }
+       wcd_regmap = wcd9xxx->regmap;
+
+       pr_debug("%s: Codec Type: %d\n", __func__, wcd9xxx->type);
+       if (wcd9xxx->type == WCD9330) {
+               regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0x4);
+               regmap_write(wcd9xxx->regmap, WCD9330_A_CDC_CTL, 0);
+               /* wait for 5ms after codec reset for it to complete */
+               usleep_range(5000, 5100);
+               regmap_write(wcd9xxx->regmap, WCD9330_A_CDC_CTL, 0x1);
+               regmap_write(wcd9xxx->regmap, WCD9330_A_LEAKAGE_CTL, 0x3);
+               regmap_write(wcd9xxx->regmap, WCD9330_A_CDC_CTL, 0x3);
+       }
+       return ret;
+}
+
+/*
+ * wcd9330_get_cdc_info: Get codec specific information
+ *
+ * @wcd9xxx: pointer to wcd9xxx structure
+ * @wcd_type: pointer to wcd9xxx_codec_type structure
+ *
+ * Returns 0 for success or negative error code for failure
+ */
+static int wcd9330_get_cdc_info(struct wcd9xxx *wcd9xxx,
+                          struct wcd9xxx_codec_type *wcd_type)
+{
+       u16 id_minor, id_major;
+       struct regmap *wcd_regmap;
+       int rc,version = 0;
+
+       if (!wcd9xxx || !wcd_type)
+               return -EINVAL;
+
+       if (!wcd9xxx->regmap) {
+               dev_err(wcd9xxx->dev, "%s: wcd9xxx regmap is null!\n",
+                       __func__);
+               return -EINVAL;
+       }
+       wcd_regmap = wcd9xxx->regmap;
+
+       rc = regmap_bulk_read(wcd_regmap, WCD9XXX_A_CHIP_ID_BYTE_0,
+                             (u8 *)&id_minor, sizeof(u16));
+       if (rc)
+               return -EINVAL;
+
+       rc = regmap_bulk_read(wcd_regmap, WCD9XXX_A_CHIP_ID_BYTE_2,
+                             (u8 *)&id_major, sizeof(u16));
+       if (rc)
+               return -EINVAL;
+
+	/* Version detection */
+	if (id_major == TOMTOM_MAJOR)
+		version = 0x2;
+
+	dev_info(wcd9xxx->dev, "%s:wcd9xxx chipid major 0x%x, minor 0x%x, version%d\n",
+		__func__, id_major, id_minor, version);
+
+	/* Fill codec type info */
+       wcd_type->id_major = id_major;
+       wcd_type->id_minor = id_minor;
+       //wcd_type->num_irqs = WCD9330_NUM_IRQS;
+	wcd_type->num_irqs = 29;
+       wcd_type->version = version;
+       wcd_type->slim_slave_type = WCD9XXX_SLIM_SLAVE_ADDR_TYPE_1;
+       wcd_type->i2c_chip_status = 0x01;
+       wcd_type->intr_tbl = wcd9330_intr_table;
+       wcd_type->intr_tbl_size = ARRAY_SIZE(wcd9330_intr_table);
+       wcd_type->intr_reg[WCD9XXX_INTR_STATUS_BASE] =
+                                               WCD9XXX_A_INTR_STATUS0;
+       wcd_type->intr_reg[WCD9XXX_INTR_CLEAR_BASE] =
+                                               WCD9XXX_A_INTR_CLEAR0;
+       wcd_type->intr_reg[WCD9XXX_INTR_MASK_BASE] =
+                                               WCD9XXX_A_INTR_MASK0;
+       wcd_type->intr_reg[WCD9XXX_INTR_LEVEL_BASE] =
+                                               WCD9XXX_A_INTR_LEVEL0;
+       wcd_type->intr_reg[WCD9XXX_INTR_CLR_COMMIT] =
+                                               WCD9XXX_A_INTR_MODE;
+
+       return rc;
+}
+
 
 /*
  * wcd9335_bring_down: Bringdown WCD Codec
@@ -545,6 +704,9 @@ codec_bringdown_fn wcd9xxx_bringdown_fn(int type)
 	case WCD934X:
 		cdc_bdown_fn = wcd934x_bring_down;
 		break;
+	 case WCD9330:
+		cdc_bdown_fn = wcd9330_bring_down;
+		break;
 	case WCD9335:
 		cdc_bdown_fn = wcd9335_bring_down;
 		break;
@@ -567,6 +729,9 @@ codec_bringup_fn wcd9xxx_bringup_fn(int type)
 	case WCD934X:
 		cdc_bup_fn = wcd934x_bring_up;
 		break;
+	case WCD9330:
+		cdc_bup_fn = wcd9330_bring_up;
+		break;
 	case WCD9335:
 		cdc_bup_fn = wcd9335_bring_up;
 		break;
@@ -588,6 +753,9 @@ codec_type_fn wcd9xxx_get_codec_info_fn(int type)
 		break;
 	case WCD934X:
 		cdc_type_fn = wcd934x_get_cdc_info;
+		break;
+	case WCD9330:
+		cdc_type_fn = wcd9330_get_cdc_info;
 		break;
 	case WCD9335:
 		cdc_type_fn = wcd9335_get_cdc_info;
