@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -3150,10 +3150,26 @@ int q6asm_open_read_compressed(struct audio_client *ac, uint32_t format,
 		open.mode_flags = 0x1;
 		open.frames_per_buf = 1;
 		pr_debug("%s: Flag 1 IEC61937 output\n", __func__);
+	} else if (format == FORMAT_DSD) {
+		open.mode_flags = ASM_DSD_FORMAT_FLAG;
+		open.frames_per_buf = 1;
+		pr_debug("%s: Flag 2 DSD output\n", __func__);
 	} else {
 		open.mode_flags = 0;
 		open.frames_per_buf = 1;
 		pr_debug("%s: Flag 0 RAW_COMPR output\n", __func__);
+	}
+
+	if (ac->perf_mode == LOW_LATENCY_PCM_MODE) {
+		open.mode_flags |= ASM_LOW_LATENCY_TX_STREAM_SESSION <<
+			ASM_SHIFT_STREAM_PERF_MODE_FLAG_IN_OPEN_READ;
+		pr_debug("%s: Perf mode is enabled, flags 0x%x\n",
+			__func__, open.mode_flags);
+	} else {
+		open.mode_flags |= ASM_LEGACY_STREAM_SESSION <<
+			ASM_SHIFT_STREAM_PERF_MODE_FLAG_IN_OPEN_READ;
+		pr_debug("%s: Perf mode is disabled, flags 0x%x\n",
+			__func__, open.mode_flags);
 	}
 
 	rc = apr_send_pkt(ac->apr, (uint32_t *) &open);
@@ -5863,8 +5879,8 @@ int q6asm_map_channels(u8 *channel_mapping, uint32_t channels,
 	} else if (channels == 6) {
 		lchannel_mapping[0] = PCM_CHANNEL_FL;
 		lchannel_mapping[1] = PCM_CHANNEL_FR;
-		lchannel_mapping[2] = PCM_CHANNEL_FC;
-		lchannel_mapping[3] = PCM_CHANNEL_LFE;
+		lchannel_mapping[2] = PCM_CHANNEL_LFE;
+		lchannel_mapping[3] = PCM_CHANNEL_FC;
 		lchannel_mapping[4] = use_back_flavor ?
 			PCM_CHANNEL_LB : PCM_CHANNEL_LS;
 		lchannel_mapping[5] = use_back_flavor ?
@@ -5879,19 +5895,19 @@ int q6asm_map_channels(u8 *channel_mapping, uint32_t channels,
 		lchannel_mapping[2] = PCM_CHANNEL_FC;
 		lchannel_mapping[3] = PCM_CHANNEL_LFE;
 		lchannel_mapping[4] = use_back_flavor ?
-			PCM_CHANNEL_LB : PCM_CHANNEL_LS;
+			PCM_CHANNEL_LS : PCM_CHANNEL_LB;
 		lchannel_mapping[5] = use_back_flavor ?
-			PCM_CHANNEL_RB : PCM_CHANNEL_RS;
+			PCM_CHANNEL_RS : PCM_CHANNEL_RB;
 		lchannel_mapping[6] = PCM_CHANNEL_CS;
 	} else if (channels == 8) {
 		lchannel_mapping[0] = PCM_CHANNEL_FL;
 		lchannel_mapping[1] = PCM_CHANNEL_FR;
-		lchannel_mapping[2] = PCM_CHANNEL_FC;
-		lchannel_mapping[3] = PCM_CHANNEL_LFE;
-		lchannel_mapping[4] = PCM_CHANNEL_LB;
-		lchannel_mapping[5] = PCM_CHANNEL_RB;
-		lchannel_mapping[6] = PCM_CHANNEL_LS;
-		lchannel_mapping[7] = PCM_CHANNEL_RS;
+		lchannel_mapping[2] = PCM_CHANNEL_LFE;
+		lchannel_mapping[3] = PCM_CHANNEL_FC;
+		lchannel_mapping[4] = PCM_CHANNEL_LS;
+		lchannel_mapping[5] = PCM_CHANNEL_RS;
+		lchannel_mapping[6] = PCM_CHANNEL_LB;
+		lchannel_mapping[7] = PCM_CHANNEL_RB;
 	} else if (channels == 10) {
 		lchannel_mapping[0] = PCM_CHANNEL_FL;
 		lchannel_mapping[1] = PCM_CHANNEL_FR;
@@ -10280,16 +10296,105 @@ fail_cmd:
 EXPORT_SYMBOL(q6asm_send_mtmx_strtr_window);
 
 /**
+ * q6asm_send_mtmx_strtr_ttp_offset -
+ *       command to send matrix for ttp offset
+ *
+ * @ac: Audio client handle
+ * @ttp_offset: ttp offset params
+ * @param_id: param id for ttp offset
+ * @dir: RX or TX direction
+ *
+ * Returns 0 on success or error on failure
+ */
+int q6asm_send_mtmx_strtr_ttp_offset(struct audio_client *ac,
+		struct asm_session_mtmx_strtr_param_ttp_offset_t *ttp_offset,
+		uint32_t param_id, int dir)
+{
+	struct asm_mtmx_strtr_params matrix;
+	int sz = 0;
+	int rc  = 0;
+
+	pr_debug("%s: ttp offset lsw is %d, ttp offset msw is %d\n", __func__,
+		  ttp_offset->ttp_offset_lsw, ttp_offset->ttp_offset_msw);
+
+	if (!ac) {
+		pr_err("%s: audio client handle is NULL\n", __func__);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	if (ac->apr == NULL) {
+		pr_err("%s: ac->apr is NULL", __func__);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	memset(&matrix, 0, sizeof(struct asm_mtmx_strtr_params));
+	sz = sizeof(struct asm_mtmx_strtr_params);
+	q6asm_add_hdr(ac, &matrix.hdr, sz, TRUE);
+	atomic_set(&ac->cmd_state, -1);
+	matrix.hdr.opcode = ASM_SESSION_CMD_SET_MTMX_STRTR_PARAMS_V2;
+
+	matrix.param.data_payload_addr_lsw = 0;
+	matrix.param.data_payload_addr_msw = 0;
+	matrix.param.mem_map_handle = 0;
+	matrix.param.data_payload_size =
+		sizeof(struct param_hdr_v1) +
+		sizeof(struct asm_session_mtmx_strtr_param_ttp_offset_t);
+	matrix.param.direction = dir;
+	matrix.data.module_id = ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC;
+	matrix.data.param_id = param_id;
+	matrix.data.param_size =
+		sizeof(struct asm_session_mtmx_strtr_param_ttp_offset_t);
+	matrix.data.reserved = 0;
+	memcpy(&(matrix.config.ttp_offset),
+	       ttp_offset,
+	       sizeof(struct asm_session_mtmx_strtr_param_ttp_offset_t));
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &matrix);
+	if (rc < 0) {
+		pr_err("%s: ttp offset send failed paramid [0x%x]\n",
+			__func__, matrix.data.param_id);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	rc = wait_event_timeout(ac->cmd_wait,
+			(atomic_read(&ac->cmd_state) >= 0),
+			msecs_to_jiffies(TIMEOUT_MS));
+	if (!rc) {
+		pr_err("%s: timeout, ttp offset paramid[0x%x]\n",
+			__func__, matrix.data.param_id);
+		rc = -ETIMEDOUT;
+		goto fail_cmd;
+	}
+
+	if (atomic_read(&ac->cmd_state) > 0) {
+		pr_err("%s: DSP returned error[%s]\n",
+				__func__, adsp_err_get_err_str(
+				atomic_read(&ac->cmd_state)));
+		rc = adsp_err_get_lnx_err_code(
+				atomic_read(&ac->cmd_state));
+		goto fail_cmd;
+	}
+	rc = 0;
+fail_cmd:
+	return rc;
+}
+EXPORT_SYMBOL(q6asm_send_mtmx_strtr_ttp_offset);
+
+/**
  * q6asm_send_mtmx_strtr_render_mode -
  *       command to send matrix for render mode
  *
  * @ac: Audio client handle
  * @render_mode: rendering mode
+ * @dir: RX or TX direction
  *
  * Returns 0 on success or error on failure
  */
 int q6asm_send_mtmx_strtr_render_mode(struct audio_client *ac,
-		uint32_t render_mode)
+		uint32_t render_mode, int dir)
 {
 	struct asm_mtmx_strtr_params matrix;
 	struct asm_session_mtmx_strtr_param_render_mode_t render_param;
@@ -10333,7 +10438,7 @@ int q6asm_send_mtmx_strtr_render_mode(struct audio_client *ac,
 	matrix.param.data_payload_size =
 		sizeof(struct param_hdr_v1) +
 		sizeof(struct asm_session_mtmx_strtr_param_render_mode_t);
-	matrix.param.direction = 0; /* RX */
+	matrix.param.direction = dir;
 	matrix.data.module_id = ASM_SESSION_MTMX_STRTR_MODULE_ID_AVSYNC;
 	matrix.data.param_id = ASM_SESSION_MTMX_STRTR_PARAM_RENDER_MODE_CMD;
 	matrix.data.param_size =

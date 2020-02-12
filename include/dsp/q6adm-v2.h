@@ -93,6 +93,11 @@ struct msm_pcm_channel_mixer {
 	bool override_out_ch_map;
 };
 
+struct ffv_spf_freeze_param_t {
+	uint16_t freeze;
+	uint16_t source_id;
+};
+
 int srs_trumedia_open(int port_id, int copp_idx, __s32 srs_tech_id,
 		      void *srs_params);
 
@@ -121,7 +126,8 @@ int adm_pack_and_set_one_pp_param(int port_id, int copp_idx,
 
 int adm_open(int port, int path, int rate, int mode, int topology,
 			   int perf_mode, uint16_t bits_per_sample,
-			   int app_type, int acdbdev_id, int session_type);
+			   int app_type, int acdbdev_id, int session_type,
+			   uint32_t pass_thr);
 
 int adm_map_rtac_block(struct rtac_cal_block_data *cal_block);
 
@@ -237,4 +243,5 @@ int q6adm_send_event_register_cmd(int port_id, int copp_idx, u8 *data,
 					int param_size, int opcode);
 int q6adm_update_rtd_info(void *rtd, int port_id,
 			int copp_idx, int fe_id, int enable);
+int adm_set_ffecns_freeze_event(bool ffecns_freeze_event);
 #endif /* __Q6_ADM_V2_H__ */
