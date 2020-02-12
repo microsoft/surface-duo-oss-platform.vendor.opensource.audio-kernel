@@ -354,6 +354,8 @@ struct msm_pcm_routing_bdai_data msm_bedais[MSM_BACKEND_DAI_MAX] = {
 	  LPASS_BE_VOICE2_PLAYBACK_TX},
 	{ VOICE_RECORD_RX, 0, {0}, {0}, 0, 0, 0, 0,
 	  LPASS_BE_INCALL_RECORD_RX},
+	{ VOICE2_RECORD_RX, 0, {0}, {0}, 0, 0, 0, 0,
+	  LPASS_BE_INCALL2_RECORD_RX},
 	{ VOICE_RECORD_TX, 0, {0}, {0}, 0, 0, 0, 0,
 	  LPASS_BE_INCALL_RECORD_TX},
 	{ MI2S_RX, 0, {0}, {0}, 0, 0, 0, 0, LPASS_BE_MI2S_RX},
@@ -2404,8 +2406,9 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 						     passthr_mode);
 		}
 	}
-	if ((msm_bedais[reg].port_id == VOICE_RECORD_RX)
-			|| (msm_bedais[reg].port_id == VOICE_RECORD_TX))
+	if ((msm_bedais[reg].port_id == VOICE_RECORD_RX) ||
+		(msm_bedais[reg].port_id == VOICE_RECORD_TX) ||
+		(msm_bedais[reg].port_id == VOICE2_RECORD_RX))
 		voc_start_record(msm_bedais[reg].port_id, set, voc_session_id);
 
 	mutex_unlock(&routing_lock);
@@ -3529,8 +3532,9 @@ static const char *const be_name[] = {
 "SLIM_0_TX", "HDMI_RX", "HDMI_RX_MS", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
 "INT_FM_RX", "INT_FM_TX", "AFE_PCM_RX", "AFE_PCM_TX",
 "AUXPCM_RX", "AUXPCM_TX", "VOICE_PLAYBACK_TX", "VOICE2_PLAYBACK_TX",
-"INCALL_RECORD_RX", "INCALL_RECORD_TX", "MI2S_RX", "MI2S_TX",
-"SEC_I2S_RX", "SLIM_1_RX", "SLIM_1_TX", "SLIM_2_RX",
+"INCALL_RECORD_RX", "INCALL2_RECORD_RX", "INCALL_RECORD_TX",
+"MI2S_RX", "MI2S_TX", "SEC_I2S_RX",
+"SLIM_1_RX", "SLIM_1_TX", "SLIM_2_RX",
 "SLIM_2_TX", "SLIM_3_RX", "SLIM_3_TX", "SLIM_4_RX",
 "SLIM_4_TX", "SLIM_5_RX", "SLIM_5_TX", "SLIM_6_RX",
 "SLIM_6_TX", "SLIM_7_RX", "SLIM_7_TX", "SLIM_8_RX",
@@ -11865,6 +11869,10 @@ static const struct snd_kcontrol_new mmul1_mixer_controls[] = {
 		MSM_BACKEND_DAI_INCALL_RECORD_RX,
 		MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, msm_routing_get_audio_mixer,
 		msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("VOC2_REC_DL", SND_SOC_NOPM,
+		MSM_BACKEND_DAI_INCALL2_RECORD_RX,
+		MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, msm_routing_get_audio_mixer,
+		msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_UL", SND_SOC_NOPM,
 		MSM_BACKEND_DAI_INCALL_RECORD_TX,
 		MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, msm_routing_get_audio_mixer,
@@ -12464,6 +12472,10 @@ static const struct snd_kcontrol_new mmul4_mixer_controls[] = {
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_DL", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_INCALL_RECORD_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA4, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("VOC2_REC_DL", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_INCALL2_RECORD_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA4, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_UL", SND_SOC_NOPM,
@@ -13103,6 +13115,10 @@ static const struct snd_kcontrol_new mmul8_mixer_controls[] = {
 	MSM_BACKEND_DAI_INCALL_RECORD_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("VOC2_REC_DL", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_INCALL2_RECORD_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_UL", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_INCALL_RECORD_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
@@ -13310,6 +13326,10 @@ static const struct snd_kcontrol_new mmul16_mixer_controls[] = {
 	MSM_BACKEND_DAI_INCALL_RECORD_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA16, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("VOC2_REC_DL", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_INCALL2_RECORD_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA16, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_UL", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_INCALL_RECORD_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA16, 1, 0, msm_routing_get_audio_mixer,
@@ -13501,6 +13521,10 @@ static const struct snd_kcontrol_new mmul9_mixer_controls[] = {
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_DL", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_INCALL_RECORD_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA9, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("VOC2_REC_DL", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_INCALL2_RECORD_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA9, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("VOC_REC_UL", SND_SOC_NOPM,
@@ -22322,6 +22346,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 				0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("INCALL_RECORD_RX", "Voice Downlink Capture",
 				0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_IN("INCALL2_RECORD_RX", "Voice2 Downlink Capture",
+				0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("SLIMBUS_4_TX", "Slimbus4 Capture",
 				0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("SENARY_TX", "Senary_mi2s Capture",
@@ -23541,6 +23567,13 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MultiMedia1 Mixer", "VOC_REC_DL", "INCALL_RECORD_RX"},
 	{"MultiMedia4 Mixer", "VOC_REC_DL", "INCALL_RECORD_RX"},
 	{"MultiMedia8 Mixer", "VOC_REC_DL", "INCALL_RECORD_RX"},
+	{"MultiMedia9 Mixer", "VOC_REC_DL", "INCALL_RECORD_RX"},
+	{"MultiMedia16 Mixer", "VOC_REC_DL", "INCALL_RECORD_RX"},
+	{"MultiMedia1 Mixer", "VOC2_REC_DL", "INCALL2_RECORD_RX"},
+	{"MultiMedia4 Mixer", "VOC2_REC_DL", "INCALL2_RECORD_RX"},
+	{"MultiMedia8 Mixer", "VOC2_REC_DL", "INCALL2_RECORD_RX"},
+	{"MultiMedia9 Mixer", "VOC2_REC_DL", "INCALL2_RECORD_RX"},
+	{"MultiMedia16 Mixer", "VOC2_REC_DL", "INCALL2_RECORD_RX"},
 	{"MultiMedia1 Mixer", "SLIM_4_TX", "SLIMBUS_4_TX"},
 	{"MultiMedia1 Mixer", "SLIM_6_TX", "SLIMBUS_6_TX"},
 	{"MultiMedia1 Mixer", "SLIM_7_TX", "SLIMBUS_7_TX"},
@@ -26846,6 +26879,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"TX_CDC_DMA_TX_5", NULL, "BE_IN"},
 	{"PRI_SPDIF_TX", NULL, "BE_IN"},
 	{"SEC_SPDIF_TX", NULL, "BE_IN"},
+	{"INCALL2_RECORD_RX", NULL, "BE_IN"},
 };
 
 static int msm_pcm_routing_hw_params(struct snd_pcm_substream *substream,

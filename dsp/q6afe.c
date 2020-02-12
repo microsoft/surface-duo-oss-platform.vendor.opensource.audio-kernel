@@ -914,6 +914,7 @@ int afe_get_port_type(u16 port_id)
 
 	switch (port_id) {
 	case VOICE_RECORD_RX:
+	case VOICE2_RECORD_RX:
 	case VOICE_RECORD_TX:
 		ret = MSM_AFE_PORT_TYPE_TX;
 		break;
@@ -995,6 +996,7 @@ int afe_sizeof_cfg_cmd(u16 port_id)
 	case VOICE_PLAYBACK_TX:
 	case VOICE2_PLAYBACK_TX:
 	case VOICE_RECORD_RX:
+	case VOICE2_RECORD_RX:
 	case VOICE_RECORD_TX:
 		ret_size = SIZEOF_CFG_CMD(afe_param_id_pseudo_port_cfg);
 		break;
@@ -4547,6 +4549,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	case VOICE_PLAYBACK_TX:
 	case VOICE2_PLAYBACK_TX:
 	case VOICE_RECORD_RX:
+	case VOICE2_RECORD_RX:
 	case VOICE_RECORD_TX:
 		cfg_type = AFE_PARAM_ID_PSEUDO_PORT_CONFIG;
 		break;
@@ -4840,6 +4843,7 @@ int afe_get_port_index(u16 port_id)
 	case RSVD_3: return IDX_RSVD_3;
 	case DIGI_MIC_TX: return IDX_DIGI_MIC_TX;
 	case VOICE_RECORD_RX: return IDX_VOICE_RECORD_RX;
+	case VOICE2_RECORD_RX: return IDX_VOICE_RECORD_TX;
 	case VOICE_RECORD_TX: return IDX_VOICE_RECORD_TX;
 	case VOICE_PLAYBACK_TX: return IDX_VOICE_PLAYBACK_TX;
 	case VOICE2_PLAYBACK_TX: return IDX_VOICE2_PLAYBACK_TX;
@@ -7184,6 +7188,7 @@ int afe_validate_port(u16 port_id)
 	case RSVD_3:
 	case DIGI_MIC_TX:
 	case VOICE_RECORD_RX:
+	case VOICE2_RECORD_RX:
 	case VOICE_RECORD_TX:
 	case VOICE_PLAYBACK_TX:
 	case VOICE2_PLAYBACK_TX:
