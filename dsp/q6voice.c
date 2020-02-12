@@ -1987,7 +1987,7 @@ static int is_cal_memory_allocated(void)
 {
 	bool ret;
 
-	if (common.cal_mem_map_table.dma_buf != NULL)
+	if (common.cal_mem_map_table.mem_handle != NULL)
 		ret = true;
 	else
 		ret = false;
@@ -2000,15 +2000,15 @@ static int free_cal_map_table(void)
 {
 	int ret = 0;
 
-	if (common.cal_mem_map_table.dma_buf == NULL)
+	if (common.cal_mem_map_table.mem_handle == NULL)
 		goto done;
 
-	ret = msm_audio_ion_free(common.cal_mem_map_table.dma_buf);
+	ret = msm_audio_ion_free(common.cal_mem_map_table.mem_handle);
 	if (ret < 0)
 		pr_err("%s: msm_audio_ion_free failed:\n", __func__);
 
 done:
-	common.cal_mem_map_table.dma_buf = NULL;
+	common.cal_mem_map_table.mem_handle = NULL;
 	return ret;
 }
 
@@ -2016,7 +2016,7 @@ static int is_rtac_memory_allocated(void)
 {
 	bool ret;
 
-	if (common.rtac_mem_map_table.dma_buf != NULL)
+	if (common.rtac_mem_map_table.mem_handle != NULL)
 		ret = true;
 	else
 		ret = false;
@@ -2028,15 +2028,15 @@ static int free_rtac_map_table(void)
 {
 	int ret = 0;
 
-	if (common.rtac_mem_map_table.dma_buf == NULL)
+	if (common.rtac_mem_map_table.mem_handle == NULL)
 		goto done;
 
-	ret = msm_audio_ion_free(common.rtac_mem_map_table.dma_buf);
+	ret = msm_audio_ion_free(common.rtac_mem_map_table.mem_handle);
 	if (ret < 0)
 		pr_err("%s: msm_audio_ion_free failed:\n", __func__);
 
 done:
-	common.rtac_mem_map_table.dma_buf = NULL;
+	common.rtac_mem_map_table.mem_handle = NULL;
 	return ret;
 }
 
@@ -2056,7 +2056,7 @@ static int is_voip_memory_allocated(void)
 	}
 
 	mutex_lock(&common.common_lock);
-	if (v->shmem_info.sh_buf.dma_buf != NULL)
+	if (v->shmem_info.sh_buf.mem_handle != NULL)
 		ret = true;
 	else
 		ret = false;
@@ -3638,7 +3638,7 @@ static int remap_cal_data(struct cal_block_data *cal_block,
 
 	pr_debug("%s\n", __func__);
 
-	if (cal_block->map_data.dma_buf == NULL) {
+	if (cal_block->map_data.mem_handle == NULL) {
 		pr_err("%s: No ION allocation for session_id %d!\n",
 			__func__, session_id);
 		ret = -EINVAL;
@@ -3861,7 +3861,7 @@ int voc_map_rtac_block(struct rtac_cal_block_data *cal_block)
 				&cal_block->cal_data.paddr,
 				cal_block->map_data.map_size);
 
-			common.rtac_mem_map_table.dma_buf = NULL;
+			common.rtac_mem_map_table.mem_handle = NULL;
 			goto done_unlock;
 		}
 	}
@@ -7445,9 +7445,9 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 		/* Free the ION memory and clear handles for Source Tracking */
 		if (is_source_tracking_shared_memomry_allocated()) {
 			msm_audio_ion_free(
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf);
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle);
 			common.source_tracking_sh_mem.mem_handle = 0;
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf =
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle =
 									NULL;
 		}
 		/* clean up srvcc rec flag */
@@ -7687,9 +7687,9 @@ static int32_t qdsp_cvs_callback(struct apr_client_data *data, void *priv)
 		/* Free the ION memory and clear handles for Source Tracking */
 		if (is_source_tracking_shared_memomry_allocated()) {
 			msm_audio_ion_free(
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf);
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle);
 			common.source_tracking_sh_mem.mem_handle = 0;
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf =
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle =
 									NULL;
 		}
 		voc_set_error_state(data->reset_proc);
@@ -7971,9 +7971,9 @@ static int32_t qdsp_cvp_callback(struct apr_client_data *data, void *priv)
 		 */
 		if (is_source_tracking_shared_memomry_allocated()) {
 			msm_audio_ion_free(
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf);
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle);
 			common.source_tracking_sh_mem.mem_handle = 0;
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf =
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle =
 									NULL;
 		}
 		voc_set_error_state(data->reset_proc);
@@ -8186,8 +8186,8 @@ static int voice_free_oob_shared_mem(void)
 		goto done;
 	}
 
-	rc = msm_audio_ion_free(v->shmem_info.sh_buf.dma_buf);
-	v->shmem_info.sh_buf.dma_buf = NULL;
+	rc = msm_audio_ion_free(v->shmem_info.sh_buf.mem_handle);
+	v->shmem_info.sh_buf.mem_handle = NULL;
 	if (rc < 0) {
 		pr_err("%s: Error:%d freeing memory\n", __func__, rc);
 
@@ -8201,7 +8201,7 @@ static int voice_free_oob_shared_mem(void)
 		cnt++;
 	}
 
-	v->shmem_info.sh_buf.dma_buf = NULL;
+	v->shmem_info.sh_buf.mem_handle = NULL;
 
 done:
 	mutex_unlock(&common.common_lock);
@@ -8228,7 +8228,7 @@ static int voice_alloc_oob_shared_mem(void)
 		goto done;
 	}
 
-	rc = msm_audio_ion_alloc(&(v->shmem_info.sh_buf.dma_buf),
+	rc = msm_audio_ion_alloc(&(v->shmem_info.sh_buf.mem_handle),
 			bufsz * bufcnt,
 			&phys, &len,
 			&mem_addr);
@@ -8279,7 +8279,7 @@ static int voice_alloc_oob_mem_table(void)
 		goto done;
 	}
 
-	rc = msm_audio_ion_alloc(&(v->shmem_info.memtbl.dma_buf),
+	rc = msm_audio_ion_alloc(&(v->shmem_info.memtbl.mem_handle),
 				sizeof(struct vss_imemory_table_t),
 				&v->shmem_info.memtbl.phys,
 				&len,
@@ -8665,7 +8665,7 @@ static int voice_alloc_cal_mem_map_table(void)
 	int ret = 0;
 	size_t len;
 
-	ret = msm_audio_ion_alloc(&(common.cal_mem_map_table.dma_buf),
+	ret = msm_audio_ion_alloc(&(common.cal_mem_map_table.mem_handle),
 				sizeof(struct vss_imemory_table_t),
 				&common.cal_mem_map_table.phys,
 				&len,
@@ -8691,7 +8691,7 @@ static int voice_alloc_rtac_mem_map_table(void)
 	size_t len;
 
 	ret = msm_audio_ion_alloc(
-			&(common.rtac_mem_map_table.dma_buf),
+			&(common.rtac_mem_map_table.mem_handle),
 			sizeof(struct vss_imemory_table_t),
 			&common.rtac_mem_map_table.phys,
 			&len,
@@ -9406,7 +9406,7 @@ static int is_source_tracking_shared_memomry_allocated(void)
 
 	pr_debug("%s: Enter\n", __func__);
 
-	if (common.source_tracking_sh_mem.sh_mem_block.dma_buf != NULL)
+	if (common.source_tracking_sh_mem.sh_mem_block.mem_handle != NULL)
 		ret = true;
 	else
 		ret = false;
@@ -9423,7 +9423,7 @@ static int voice_alloc_source_tracking_shared_memory(void)
 	pr_debug("%s: Enter\n", __func__);
 
 	ret = msm_audio_ion_alloc(
-		&(common.source_tracking_sh_mem.sh_mem_block.dma_buf),
+		&(common.source_tracking_sh_mem.sh_mem_block.mem_handle),
 		BUFFER_BLOCK_SIZE,
 		&(common.source_tracking_sh_mem.sh_mem_block.phys),
 		(size_t *)&(common.source_tracking_sh_mem.sh_mem_block.size),
@@ -9445,7 +9445,7 @@ static int voice_alloc_source_tracking_shared_memory(void)
 		(size_t)(common.source_tracking_sh_mem.sh_mem_block.size));
 
 	ret = msm_audio_ion_alloc(
-		&(common.source_tracking_sh_mem.sh_mem_table.dma_buf),
+		&(common.source_tracking_sh_mem.sh_mem_table.mem_handle),
 		sizeof(struct vss_imemory_table_t),
 		&(common.source_tracking_sh_mem.sh_mem_table.phys),
 		(size_t *)&(common.source_tracking_sh_mem.sh_mem_table.size),
@@ -9455,8 +9455,8 @@ static int voice_alloc_source_tracking_shared_memory(void)
 			__func__, ret);
 
 		ret = msm_audio_ion_free(
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf);
-		common.source_tracking_sh_mem.sh_mem_block.dma_buf = NULL;
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle);
+		common.source_tracking_sh_mem.sh_mem_block.mem_handle = NULL;
 		if (ret < 0)
 			pr_err("%s: Error:%d freeing memory\n", __func__, ret);
 
@@ -9532,11 +9532,11 @@ static int voice_unmap_and_free_source_tracking_shared_memory(
 		}
 	}
 
-	if (common.source_tracking_sh_mem.sh_mem_block.dma_buf == NULL)
+	if (common.source_tracking_sh_mem.sh_mem_block.mem_handle == NULL)
 		goto done;
 
 	ret = msm_audio_ion_free(
-			common.source_tracking_sh_mem.sh_mem_block.dma_buf);
+			common.source_tracking_sh_mem.sh_mem_block.mem_handle);
 	if (ret < 0) {
 		pr_err("%s: Error:%d freeing memory\n", __func__, ret);
 
@@ -9546,7 +9546,7 @@ static int voice_unmap_and_free_source_tracking_shared_memory(
 
 done:
 	common.source_tracking_sh_mem.mem_handle = 0;
-	common.source_tracking_sh_mem.sh_mem_block.dma_buf = NULL;
+	common.source_tracking_sh_mem.sh_mem_block.mem_handle = NULL;
 	pr_debug("%s: Exit, ret=%d\n", __func__, ret);
 
 	return ret;
