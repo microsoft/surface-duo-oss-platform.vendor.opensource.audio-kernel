@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,11 +31,14 @@
 #include "msm-pcm-routing-v2.h"
 #include "codecs/msm-cdc-pinctrl.h"
 #include "codecs/sdm660_cdc/msm-digital-cdc.h"
-//#include "codecs/sdm660_cdc/msm-analog-cdc.h"
+#include "codecs/sdm660_cdc/msm-analog-cdc.h"
 #include "codecs/wcd-mbhc-v2.h"
 #include "msm8952.h"
 
-#define DRV_NAME "msm8909-asoc-wcd"
+#define DRV_NAME "msm8905-asoc-wcd"
+
+#define MSM_INT_DIGITAL_CODEC "msm-dig-codec"
+#define PMIC_INT_ANALOG_CODEC "analog-codec"
 
 enum btsco_rates {
 	RATE_8KHZ_ID,
@@ -47,6 +50,29 @@ enum {
 	MSM_FRONTEND_DAI_VOICE2,
 	MSM_FRONTEND_DAI_VOLTE,
 	MSM_FRONTEND_DAI_VOWLAN,
+};
+
+/*
+ * Android L spec
+ * Need to report LINEIN
+ * if R/L channel impedance is larger than 5K ohm
+ */
+static struct wcd_mbhc_config mbhc_cfg = {
+	.read_fw_bin = false,
+	.calibration = NULL,
+	.detect_extn_cable = true,
+	.mono_stero_detection = false,
+	.swap_gnd_mic = NULL,
+	.hs_ext_micbias = false,
+	.key_code[0] = KEY_MEDIA,
+	.key_code[1] = KEY_VOICECOMMAND,
+	.key_code[2] = KEY_VOLUMEUP,
+	.key_code[3] = KEY_VOLUMEDOWN,
+	.key_code[4] = 0,
+	.key_code[5] = 0,
+	.key_code[6] = 0,
+	.key_code[7] = 0,
+	.linein_th = 5000,
 };
 
 static int msm8909_auxpcm_rate = 8000;
@@ -145,43 +171,16 @@ static void param_set_mask(struct snd_pcm_hw_params *p, int n, unsigned int bit)
 	}
 }
 
-static int msm8909_dmic_event(struct snd_soc_dapm_widget *w,
-				struct snd_kcontrol *kcontrol, int event)
-{
-	struct msm_asoc_mach_data *pdata = NULL;
-	int ret = 0;
-	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
-
-	pdata = snd_soc_card_get_drvdata(codec->component.card);
-	pr_debug("%s: event = %d\n", __func__, event);
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		ret = msm_cdc_pinctrl_select_active_state(pdata->dmic_gpio_p);
-		if (ret) {
-			pr_err("%s: gpio set cannot be activated: %sd\n",
-				__func__, "dmic_gpio");
-			break;
-		}
-		break;
-	case SND_SOC_DAPM_POST_PMD:
-		ret =  msm_cdc_pinctrl_select_sleep_state(pdata->dmic_gpio_p);
-		if (ret < 0) {
-			pr_err("%s: gpio set cannot be de-activated %sd\n",
-					__func__, "dmic_gpio");
-			return ret;
-		}
-		break;
-	default:
-		return -EINVAL;
-	}
-	return 0;
-}
-
 static const struct snd_soc_dapm_widget msm8909_dapm_widgets[] = {
 	SND_SOC_DAPM_SUPPLY_S("MCLK", -1, SND_SOC_NOPM, 0, 0,
-	msm_mclk_event, SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_MIC("Digital Mic1", msm8909_dmic_event),
-	SND_SOC_DAPM_MIC("Digital Mic2", msm8909_dmic_event),
+	msm_mclk_event, SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+	SND_SOC_DAPM_MIC("Handset Mic", NULL),
+	SND_SOC_DAPM_MIC("Headset Mic", NULL),
+	SND_SOC_DAPM_MIC("Secondary Mic", NULL),
+	SND_SOC_DAPM_MIC("Digital Mic0", NULL),
+	SND_SOC_DAPM_MIC("Digital Mic1", NULL),
+	SND_SOC_DAPM_MIC("Digital Mic2", NULL),
+	SND_SOC_DAPM_MIC("Digital Mic3", NULL),
 };
 
 static int msm_proxy_rx_ch_get(struct snd_kcontrol *kcontrol,
@@ -516,8 +515,8 @@ static int msm_enable_dig_cdc_clk(struct snd_soc_codec *codec,
 
 	pdata = snd_soc_card_get_drvdata(codec->component.card);
 	pr_debug("%s: enable %d mclk ref counter %d\n",
-		   __func__, enable,
-		   atomic_read(&pdata->int_mclk0_rsc_ref));
+			__func__, enable,
+			atomic_read(&pdata->int_mclk0_rsc_ref));
 	if (enable) {
 		if (!atomic_read(&pdata->int_mclk0_rsc_ref)) {
 			cancel_delayed_work_sync(
@@ -538,7 +537,7 @@ static int msm_enable_dig_cdc_clk(struct snd_soc_codec *codec,
 				pr_debug("enabled digital codec core clk\n");
 				atomic_set(&pdata->int_mclk0_enabled, true);
 			} else
-			pr_debug("digital codec core clk is already enabled\n");
+				pr_debug("digital codec core clk is already enabled\n");
 			mutex_unlock(&pdata->cdc_int_mclk0_mutex);
 		}
 		atomic_inc(&pdata->int_mclk0_rsc_ref);
@@ -808,19 +807,40 @@ static int msm_mclk_event(struct snd_soc_dapm_widget *w,
 {
 	struct msm_asoc_mach_data *pdata = NULL;
 	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	int ret = 0;
 
 	pdata = snd_soc_card_get_drvdata(codec->component.card);
 	pr_debug("%s: event = %d\n", __func__, event);
 	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		if (pdata->mi2s_gpio_p[PRIM_MI2S]) {
+			ret = msm_cdc_pinctrl_select_active_state(
+				pdata->mi2s_gpio_p[PRIM_MI2S]);
+			if (ret) {
+				pr_err("%s: failed to enable pri gpios: %d\n",
+					__func__, ret);
+				break;
+			}
+		}
+		msm_enable_dig_cdc_clk(codec, 1, true);
+		msm_anlg_cdc_mclk_enable(codec, 1, true);
+		break;
 	case SND_SOC_DAPM_POST_PMD:
 		pr_debug("%s: mclk_res_ref = %d\n",
 			__func__, atomic_read(&pdata->int_mclk0_rsc_ref));
-		if (atomic_read(&pdata->int_mclk0_rsc_ref) == 0) {
-			pr_debug("%s: disabling MCLK\n", __func__);
-			/* disable the codec mclk config*/
-			msm_digcdc_mclk_enable(codec, 0, true);
-			msm_enable_dig_cdc_clk(codec, 0, true);
+		if (pdata->mi2s_gpio_p[PRIM_MI2S]) {
+			ret =  msm_cdc_pinctrl_select_sleep_state(
+				pdata->mi2s_gpio_p[PRIM_MI2S]);
+			if (ret < 0) {
+				pr_err("%s: gpio set cannot be de-activated %s",
+					__func__, "pri_i2s");
+				return ret;
+			}
 		}
+		pr_debug("%s: disabling MCLK\n", __func__);
+                /* disable the codec mclk config*/
+                msm_anlg_cdc_mclk_enable(codec, 0, true);
+		msm_enable_dig_cdc_clk(codec, 0, true);
 		break;
 	default:
 		pr_err("%s: invalid DAPM event %d\n", __func__, event);
@@ -834,7 +854,6 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_card *card = rtd->card;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	struct snd_soc_codec *codec = rtd->codec;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret = 0, val = 0;
 
@@ -852,29 +871,22 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	 */
 	if (pdata->vaddr_gpio_mux_spkr_ctl) {
 		val = ioread32(pdata->vaddr_gpio_mux_spkr_ctl);
-		val = val | 0x00010000;
+		val = val | 0x00030300;
 		iowrite32(val, pdata->vaddr_gpio_mux_spkr_ctl);
 	}
 
 	if (pdata->vaddr_gpio_mux_mic_ctl) {
 		val = ioread32(pdata->vaddr_gpio_mux_mic_ctl);
-		val = val | 0x00200000;
+		val = val | 0x00220002;
 		iowrite32(val, pdata->vaddr_gpio_mux_mic_ctl);
 	}
-
 	ret = msm_mi2s_sclk_ctl(substream, true);
 	if (ret < 0) {
 		pr_err("%s: failed to enable sclk %d\n",
 				__func__, ret);
 		return ret;
 	}
-	ret =  msm_enable_dig_cdc_clk(codec, 1, true);
-	if (ret < 0) {
-		pr_err("failed to enable mclk\n");
-		return ret;
-	}
 	/* Enable the codec mclk config */
-	msm_digcdc_mclk_enable(codec, 1, true);
 	ret = snd_soc_dai_set_fmt(cpu_dai, SND_SOC_DAIFMT_CBS_CFS);
 	if (ret < 0)
 		pr_err("%s: set fmt cpu dai failed; ret=%d\n", __func__, ret);
@@ -1218,40 +1230,106 @@ static void msm_quin_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	}
 }
 
+static void *def_msm8905_wcd_mbhc_cal(void)
+{
+	void *msm8905_wcd_cal;
+	struct wcd_mbhc_btn_detect_cfg *btn_cfg;
+	u16 *btn_low, *btn_high;
+
+	msm8905_wcd_cal = kzalloc(WCD_MBHC_CAL_SIZE(WCD_MBHC_DEF_BUTTONS,
+				WCD_MBHC_DEF_RLOADS), GFP_KERNEL);
+	if (!msm8905_wcd_cal)
+		return NULL;
+
+#define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(msm8905_wcd_cal)->X) = (Y))
+	S(v_hs_max, 1500);
+#undef S
+#define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(msm8905_wcd_cal)->X) = (Y))
+	S(num_btn, WCD_MBHC_DEF_BUTTONS);
+#undef S
+	btn_cfg = WCD_MBHC_CAL_BTN_DET_PTR(msm8905_wcd_cal);
+	btn_low = btn_cfg->_v_btn_low;
+	btn_high = ((void *)&btn_cfg->_v_btn_low) +
+		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
+	/*
+         * In SW we are maintaining two sets of threshold register
+         * one for current source and another for Micbias.
+         * all btn_low corresponds to threshold for current source
+         * all bt_high corresponds to threshold for Micbias
+         * Below thresholds are based on following resistances
+         * 0-70    == Button 0
+         * 110-180 == Button 1
+         * 210-290 == Button 2
+         * 360-680 == Button 3
+         */
+	btn_low[0] = 75;
+	btn_high[0] = 75;
+	btn_low[1] = 150;
+	btn_high[1] = 150;
+	btn_low[2] = 237;
+	btn_high[2] = 237;
+	btn_low[3] = 450;
+	btn_high[3] = 450;
+	btn_low[4] = 500;
+	btn_high[4] = 500;
+
+        return msm8905_wcd_cal;
+}
+
 static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
-	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
+	struct snd_soc_codec *dig_cdc = rtd->codec_dais[DIG_CDC]->codec;
+	struct snd_soc_codec *ana_cdc = rtd->codec_dais[ANA_CDC]->codec;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(ana_cdc);
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(rtd->card);
 	struct snd_card *card;
+	int ret = -ENOMEM;
 
-	snd_soc_add_codec_controls(codec, msm_snd_controls,
+	snd_soc_add_codec_controls(ana_cdc, msm_snd_controls,
 			ARRAY_SIZE(msm_snd_controls));
 
 	snd_soc_dapm_new_controls(dapm, msm8909_dapm_widgets,
 			ARRAY_SIZE(msm8909_dapm_widgets));
 
+	snd_soc_dapm_ignore_suspend(dapm, "Handset Mic");
+	snd_soc_dapm_ignore_suspend(dapm, "Headset Mic");
+	snd_soc_dapm_ignore_suspend(dapm, "Secondary Mic");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic1");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic2");
 
+	snd_soc_dapm_ignore_suspend(dapm, "EAR");
+	snd_soc_dapm_ignore_suspend(dapm, "HEADPHONE");
+	snd_soc_dapm_ignore_suspend(dapm, "SPK_OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "AMIC1");
+	snd_soc_dapm_ignore_suspend(dapm, "AMIC2");
+	snd_soc_dapm_ignore_suspend(dapm, "AMIC3");
 	snd_soc_dapm_ignore_suspend(dapm, "DMIC1");
 	snd_soc_dapm_ignore_suspend(dapm, "DMIC2");
 
 	snd_soc_dapm_sync(dapm);
 
+	mbhc_cfg.calibration = def_msm8905_wcd_mbhc_cal();
+	if (mbhc_cfg.calibration) {
+		ret = msm_anlg_cdc_hs_detect(ana_cdc, &mbhc_cfg);
+		if (ret) {
+			kfree(mbhc_cfg.calibration);
+			return ret;
+		}
+	}
+
 	card = rtd->card->snd_card;
 	if (!codec_root) {
 		codec_root = snd_info_create_subdir(card->module, "codecs",
 					card->proc_root);
-		if (codec_root)
-			msm_dig_codec_info_create_codec_entry(codec_root,
-							      codec);
-		else
-			pr_debug("%s: Cannot create codecs module entry\n",
-				 __func__);
+		if (!codec_root) {
+			pr_debug("%s: Cannot create codecs module entry\n", __func__);
+			goto done;
+		}
 	}
 	pdata->codec_root = codec_root;
-	msm_dig_codec_info_create_codec_entry(codec_root, codec);
+	msm_dig_codec_info_create_codec_entry(codec_root, dig_cdc);
+	msm_anlg_codec_info_create_codec_entry(codec_root, ana_cdc);
+done:
 	return 0;
 }
 
@@ -1282,6 +1360,39 @@ static struct snd_soc_ops msm8909_mi2s_be_ops = {
 static struct snd_soc_ops msm_pri_auxpcm_be_ops = {
 	.startup = msm_prim_auxpcm_startup,
 	.shutdown = msm_prim_auxpcm_shutdown,
+};
+
+struct snd_soc_dai_link_component dlc_rx1[] = {
+        {
+                .of_node = NULL,
+                .dai_name = "msm_dig_cdc_dai_rx1",
+        },
+        {
+                .of_node = NULL,
+                .dai_name  = "msm_anlg_cdc_i2s_rx1",
+        },
+};
+
+struct snd_soc_dai_link_component dlc_tx1[] = {
+        {
+                .of_node = NULL,
+                .dai_name = "msm_dig_cdc_dai_tx1",
+        },
+        {
+                .of_node = NULL,
+                .dai_name  = "msm_anlg_cdc_i2s_tx1",
+        },
+};
+
+struct snd_soc_dai_link_component dlc_vifeed[] = {
+        {
+                .of_node = NULL,
+                .dai_name = "msm_dig_cdc_dai_vifeed",
+        },
+        {
+                .of_node = NULL,
+                .dai_name  = "msm_anlg_vifeedback",
+        },
 };
 
 /* Digital audio interface glue - connects codec <---> CPU */
@@ -1977,13 +2088,14 @@ static struct snd_soc_dai_link msm8909_dai[] = {
 		.stream_name = "Primary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.0",
 		.platform_name = "msm-pcm-routing",
-		.codec_name = "snd-soc-dummy",
-		.codec_dai_name = "snd-soc-dummy-dai",
+                .codecs = dlc_rx1,
+                .num_codecs = CODECS_MAX,
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE |
 			ASYNC_DPCM_SND_SOC_HW_PARAMS,
 		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
+                .init = &msm_audrx_init,
 		.be_hw_params_fixup = msm_mi2s_rx_be_hw_params_fixup,
 		.ops = &msm8909_mi2s_be_ops,
 		.ignore_suspend = 1,
@@ -2007,14 +2119,13 @@ static struct snd_soc_dai_link msm8909_dai[] = {
 		.stream_name = "Tertiary MI2S Capture",
 		.cpu_dai_name = "msm-dai-q6-mi2s.2",
 		.platform_name = "msm-pcm-routing",
-		.codec_name     = "msm-dig-codec",
-		.codec_dai_name = "msm_dig_cdc_dai_tx1",
+		.codecs = dlc_tx1,
+		.num_codecs = CODECS_MAX,
 		.no_pcm = 1,
 		.dpcm_capture = 1,
 		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE |
 			ASYNC_DPCM_SND_SOC_HW_PARAMS,
 		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_TX,
-		.init = &msm_audrx_init,
 		.be_hw_params_fixup = msm_tx_be_hw_params_fixup,
 		.ops = &msm8909_mi2s_be_ops,
 		.ignore_suspend = 1,
@@ -2410,6 +2521,27 @@ codec_dai:
 			dai_link[i].codec_of_node = phandle;
 			dai_link[i].codec_name = NULL;
 		}
+		if ((dai_link[i].id == MSM_BACKEND_DAI_PRI_MI2S_RX) ||
+			(dai_link[i].id == MSM_BACKEND_DAI_TERTIARY_MI2S_TX) ||
+			(dai_link[i].id == MSM_BACKEND_DAI_SENARY_MI2S_TX)) {
+				index = of_property_match_string(
+						cdev->of_node,
+						"asoc-codec-names",
+						MSM_INT_DIGITAL_CODEC);
+
+				phandle = of_parse_phandle(
+						cdev->of_node,
+						"asoc-codec", index);
+				dai_link[i].codecs[DIG_CDC].of_node = phandle;
+				index = of_property_match_string(
+					cdev->of_node,
+					"asoc-codec-names",
+					PMIC_INT_ANALOG_CODEC);
+				phandle = of_parse_phandle(
+					cdev->of_node,
+					"asoc-codec", index);
+				dai_link[i].codecs[ANA_CDC].of_node = phandle;
+		}
 	}
 err:
 	return ret;
@@ -2570,8 +2702,19 @@ parse_mclk_freq:
 	}
 	pr_debug("%s: ext_pa = %d\n", __func__, pdata->ext_pa);
 
-	pdata->mi2s_gpio_p[QUAT_MI2S] = of_parse_phandle(pdev->dev.of_node,
-					"qcom,quat-mi2s-gpios", 0);
+	pdata->comp_gpio_p = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,cdc-comp-gpios", 0);
+
+        pdata->mi2s_gpio_p[PRIM_MI2S] = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,pri-mi2s-gpios", 0);
+        pdata->mi2s_gpio_p[SEC_MI2S] = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,sec-mi2s-gpios", 0);
+        pdata->mi2s_gpio_p[TERT_MI2S] = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,tert-mi2s-gpios", 0);
+        pdata->mi2s_gpio_p[QUAT_MI2S] = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,quat-mi2s-gpios", 0);
+        pdata->mi2s_gpio_p[QUIN_MI2S] = of_parse_phandle(pdev->dev.of_node,
+                                        "qcom,quin-mi2s-gpios", 0);
 	pdata->dmic_gpio_p = of_parse_phandle(pdev->dev.of_node,
 					"qcom,cdc-dmic-gpios", 0);
 
