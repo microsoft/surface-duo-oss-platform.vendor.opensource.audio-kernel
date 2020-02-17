@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -84,6 +84,7 @@ static uint32_t voc_session_id = ALL_SESSION_VSID;
 static int msm_route_ext_ec_ref;
 static bool is_custom_stereo_on;
 static bool is_ds2_on;
+static bool ffecns_freeze_event;
 static bool swap_ch;
 static int aanc_level;
 static int msm_ec_ref_port_id;
@@ -163,6 +164,7 @@ struct msm_pcm_route_bdai_pp_params {
 static struct msm_pcm_route_bdai_pp_params
 	msm_bedais_pp_params[MSM_BACKEND_DAI_PP_PARAMS_REQ_MAX] = {
 	{HDMI_RX, 0, 0, 0},
+	{HDMI_RX_MS, 0, 0, 0},
 	{DISPLAY_PORT_RX, 0, 0, 0},
 };
 
@@ -679,6 +681,7 @@ struct msm_pcm_routing_bdai_data msm_bedais[MSM_BACKEND_DAI_MAX] = {
 	  LPASS_BE_PRI_META_MI2S_RX},
 	{ AFE_PORT_ID_SECONDARY_META_MI2S_RX, 0, {0}, {0}, 0, 0, 0, 0,
 	  LPASS_BE_SEC_META_MI2S_RX},
+	{ HDMI_RX_MS, 0, {0}, {0}, 0, 0, 0, 0, LPASS_BE_HDMI_MS},
 };
 
 /* Track ASM playback & capture sessions of DAI
@@ -1631,7 +1634,7 @@ int msm_pcm_routing_reg_phy_compr_stream(int fe_id, int perf_mode,
 				adm_open(port_id, path_type, sample_rate,
 					 channels, topology, perf_mode,
 					 bit_width, app_type, acdb_dev_id,
-					 session_type);
+					 session_type, passthr_mode);
 			if ((copp_idx < 0) ||
 				(copp_idx >= MAX_COPPS_PER_PORT)) {
 				pr_err("%s:adm open failed coppid:%d\n",
@@ -2025,7 +2028,7 @@ int msm_pcm_routing_reg_phy_stream(int fedai_id, int perf_mode,
 					    sample_rate, channels, topology,
 					    perf_mode, bits_per_sample,
 					    app_type, acdb_dev_id,
-					    session_type);
+					    session_type, passthr_mode);
 			if ((copp_idx < 0) ||
 				(copp_idx >= MAX_COPPS_PER_PORT)) {
 				pr_err("%s: adm open failed copp_idx:%d\n",
@@ -2213,6 +2216,10 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 	if (!route_check_fe_id_adm_support(val)) {
 		/* ignore adm open if not supported for fe_id */
 		pr_debug("%s: No ADM support for fe id %d\n", __func__, val);
+		if (set)
+			set_bit(val, &msm_bedais[reg].fe_sessions[0]);
+		else
+			clear_bit(val, &msm_bedais[reg].fe_sessions[0]);
 		return;
 	}
 
@@ -2301,7 +2308,7 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 					    sample_rate, channels, topology,
 					    fdai->perf_mode, bits_per_sample,
 					    app_type, acdb_dev_id,
-					    session_type);
+					    session_type, passthr_mode);
 			if ((copp_idx < 0) ||
 			    (copp_idx >= MAX_COPPS_PER_PORT)) {
 				pr_err("%s: adm open failed\n", __func__);
@@ -3513,7 +3520,7 @@ static const char *const ch_mixer[] = {"Disable", "Enable"};
 /* If new backend is added, need update this array */
 static const char *const be_name[] = {
 "ZERO", "PRI_I2S_RX", "PRI_I2S_TX", "SLIM_0_RX",
-"SLIM_0_TX", "HDMI_RX", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
+"SLIM_0_TX", "HDMI_RX", "HDMI_RX_MS", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
 "INT_FM_RX", "INT_FM_TX", "AFE_PCM_RX", "AFE_PCM_TX",
 "AUXPCM_RX", "AUXPCM_TX", "VOICE_PLAYBACK_TX", "VOICE2_PLAYBACK_TX",
 "INCALL_RECORD_RX", "INCALL_RECORD_TX", "MI2S_RX", "MI2S_TX",
@@ -5625,6 +5632,12 @@ static const struct snd_kcontrol_new ec_ref_param_controls[] = {
 	SOC_SINGLE_MULTI_EXT("EC Reference ChMixer Weights Ch6", SND_SOC_NOPM,
 		5, 16384, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8, NULL,
 		msm_ec_ref_chmixer_weights_put),
+	SOC_SINGLE_MULTI_EXT("EC Reference ChMixer Weights Ch7", SND_SOC_NOPM,
+		6, 16384, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8, NULL,
+		msm_ec_ref_chmixer_weights_put),
+	SOC_SINGLE_MULTI_EXT("EC Reference ChMixer Weights Ch8", SND_SOC_NOPM,
+		7, 16384, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8, NULL,
+		msm_ec_ref_chmixer_weights_put),
 	SOC_ENUM_EXT("AFE_LOOPBACK_TX Port", msm_route_ec_ref_rx_enum[0],
 		msm_routing_afe_lb_tx_port_get, msm_routing_afe_lb_tx_port_put),
 };
@@ -7448,6 +7461,101 @@ static const struct snd_kcontrol_new hdmi_mixer_controls[] = {
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("MultiMedia30", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_HDMI_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA30, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+};
+
+static const struct snd_kcontrol_new hdmi_ms_mixer_controls[] = {
+	SOC_DOUBLE_EXT("MultiMedia1", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia2", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA2, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia3", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA3, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia4", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA4, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia5", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA5, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia6", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia7", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA7, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia8", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA8, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia9", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA9, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia10", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA10, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia11", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA11, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia12", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA12, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia13", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA13, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia14", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA14, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia15", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA15, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia16", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA16, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia17", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA17, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia18", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA18, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia19", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA19, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia26", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA26, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia28", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA28, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia29", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_FRONTEND_DAI_MULTIMEDIA29, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia30", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
 	MSM_FRONTEND_DAI_MULTIMEDIA30, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 };
@@ -16815,6 +16923,13 @@ static const struct snd_kcontrol_new hdmi_rx_port_mixer_controls[] = {
 	msm_routing_put_port_mixer),
 };
 
+static const struct snd_kcontrol_new hdmi_rx_ms_port_mixer_controls[] = {
+	SOC_DOUBLE_EXT("MI2S_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_HDMI_RX_MS,
+	MSM_BACKEND_DAI_MI2S_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
+};
+
 static const struct snd_kcontrol_new display_port_rx_port_mixer_controls[] = {
 	SOC_DOUBLE_EXT("MI2S_TX", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_DISPLAY_PORT_RX,
@@ -20158,6 +20273,36 @@ static const struct snd_kcontrol_new use_ds1_or_ds2_controls[] = {
 	msm_routing_put_use_ds1_or_ds2_control),
 };
 
+static int msm_routing_get_ffecns_freeze_event_control(
+					struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = ffecns_freeze_event;
+	return 0;
+}
+
+static int msm_routing_put_ffecns_freeze_event_control(
+					struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = -EINVAL;
+
+	ffecns_freeze_event = ucontrol->value.integer.value[0];
+
+	ret = adm_set_ffecns_freeze_event(ffecns_freeze_event);
+	if (ret)
+		pr_err("%s: failed to set ffecns imc event to%d\n",
+			__func__, ffecns_freeze_event);
+
+	return ret;
+}
+
+static const struct snd_kcontrol_new use_ffecns_freeze_event_controls[] = {
+	SOC_SINGLE_EXT("FFECNS Freeze Event", SND_SOC_NOPM, 0,
+	1, 0, msm_routing_get_ffecns_freeze_event_control,
+	msm_routing_put_ffecns_freeze_event_control),
+};
+
 int msm_routing_get_rms_value_control(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol) {
 	int rc = 0;
@@ -21501,6 +21646,7 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_AIF_OUT("SLIMBUS_2_RX", "Slimbus2 Playback", 0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("SLIMBUS_5_RX", "Slimbus5 Playback", 0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("HDMI", "HDMI Playback", 0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("HDMI_MS", "HDMI MS Playback", 0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("DISPLAY_PORT", "Display Port Playback",
 			     0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("DISPLAY_PORT1", "Display Port1 Playback",
@@ -21901,6 +22047,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	slimbus_9_rx_mixer_controls, ARRAY_SIZE(slimbus_9_rx_mixer_controls)),
 	SND_SOC_DAPM_MIXER("HDMI Mixer", SND_SOC_NOPM, 0, 0,
 	hdmi_mixer_controls, ARRAY_SIZE(hdmi_mixer_controls)),
+	SND_SOC_DAPM_MIXER("HDMI_MS Mixer", SND_SOC_NOPM, 0, 0,
+	hdmi_ms_mixer_controls, ARRAY_SIZE(hdmi_ms_mixer_controls)),
 	SND_SOC_DAPM_MIXER("DISPLAY_PORT Mixer", SND_SOC_NOPM, 0, 0,
 	display_port_mixer_controls, ARRAY_SIZE(display_port_mixer_controls)),
 	SND_SOC_DAPM_MIXER("DISPLAY_PORT1 Mixer", SND_SOC_NOPM, 0, 0,
@@ -22296,6 +22444,9 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 	SND_SOC_DAPM_MIXER("HDMI_RX Port Mixer",
 	SND_SOC_NOPM, 0, 0, hdmi_rx_port_mixer_controls,
 	ARRAY_SIZE(hdmi_rx_port_mixer_controls)),
+	SND_SOC_DAPM_MIXER("HDMI_RX_MS Port Mixer",
+	SND_SOC_NOPM, 0, 0, hdmi_rx_ms_port_mixer_controls,
+	ARRAY_SIZE(hdmi_rx_ms_port_mixer_controls)),
 	SND_SOC_DAPM_MIXER("DISPLAY_PORT_RX Port Mixer",
 	SND_SOC_NOPM, 0, 0, display_port_rx_port_mixer_controls,
 	ARRAY_SIZE(display_port_rx_port_mixer_controls)),
@@ -22798,6 +22949,25 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"HDMI Mixer", "MultiMedia16", "MM_DL16"},
 	{"HDMI Mixer", "MultiMedia26", "MM_DL26"},
 	{"HDMI", NULL, "HDMI Mixer"},
+
+	{"HDMI_MS Mixer", "MultiMedia1", "MM_DL1"},
+	{"HDMI_MS Mixer", "MultiMedia2", "MM_DL2"},
+	{"HDMI_MS Mixer", "MultiMedia3", "MM_DL3"},
+	{"HDMI_MS Mixer", "MultiMedia4", "MM_DL4"},
+	{"HDMI_MS Mixer", "MultiMedia5", "MM_DL5"},
+	{"HDMI_MS Mixer", "MultiMedia6", "MM_DL6"},
+	{"HDMI_MS Mixer", "MultiMedia7", "MM_DL7"},
+	{"HDMI_MS Mixer", "MultiMedia8", "MM_DL8"},
+	{"HDMI_MS Mixer", "MultiMedia9", "MM_DL9"},
+	{"HDMI_MS Mixer", "MultiMedia10", "MM_DL10"},
+	{"HDMI_MS Mixer", "MultiMedia11", "MM_DL11"},
+	{"HDMI_MS Mixer", "MultiMedia12", "MM_DL12"},
+	{"HDMI_MS Mixer", "MultiMedia13", "MM_DL13"},
+	{"HDMI_MS Mixer", "MultiMedia14", "MM_DL14"},
+	{"HDMI_MS Mixer", "MultiMedia15", "MM_DL15"},
+	{"HDMI_MS Mixer", "MultiMedia16", "MM_DL16"},
+	{"HDMI_MS Mixer", "MultiMedia26", "MM_DL26"},
+	{"HDMI_MS", NULL, "HDMI_MS Mixer"},
 
 	{"DISPLAY_PORT Mixer", "MultiMedia1", "MM_DL1"},
 	{"DISPLAY_PORT Mixer", "MultiMedia2", "MM_DL2"},
@@ -25940,6 +26110,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"HDMI_RX Port Mixer", "MI2S_TX", "MI2S_TX"},
 	{"HDMI", NULL, "HDMI_RX Port Mixer"},
 
+	{"HDMI_RX_MS Port Mixer", "MI2S_TX", "MI2S_TX"},
+	{"HDMI_MS", NULL, "HDMI_RX_MS Port Mixer"},
+
 	{"DISPLAY_PORT_RX Port Mixer", "MI2S_TX", "MI2S_TX"},
 	{"DISPLAY_PORT", NULL, "DISPLAY_PORT_RX Port Mixer"},
 
@@ -26022,6 +26195,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"BE_OUT", NULL, "SLIMBUS_9_RX"},
 	{"BE_OUT", NULL, "USB_AUDIO_RX"},
 	{"BE_OUT", NULL, "HDMI"},
+	{"BE_OUT", NULL, "HDMI_MS"},
 	{"BE_OUT", NULL, "DISPLAY_PORT"},
 	{"BE_OUT", NULL, "DISPLAY_PORT1"},
 	{"BE_OUT", NULL, "PRI_SPDIF_RX"},
@@ -26403,7 +26577,7 @@ static int msm_pcm_routing_prepare(struct snd_pcm_substream *substream)
 					    sample_rate, channels, topology,
 					    fdai->perf_mode, bits_per_sample,
 					    app_type, acdb_dev_id,
-					    session_type);
+					    session_type, fdai->passthr_mode);
 			if ((copp_idx < 0) ||
 				(copp_idx >= MAX_COPPS_PER_PORT)) {
 				pr_err("%s: adm open failed\n", __func__);
@@ -26500,7 +26674,8 @@ static int msm_routing_send_device_pp_params(int port_id, int copp_idx,
 
 	pr_debug("%s: port_id %d, copp_idx %d\n", __func__, port_id, copp_idx);
 
-	if (port_id != HDMI_RX && port_id != DISPLAY_PORT_RX) {
+	if (port_id != HDMI_RX && port_id != DISPLAY_PORT_RX
+			&& port_id != HDMI_RX_MS) {
 		pr_err("%s: Device pp params on invalid port %d\n",
 			__func__, port_id);
 		return  -EINVAL;
@@ -26977,7 +27152,8 @@ static int msm_routing_put_device_pp_params_mixer(struct snd_kcontrol *kcontrol,
 
 	for (be_idx = 0; be_idx < MSM_BACKEND_DAI_MAX; be_idx++) {
 		port_id = msm_bedais[be_idx].port_id;
-		if (port_id == HDMI_RX || port_id == DISPLAY_PORT_RX)
+		if (port_id == HDMI_RX || port_id == DISPLAY_PORT_RX
+				|| port_id == HDMI_RX_MS)
 			break;
 	}
 
@@ -27090,6 +27266,50 @@ static const struct snd_kcontrol_new aptx_dec_license_controls[] = {
 	SOC_SINGLE_EXT("APTX Dec License", SND_SOC_NOPM, 0,
 	0xFFFF, 0, msm_aptx_dec_license_control_get,
 	msm_aptx_dec_license_control_put),
+};
+
+static int msm_routing_get_pll_clk_drift(struct snd_kcontrol *kcontrol,
+					 struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int msm_routing_put_pll_clk_drift(struct snd_kcontrol *kcontrol,
+					 struct snd_ctl_elem_value *ucontrol)
+{
+	u16 port_id = 0;
+	int32_t clk_drift = 0;
+	uint32_t clk_reset = 0;
+	int be_idx, ret = -EINVAL;
+
+	be_idx = ucontrol->value.integer.value[0];
+	clk_drift = ucontrol->value.integer.value[1];
+	clk_reset = ucontrol->value.integer.value[2];
+
+	if (be_idx < 0 && be_idx >= MSM_BACKEND_DAI_MAX) {
+		pr_err("%s: Invalid be id %d\n", __func__, be_idx);
+		return -EINVAL;
+	}
+
+	if (!msm_bedais[be_idx].active && !clk_reset) {
+		pr_err("%s:BE is not active %d, cannot set clock drift\n",
+			__func__, be_idx);
+		return -EINVAL;
+	}
+
+	port_id = msm_bedais[be_idx].port_id;
+	pr_debug("%s: clk drift %d be idx %d clk reset %d port id 0x%x\n",
+		  __func__, clk_drift, be_idx, clk_reset, port_id);
+	ret = afe_set_pll_clk_drift(port_id, clk_drift, clk_reset);
+	if (ret < 0)
+		pr_err("%s: failed to set pll clk drift\n", __func__);
+
+	return ret;
+}
+
+static const struct snd_kcontrol_new pll_clk_drift_controls[] = {
+	SOC_SINGLE_MULTI_EXT("PLL config data", SND_SOC_NOPM, 0, 0xFFFFFFFF,
+	0, 128, msm_routing_get_pll_clk_drift, msm_routing_put_pll_clk_drift),
 };
 
 static int msm_routing_put_port_chmap_mixer(struct snd_kcontrol *kcontrol,
@@ -27344,6 +27564,10 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 			ARRAY_SIZE(use_ds1_or_ds2_controls));
 
 	snd_soc_add_platform_controls(platform,
+			use_ffecns_freeze_event_controls,
+			ARRAY_SIZE(use_ffecns_freeze_event_controls));
+
+	snd_soc_add_platform_controls(platform,
 				device_pp_params_mixer_controls,
 				ARRAY_SIZE(device_pp_params_mixer_controls));
 
@@ -27377,6 +27601,8 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 				      ARRAY_SIZE(copp_callback_event_controls));
 	snd_soc_add_platform_controls(platform, adsp_lib_ion_controls,
 				      ARRAY_SIZE(adsp_lib_ion_controls));
+	snd_soc_add_platform_controls(platform, pll_clk_drift_controls,
+				      ARRAY_SIZE(pll_clk_drift_controls));
 	kctl = snd_soc_card_get_kcontrol(platform->component.dapm.card,
 				"ADSP COPP Callback Event");
 

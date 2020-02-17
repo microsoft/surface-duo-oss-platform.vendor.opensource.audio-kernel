@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -269,9 +269,10 @@ enum {
 	IDX_AFE_PORT_ID_SENARY_PCM_RX,
 	IDX_AFE_PORT_ID_SENARY_PCM_TX,
 	IDX_AFE_LOOPBACK_TX,
-	/* IDX 190-> 191 */
+	/* IDX 190-> 192 */
 	IDX_AFE_PORT_ID_PRIMARY_META_MI2S_RX,
 	IDX_AFE_PORT_ID_SECONDARY_META_MI2S_RX,
+	IDX_HDMI_RX_MS,
 	AFE_MAX_PORTS
 };
 
@@ -476,6 +477,9 @@ void afe_register_wakeup_irq_callback(
 	void (*afe_cb_wakeup_irq)(void *handle));
 int afe_get_doa_tracking_mon(u16 port_id,
 	struct doa_tracking_mon_param *doa_tracking_data);
+int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
+			  uint32_t clk_reset);
+int afe_set_clk_id(u16 port_id, uint32_t clk_id);
 
 #define AFE_LPASS_CORE_HW_BLOCK_ID_NONE                        0
 #define AFE_LPASS_CORE_HW_BLOCK_ID_AVTIMER                     2

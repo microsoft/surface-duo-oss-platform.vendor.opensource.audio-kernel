@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -141,6 +141,12 @@ static struct reg_default ep92_reg_defaults[] = {
  */
 #define EP92_GI_ADO_CHF_MASK        0x01
 #define EP92_GI_CEC_ECF_MASK        0x02
+#define EP92_GI_ARC_ON_SHIFT        0
+#define EP92_GI_ARC_ON_MASK         0x01
+#define EP92_GI_EARC_ON_SHIFT       1
+#define EP92_GI_EARC_ON_MASK        0x02
+#define EP92_GI_EARC_SEL_SHIFT      2
+#define EP92_GI_EARC_SEL_MASK       0x04
 #define EP92_GI_TX_HOT_PLUG_SHIFT   7
 #define EP92_GI_TX_HOT_PLUG_MASK    0x80
 #define EP92_GI_VIDEO_LATENCY_SHIFT 0
@@ -148,6 +154,8 @@ static struct reg_default ep92_reg_defaults[] = {
 
 #define EP92_GC_POWER_SHIFT      7
 #define EP92_GC_POWER_MASK       0x80
+#define EP92_GC_EARC_EN_SHIFT    6
+#define EP92_GC_EARC_EN_MASK     0x40
 #define EP92_GC_AUDIO_PATH_SHIFT 5
 #define EP92_GC_AUDIO_PATH_MASK  0x20
 #define EP92_GC_CEC_MUTE_SHIFT   1
@@ -156,6 +164,8 @@ static struct reg_default ep92_reg_defaults[] = {
 #define EP92_GC_ARC_EN_MASK      0x01
 #define EP92_GC_ARC_DIS_SHIFT    6
 #define EP92_GC_ARC_DIS_MASK     0x40
+#define EP92_GC_EARC_DIS_SHIFT   5
+#define EP92_GC_EARC_DIS_MASK    0x20
 #define EP92_GC_RX_SEL_SHIFT     0
 #define EP92_GC_RX_SEL_MASK      0x07
 #define EP92_GC_CEC_VOLUME_SHIFT 0
@@ -173,20 +183,30 @@ static struct reg_default ep92_reg_defaults[] = {
 #define EP92_AI_AVMUTE_MASK      0x20
 #define EP92_AI_LAYOUT_SHIFT     0
 #define EP92_AI_LAYOUT_MASK      0x01
+#define EP92_AI_DSD_RATE_SHIFT   4
+#define EP92_AI_DSD_RATE_MASK    0x30
+#define EP92_AI_EARC_CON_SHIFT   0
+#define EP92_AI_EARC_CON_MASK    0x01
+#define EP92_AI_COMP_ADO_SHIFT   7
+#define EP92_AI_COMP_ADO_MASK    0x80
 #define EP92_AI_HBR_ADO_SHIFT    5
 #define EP92_AI_HBR_ADO_MASK     0x20
+#define EP92_AI_DSD_ADO_SHIFT    4
+#define EP92_AI_DSD_ADO_MASK     0x10
 #define EP92_AI_STD_ADO_SHIFT    3
 #define EP92_AI_STD_ADO_MASK     0x08
 #define EP92_AI_RATE_MASK        0x07
 #define EP92_AI_NPCM_MASK        0x02
 #define EP92_AI_PREEMPH_SHIFT    3
 #define EP92_AI_PREEMPH_MASK     0x38
+#define EP92_AI_EARC_MODE_MASK   0x3b
+#define EP92_AI_EARC_MODE_LPCM_2CH   0x00
+#define EP92_AI_EARC_MODE_LPCM_MCH   0x20
+#define EP92_AI_EARC_MODE_IEC61937   0x02
+#define EP92_AI_EARC_RATE_SHIFT  0
+#define EP92_AI_EARC_RATE_MASK   0xcf
 #define EP92_AI_CH_COUNT_MASK    0x07
 #define EP92_AI_CH_ALLOC_MASK    0xff
-#define EP92_AI_DSD_ADO_SHIFT    4
-#define EP92_AI_DSD_ADO_MASK     0x10
-#define EP92_AI_DSD_RATE_SHIFT   4
-#define EP92_AI_DSD_RATE_MASK    0x30
 
 #define EP92_2CHOICE_MASK        1
 #define EP92_GC_CEC_VOLUME_MIN   0
