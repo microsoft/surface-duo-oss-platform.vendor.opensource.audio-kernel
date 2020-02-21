@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -12,10 +12,13 @@
 #include "../../../drivers/clk/qcom/common.h"
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <dsp/apr_audio-v2.h>
 #include <dt-bindings/clock/qcom,audio-ext-clk.h>
-#include <dsp/q6afe-v2.h>
+#ifdef CONFIG_AUDIO_PRM
+#include <dsp/audio_prm.h>
+#else
 #include "audio-ext-clk-up.h"
-
+#endif
 enum {
 	AUDIO_EXT_CLK_PMI,
 	AUDIO_EXT_CLK_LNBB2,
@@ -50,6 +53,9 @@ struct audio_ext_clk_priv {
 	struct device *dev;
 	int clk_src;
 	struct afe_clk_set clk_cfg;
+#ifdef CONFIG_AUDIO_PRM
+	struct clk_cfg prm_clk_cfg;
+#endif
 	struct audio_ext_clk audio_clk;
 	const char *clk_name;
 	uint32_t lpass_core_hwvote_client_handle;
@@ -68,14 +74,19 @@ static int audio_ext_clk_prepare(struct clk_hw *hw)
 	int ret;
 
 	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
-		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
-		clk_priv->clk_cfg.enable = 1;
+		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX) && !clk_priv->clk_cfg.enable)  {
+#ifdef CONFIG_AUDIO_PRM
+	    pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg,1);
+#else
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
+#endif
 		if (ret < 0) {
 			pr_err_ratelimited("%s afe_set_digital_codec_core_clock failed\n",
 				__func__);
 			return ret;
 		}
+		clk_priv->clk_cfg.enable = 1;
 	}
 
 	if (pnctrl_info->pinctrl) {
@@ -112,7 +123,13 @@ static void audio_ext_clk_unprepare(struct clk_hw *hw)
 	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
 		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
 		clk_priv->clk_cfg.enable = 0;
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: clk_id %d",__func__,
+				clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_clk_cfg(&clk_priv->prm_clk_cfg,0);
+#else
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
+#endif
 		if (ret < 0)
 			pr_err_ratelimited("%s: afe_set_lpass_clk_cfg failed, ret = %d\n",
 				__func__, ret);
@@ -142,13 +159,19 @@ static u8 audio_ext_clk_get_parent(struct clk_hw *hw)
 
 static int lpass_hw_vote_prepare(struct clk_hw *hw)
 {
-	struct audio_ext_clk_priv *clk_priv = to_audio_clk(hw);
-	int ret;
 
+        struct audio_ext_clk_priv *clk_priv = to_audio_clk(hw);
+        int ret;
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_CORE_HW_VOTE)  {
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg, 
+			HW_CORE_ID_LPASS, 1);
+#else
 		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_MACRO_BLOCK,
 			"LPASS_HW_MACRO",
 			&clk_priv->lpass_core_hwvote_client_handle);
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass core hw vote failed %d\n",
 				__func__, ret);
@@ -157,9 +180,15 @@ static int lpass_hw_vote_prepare(struct clk_hw *hw)
 	}
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_AUDIO_HW_VOTE)  {
+#ifdef CONFIG_AUDIO_PRM
+		pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
+		ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg, 
+			HW_CORE_ID_DCODEC, 1);
+#else
 		ret = afe_vote_lpass_core_hw(AFE_LPASS_CORE_HW_DCODEC_BLOCK,
 			"LPASS_HW_DCODEC",
 			&clk_priv->lpass_audio_hwvote_client_handle);
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass audio hw vote failed %d\n",
 				__func__, ret);
@@ -176,9 +205,16 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
 	int ret = 0;
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_CORE_HW_VOTE) {
+#ifdef CONFIG_AUDIO_PRM
+                pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
+                ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+                        HW_CORE_ID_LPASS, 0);
+#else
+
 		ret = afe_unvote_lpass_core_hw(
 			AFE_LPASS_CORE_HW_MACRO_BLOCK,
 			clk_priv->lpass_core_hwvote_client_handle);
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass core hw vote failed %d\n",
 				__func__, ret);
@@ -186,9 +222,16 @@ static void lpass_hw_vote_unprepare(struct clk_hw *hw)
 	}
 
 	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS_AUDIO_HW_VOTE) {
+
+#ifdef CONFIG_AUDIO_PRM
+                pr_debug("%s: clk_id %d ",__func__, clk_priv->prm_clk_cfg.clk_id);
+                ret = audio_prm_set_lpass_hw_core_req(&clk_priv->prm_clk_cfg,
+                        HW_CORE_ID_DCODEC, 0);
+#else
 		ret = afe_unvote_lpass_core_hw(
 			AFE_LPASS_CORE_HW_DCODEC_BLOCK,
 			clk_priv->lpass_audio_hwvote_client_handle);
+#endif
 		if (ret < 0) {
 			pr_err("%s lpass audio hw unvote failed %d\n",
 				__func__, ret);
@@ -529,21 +572,45 @@ static int audio_ref_clk_probe(struct platform_device *pdev)
 	clk_priv->clk_cfg.clk_freq_in_hz = Q6AFE_LPASS_OSR_CLK_9_P600_MHZ;
 	clk_priv->clk_cfg.clk_attri = Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO;
 
+#ifdef CONFIG_AUDIO_PRM
+	/* Init prm clk cfg default values */
+	clk_priv->prm_clk_cfg.clk_id = Q6AFE_LPASS_CLK_ID_SPEAKER_I2S_OSR;
+	clk_priv->prm_clk_cfg.clk_freq_in_hz = Q6AFE_LPASS_OSR_CLK_9_P600_MHZ;
+	clk_priv->prm_clk_cfg.clk_attri = Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO;
+	clk_priv->prm_clk_cfg.clk_root = 0;
+#endif
+
 	ret = of_property_read_u32(pdev->dev.of_node,
 			"qcom,codec-lpass-ext-clk-freq",
 			&clk_freq);
-	if (!ret)
+	if (!ret) {
 		clk_priv->clk_cfg.clk_freq_in_hz = clk_freq;
+#ifdef CONFIG_AUDIO_PRM
+		clk_priv->prm_clk_cfg.clk_freq_in_hz = clk_freq;
+#endif
+	}
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 			"qcom,codec-lpass-clk-id",
 			&clk_id);
-	if (!ret)
+	if (!ret) {
 		clk_priv->clk_cfg.clk_id = clk_id;
+#ifdef CONFIG_AUDIO_PRM
+		clk_priv->prm_clk_cfg.clk_id = clk_id;
+		dev_info(&pdev->dev, "%s: PRM ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
+			__func__, clk_priv->prm_clk_cfg.clk_freq_in_hz,
+			clk_priv->prm_clk_cfg.clk_id, clk_priv->clk_src);
+#endif
+	}
 
-	dev_dbg(&pdev->dev, "%s: ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
+	dev_info(&pdev->dev, "%s: ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
 			__func__, clk_priv->clk_cfg.clk_freq_in_hz,
 			clk_priv->clk_cfg.clk_id, clk_priv->clk_src);
+
+        dev_info(&pdev->dev, "%s: PRM2 ext-clk freq: %d, lpass clk_id: %d, clk_src: %d\n",
+                        __func__, clk_priv->prm_clk_cfg.clk_freq_in_hz,
+                        clk_priv->prm_clk_cfg.clk_id, clk_priv->clk_src);
+
 	platform_set_drvdata(pdev, clk_priv);
 
 	ret = of_property_read_string(pdev->dev.of_node, "pmic-clock-names",

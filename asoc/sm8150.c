@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -21,15 +21,16 @@
 #include <sound/pcm_params.h>
 #include <sound/info.h>
 #include <dsp/audio_notifier.h>
-#include <dsp/q6afe-v2.h>
-#include <dsp/q6core.h>
+//#include <dsp/q6afe-v2.h>
+//#include <dsp/q6core.h>
 #include "device_event.h"
-#include "msm-pcm-routing-v2.h"
+#include <dsp/audio_prm.h>
+#include "msm-audio-defs-v2.h"
 #include <asoc/msm-cdc-pinctrl.h>
 #include "codecs/wcd934x/wcd934x.h"
 #include "codecs/wcd934x/wcd934x-mbhc.h"
 #include "codecs/wsa881x.h"
-#include <asoc/wcd-mbhc-v2.h>
+#include "codecs/wcd-mbhc-v2.h"
 
 #define DRV_NAME "sm8150-asoc-snd"
 
@@ -113,11 +114,11 @@ struct mi2s_conf {
 };
 
 static u32 mi2s_ebit_clk[MI2S_MAX] = {
-	Q6AFE_LPASS_CLK_ID_PRI_MI2S_EBIT,
-	Q6AFE_LPASS_CLK_ID_SEC_MI2S_EBIT,
-	Q6AFE_LPASS_CLK_ID_TER_MI2S_EBIT,
-	Q6AFE_LPASS_CLK_ID_QUAD_MI2S_EBIT,
-	Q6AFE_LPASS_CLK_ID_QUI_MI2S_EBIT
+	CLOCK_ID_PRI_MI2S_EBIT,
+	CLOCK_ID_SEC_MI2S_EBIT,
+	CLOCK_ID_TER_MI2S_EBIT,
+	CLOCK_ID_QUAD_MI2S_EBIT,
+	CLOCK_ID_QUI_MI2S_EBIT
 };
 
 struct dev_config {
@@ -196,6 +197,7 @@ struct tdm_port {
 	u32 channel;
 };
 
+#if 0
 /* TDM default config */
 static struct dev_config tdm_rx_cfg[TDM_INTERFACE_MAX][TDM_PORT_MAX] = {
 	{ /* PRI TDM */
@@ -305,6 +307,7 @@ static struct dev_config tdm_tx_cfg[TDM_INTERFACE_MAX][TDM_PORT_MAX] = {
 	}
 
 };
+#endif
 
 /* Default configuration of slimbus channels */
 static struct dev_config slim_rx_cfg[] = {
@@ -330,6 +333,7 @@ static struct dev_config slim_tx_cfg[] = {
 	[SLIM_TX_8] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
 };
 
+#if 0
 /* Default configuration of external display BE */
 static struct dev_config ext_disp_rx_cfg[] = {
 	[DP_RX_IDX] =   {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
@@ -352,7 +356,7 @@ static struct dev_config proxy_rx_cfg = {
 	.bit_format = SNDRV_PCM_FORMAT_S16_LE,
 	.channels = 2,
 };
-
+#endif
 /* Default configuration of MI2S channels */
 static struct dev_config mi2s_rx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
@@ -369,7 +373,7 @@ static struct dev_config mi2s_tx_cfg[] = {
 	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUIN_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
-
+#if 0
 static struct dev_config aux_pcm_rx_cfg[] = {
 	[PRIM_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[SEC_AUX_PCM]  = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
@@ -508,15 +512,18 @@ static SOC_ENUM_SINGLE_EXT_DECL(mi2s_tx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(aux_pcm_rx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(aux_pcm_tx_format, bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(hifi_function, hifi_text);
+#endif
 
 static struct platform_device *spdev;
 
 static int msm_hifi_control;
+#if 0
 static bool is_initial_boot;
+#endif
 static bool codec_reg_done;
 static struct snd_soc_aux_dev *msm_aux_dev;
 static struct snd_soc_codec_conf *msm_codec_conf;
-static struct msm_asoc_wcd93xx_codec msm_codec_fn;
+//static struct msm_asoc_wcd93xx_codec msm_codec_fn;
 
 static void *def_wcd_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_component *component,
@@ -562,2539 +569,42 @@ static struct snd_soc_dapm_route wcd_audio_paths_tavil[] = {
 	{"MIC BIAS4", NULL, "MCLK TX"},
 };
 
-static struct afe_clk_set mi2s_clk[MI2S_MAX] = {
+static struct clk_cfg mi2s_clk[MI2S_MAX] = {
 	{
-		AFE_API_VERSION_I2S_CONFIG,
-		Q6AFE_LPASS_CLK_ID_PRI_MI2S_IBIT,
-		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
-		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
-		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
-		0,
+		CLOCK_ID_PRI_MI2S_IBIT,
+		IBIT_CLOCK_1_P536_MHZ,
+		CLOCK_ATTRIBUTE_COUPLE_NO,
+		CLOCK_ROOT_DEFAULT,
 	},
 	{
-		AFE_API_VERSION_I2S_CONFIG,
-		Q6AFE_LPASS_CLK_ID_SEC_MI2S_IBIT,
-		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
-		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
-		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
-		0,
+		CLOCK_ID_SEC_MI2S_IBIT,
+		IBIT_CLOCK_1_P536_MHZ,
+		CLOCK_ATTRIBUTE_COUPLE_NO,
+		CLOCK_ROOT_DEFAULT,
 	},
 	{
-		AFE_API_VERSION_I2S_CONFIG,
-		Q6AFE_LPASS_CLK_ID_TER_MI2S_IBIT,
-		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
-		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
-		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
-		0,
+		CLOCK_ID_TER_MI2S_IBIT,
+		IBIT_CLOCK_1_P536_MHZ,
+		CLOCK_ATTRIBUTE_COUPLE_NO,
+		CLOCK_ROOT_DEFAULT,
 	},
 	{
-		AFE_API_VERSION_I2S_CONFIG,
-		Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT,
-		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
-		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
-		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
-		0,
+		CLOCK_ID_QUAD_MI2S_IBIT,
+		IBIT_CLOCK_1_P536_MHZ,
+		CLOCK_ATTRIBUTE_COUPLE_NO,
+		CLOCK_ROOT_DEFAULT,
 	},
 	{
-		AFE_API_VERSION_I2S_CONFIG,
-		Q6AFE_LPASS_CLK_ID_QUI_MI2S_IBIT,
-		Q6AFE_LPASS_IBIT_CLK_1_P536_MHZ,
-		Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO,
-		Q6AFE_LPASS_CLK_ROOT_DEFAULT,
-		0,
-	}
-
+		CLOCK_ID_QUI_MI2S_IBIT,
+		IBIT_CLOCK_1_P536_MHZ,
+		CLOCK_ATTRIBUTE_COUPLE_NO,
+		CLOCK_ROOT_DEFAULT,
+	},
 };
+
 
 static struct mi2s_conf mi2s_intf_conf[MI2S_MAX];
 
-static int slim_get_sample_rate_val(int sample_rate)
-{
-	int sample_rate_val = 0;
-
-	switch (sample_rate) {
-	case SAMPLING_RATE_8KHZ:
-		sample_rate_val = 0;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 2;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		sample_rate_val = 3;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		sample_rate_val = 4;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		sample_rate_val = 5;
-		break;
-	case SAMPLING_RATE_96KHZ:
-		sample_rate_val = 6;
-		break;
-	case SAMPLING_RATE_176P4KHZ:
-		sample_rate_val = 7;
-		break;
-	case SAMPLING_RATE_192KHZ:
-		sample_rate_val = 8;
-		break;
-	case SAMPLING_RATE_352P8KHZ:
-		sample_rate_val = 9;
-		break;
-	case SAMPLING_RATE_384KHZ:
-		sample_rate_val = 10;
-		break;
-	default:
-		sample_rate_val = 4;
-		break;
-	}
-	return sample_rate_val;
-}
-
-static int slim_get_sample_rate(int value)
-{
-	int sample_rate = 0;
-
-	switch (value) {
-	case 0:
-		sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	case 1:
-		sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 2:
-		sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 3:
-		sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 4:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 5:
-		sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 6:
-		sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 7:
-		sample_rate = SAMPLING_RATE_176P4KHZ;
-		break;
-	case 8:
-		sample_rate = SAMPLING_RATE_192KHZ;
-		break;
-	case 9:
-		sample_rate = SAMPLING_RATE_352P8KHZ;
-		break;
-	case 10:
-		sample_rate = SAMPLING_RATE_384KHZ;
-		break;
-	default:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-	return sample_rate;
-}
-
-static int slim_get_bit_format_val(int bit_format)
-{
-	int val = 0;
-
-	switch (bit_format) {
-	case SNDRV_PCM_FORMAT_S32_LE:
-		val = 3;
-		break;
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		val = 2;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		val = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		val = 0;
-		break;
-	}
-	return val;
-}
-
-static int slim_get_bit_format(int val)
-{
-	int bit_fmt = SNDRV_PCM_FORMAT_S16_LE;
-
-	switch (val) {
-	case 0:
-		bit_fmt = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	case 1:
-		bit_fmt = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 2:
-		bit_fmt = SNDRV_PCM_FORMAT_S24_3LE;
-		break;
-	case 3:
-		bit_fmt = SNDRV_PCM_FORMAT_S32_LE;
-		break;
-	default:
-		bit_fmt = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	return bit_fmt;
-}
-
-static int slim_get_port_idx(struct snd_kcontrol *kcontrol)
-{
-	int port_id = 0;
-
-	if (strnstr(kcontrol->id.name, "SLIM_0_RX", sizeof("SLIM_0_RX"))) {
-		port_id = SLIM_RX_0;
-	} else if (strnstr(kcontrol->id.name,
-					   "SLIM_2_RX", sizeof("SLIM_2_RX"))) {
-		port_id = SLIM_RX_2;
-	} else if (strnstr(kcontrol->id.name,
-					   "SLIM_5_RX", sizeof("SLIM_5_RX"))) {
-		port_id = SLIM_RX_5;
-	} else if (strnstr(kcontrol->id.name,
-					   "SLIM_6_RX", sizeof("SLIM_6_RX"))) {
-		port_id = SLIM_RX_6;
-	} else if (strnstr(kcontrol->id.name,
-	 				   "SLIM_0_TX", sizeof("SLIM_0_TX"))) {
-		port_id = SLIM_TX_0;
-	} else if (strnstr(kcontrol->id.name,
-					   "SLIM_1_TX", sizeof("SLIM_1_TX"))) {
-		port_id = SLIM_TX_1;
-	} else {
-		pr_err("%s: unsupported channel: %s\n",
-			__func__, kcontrol->id.name);
-		return -EINVAL;
-	}
-
-	return port_id;
-}
-
-static int slim_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	ucontrol->value.enumerated.item[0] =
-		slim_get_sample_rate_val(slim_rx_cfg[ch_num].sample_rate);
-
-	pr_debug("%s: slim[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 ch_num, slim_rx_cfg[ch_num].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	slim_rx_cfg[ch_num].sample_rate =
-		slim_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: slim[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 ch_num, slim_rx_cfg[ch_num].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	ucontrol->value.enumerated.item[0] =
-		slim_get_sample_rate_val(slim_tx_cfg[ch_num].sample_rate);
-
-	pr_debug("%s: slim[%d]_tx_sample_rate = %d, item = %d\n", __func__,
-		 ch_num, slim_tx_cfg[ch_num].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int sample_rate = 0;
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	sample_rate = slim_get_sample_rate(ucontrol->value.enumerated.item[0]);
-	if (sample_rate == SAMPLING_RATE_44P1KHZ) {
-		pr_err("%s: Unsupported sample rate %d: for Tx path\n",
-			__func__, sample_rate);
-		return -EINVAL;
-	}
-	slim_tx_cfg[ch_num].sample_rate = sample_rate;
-
-	pr_debug("%s: slim[%d]_tx_sample_rate = %d, value = %d\n", __func__,
-		 ch_num, slim_tx_cfg[ch_num].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_rx_bit_format_get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	ucontrol->value.enumerated.item[0] =
-			slim_get_bit_format_val(slim_rx_cfg[ch_num].bit_format);
-
-	pr_debug("%s: slim[%d]_rx_bit_format = %d, ucontrol value = %d\n",
-		 __func__, ch_num, slim_rx_cfg[ch_num].bit_format,
-			ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_rx_bit_format_put(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	slim_rx_cfg[ch_num].bit_format =
-		slim_get_bit_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: slim[%d]_rx_bit_format = %d, ucontrol value = %d\n",
-		 __func__, ch_num, slim_rx_cfg[ch_num].bit_format,
-			ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_tx_bit_format_get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	ucontrol->value.enumerated.item[0] =
-			slim_get_bit_format_val(slim_tx_cfg[ch_num].bit_format);
-
-	pr_debug("%s: slim[%d]_tx_bit_format = %d, ucontrol value = %d\n",
-		 __func__, ch_num, slim_tx_cfg[ch_num].bit_format,
-			ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_tx_bit_format_put(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	slim_tx_cfg[ch_num].bit_format =
-		slim_get_bit_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: slim[%d]_tx_bit_format = %d, ucontrol value = %d\n",
-		 __func__, ch_num, slim_tx_cfg[ch_num].bit_format,
-			ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int slim_rx_ch_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	pr_debug("%s: msm_slim_[%d]_rx_ch  = %d\n", __func__,
-		 ch_num, slim_rx_cfg[ch_num].channels);
-	ucontrol->value.enumerated.item[0] = slim_rx_cfg[ch_num].channels - 1;
-
-	return 0;
-}
-
-static int slim_rx_ch_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	slim_rx_cfg[ch_num].channels = ucontrol->value.enumerated.item[0] + 1;
-	pr_debug("%s: msm_slim_[%d]_rx_ch  = %d\n", __func__,
-		 ch_num, slim_rx_cfg[ch_num].channels);
-
-	return 1;
-}
-
-static int slim_tx_ch_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	pr_debug("%s: msm_slim_[%d]_tx_ch  = %d\n", __func__,
-		 ch_num, slim_tx_cfg[ch_num].channels);
-	ucontrol->value.enumerated.item[0] = slim_tx_cfg[ch_num].channels - 1;
-
-	return 0;
-}
-
-static int slim_tx_ch_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int ch_num = slim_get_port_idx(kcontrol);
-
-	if (ch_num < 0)
-		return ch_num;
-
-	slim_tx_cfg[ch_num].channels = ucontrol->value.enumerated.item[0] + 1;
-	pr_debug("%s: msm_slim_[%d]_tx_ch = %d\n", __func__,
-		 ch_num, slim_tx_cfg[ch_num].channels);
-
-	return 1;
-}
-
-static int msm_vi_feed_tx_ch_get(struct snd_kcontrol *kcontrol,
-				 struct snd_ctl_elem_value *ucontrol)
-{
-	ucontrol->value.integer.value[0] = msm_vi_feed_tx_ch - 1;
-	pr_debug("%s: msm_vi_feed_tx_ch = %ld\n", __func__,
-		 ucontrol->value.integer.value[0]);
-	return 0;
-}
-
-static int msm_vi_feed_tx_ch_put(struct snd_kcontrol *kcontrol,
-				 struct snd_ctl_elem_value *ucontrol)
-{
-	msm_vi_feed_tx_ch = ucontrol->value.integer.value[0] + 1;
-
-	pr_debug("%s: msm_vi_feed_tx_ch = %d\n", __func__, msm_vi_feed_tx_ch);
-	return 1;
-}
-
-static int msm_bt_sample_rate_get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	/*
-	 * Slimbus_7_Rx/Tx sample rate values should always be in sync (same)
-	 * when used for BT_SCO use case. Return either Rx or Tx sample rate
-	 * value.
-	 */
-	switch (slim_rx_cfg[SLIM_RX_7].sample_rate) {
-	case SAMPLING_RATE_96KHZ:
-		ucontrol->value.integer.value[0] = 5;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		ucontrol->value.integer.value[0] = 4;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		ucontrol->value.integer.value[0] = 3;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-	pr_debug("%s: sample rate = %d\n", __func__,
-		 slim_rx_cfg[SLIM_RX_7].sample_rate);
-
-	return 0;
-}
-
-static int msm_bt_sample_rate_put(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 1:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_16KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 2:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 3:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_48KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 4:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 5:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_96KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 0:
-	default:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_8KHZ;
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	}
-	pr_debug("%s: sample rates: slim7_rx = %d, slim7_tx = %d, value = %d\n",
-		 __func__,
-		 slim_rx_cfg[SLIM_RX_7].sample_rate,
-		 slim_tx_cfg[SLIM_TX_7].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_bt_sample_rate_rx_get(struct snd_kcontrol *kcontrol,
-				     struct snd_ctl_elem_value *ucontrol)
-{
-	switch (slim_rx_cfg[SLIM_RX_7].sample_rate) {
-	case SAMPLING_RATE_96KHZ:
-		ucontrol->value.integer.value[0] = 5;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		ucontrol->value.integer.value[0] = 4;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		ucontrol->value.integer.value[0] = 3;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-	pr_debug("%s: sample rate rx = %d\n", __func__,
-		 slim_rx_cfg[SLIM_RX_7].sample_rate);
-
-	return 0;
-}
-
-static int msm_bt_sample_rate_rx_put(struct snd_kcontrol *kcontrol,
-				     struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 1:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 2:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 3:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 4:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 5:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 0:
-	default:
-		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	}
-	pr_debug("%s: sample rate: slim7_rx = %d, value = %d\n",
-		 __func__,
-		 slim_rx_cfg[SLIM_RX_7].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_bt_sample_rate_tx_get(struct snd_kcontrol *kcontrol,
-				     struct snd_ctl_elem_value *ucontrol)
-{
-	switch (slim_tx_cfg[SLIM_TX_7].sample_rate) {
-	case SAMPLING_RATE_96KHZ:
-		ucontrol->value.integer.value[0] = 5;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		ucontrol->value.integer.value[0] = 4;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		ucontrol->value.integer.value[0] = 3;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-	pr_debug("%s: sample rate tx = %d\n", __func__,
-		 slim_tx_cfg[SLIM_TX_7].sample_rate);
-
-	return 0;
-}
-
-static int msm_bt_sample_rate_tx_put(struct snd_kcontrol *kcontrol,
-				     struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 1:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 2:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 3:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 4:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 5:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 0:
-	default:
-		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	}
-	pr_debug("%s: sample rate: slim7_tx = %d, value = %d\n",
-		 __func__,
-		 slim_tx_cfg[SLIM_TX_7].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int usb_audio_rx_ch_get(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s: usb_audio_rx_ch  = %d\n", __func__,
-		 usb_rx_cfg.channels);
-	ucontrol->value.integer.value[0] = usb_rx_cfg.channels - 1;
-	return 0;
-}
-
-static int usb_audio_rx_ch_put(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	usb_rx_cfg.channels = ucontrol->value.integer.value[0] + 1;
-
-	pr_debug("%s: usb_audio_rx_ch = %d\n", __func__, usb_rx_cfg.channels);
-	return 1;
-}
-
-static int usb_audio_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-					struct snd_ctl_elem_value *ucontrol)
-{
-	int sample_rate_val;
-
-	switch (usb_rx_cfg.sample_rate) {
-	case SAMPLING_RATE_384KHZ:
-		sample_rate_val = 12;
-		break;
-	case SAMPLING_RATE_352P8KHZ:
-		sample_rate_val = 11;
-		break;
-	case SAMPLING_RATE_192KHZ:
-		sample_rate_val = 10;
-		break;
-	case SAMPLING_RATE_176P4KHZ:
-		sample_rate_val = 9;
-		break;
-	case SAMPLING_RATE_96KHZ:
-		sample_rate_val = 8;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		sample_rate_val = 7;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		sample_rate_val = 6;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		sample_rate_val = 5;
-		break;
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 4;
-		break;
-	case SAMPLING_RATE_22P05KHZ:
-		sample_rate_val = 3;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 2;
-		break;
-	case SAMPLING_RATE_11P025KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-	default:
-		sample_rate_val = 0;
-		break;
-	}
-
-	ucontrol->value.integer.value[0] = sample_rate_val;
-	pr_debug("%s: usb_audio_rx_sample_rate = %d\n", __func__,
-		 usb_rx_cfg.sample_rate);
-	return 0;
-}
-
-static int usb_audio_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-					struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 12:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_384KHZ;
-		break;
-	case 11:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_352P8KHZ;
-		break;
-	case 10:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_192KHZ;
-		break;
-	case 9:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_176P4KHZ;
-		break;
-	case 8:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 7:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 6:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 5:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 4:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 3:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_22P05KHZ;
-		break;
-	case 2:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 1:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_11P025KHZ;
-		break;
-	case 0:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	default:
-		usb_rx_cfg.sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-
-	pr_debug("%s: control value = %ld, usb_audio_rx_sample_rate = %d\n",
-		__func__, ucontrol->value.integer.value[0],
-		usb_rx_cfg.sample_rate);
-	return 0;
-}
-
-static int usb_audio_rx_format_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	switch (usb_rx_cfg.bit_format) {
-	case SNDRV_PCM_FORMAT_S32_LE:
-		ucontrol->value.integer.value[0] = 3;
-		break;
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-
-	pr_debug("%s: usb_audio_rx_format = %d, ucontrol value = %ld\n",
-		 __func__, usb_rx_cfg.bit_format,
-		 ucontrol->value.integer.value[0]);
-	return 0;
-}
-
-static int usb_audio_rx_format_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int rc = 0;
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 3:
-		usb_rx_cfg.bit_format = SNDRV_PCM_FORMAT_S32_LE;
-		break;
-	case 2:
-		usb_rx_cfg.bit_format = SNDRV_PCM_FORMAT_S24_3LE;
-		break;
-	case 1:
-		usb_rx_cfg.bit_format = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 0:
-	default:
-		usb_rx_cfg.bit_format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	pr_debug("%s: usb_audio_rx_format = %d, ucontrol value = %ld\n",
-		 __func__, usb_rx_cfg.bit_format,
-		 ucontrol->value.integer.value[0]);
-
-	return rc;
-}
-
-static int usb_audio_tx_ch_get(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s: usb_audio_tx_ch  = %d\n", __func__,
-		 usb_tx_cfg.channels);
-	ucontrol->value.integer.value[0] = usb_tx_cfg.channels - 1;
-	return 0;
-}
-
-static int usb_audio_tx_ch_put(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	usb_tx_cfg.channels = ucontrol->value.integer.value[0] + 1;
-
-	pr_debug("%s: usb_audio_tx_ch = %d\n", __func__, usb_tx_cfg.channels);
-	return 1;
-}
-
-static int usb_audio_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
-					struct snd_ctl_elem_value *ucontrol)
-{
-	int sample_rate_val;
-
-	switch (usb_tx_cfg.sample_rate) {
-	case SAMPLING_RATE_384KHZ:
-		sample_rate_val = 12;
-		break;
-	case SAMPLING_RATE_352P8KHZ:
-		sample_rate_val = 11;
-		break;
-	case SAMPLING_RATE_192KHZ:
-		sample_rate_val = 10;
-		break;
-	case SAMPLING_RATE_176P4KHZ:
-		sample_rate_val = 9;
-		break;
-	case SAMPLING_RATE_96KHZ:
-		sample_rate_val = 8;
-		break;
-	case SAMPLING_RATE_88P2KHZ:
-		sample_rate_val = 7;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		sample_rate_val = 6;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		sample_rate_val = 5;
-		break;
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 4;
-		break;
-	case SAMPLING_RATE_22P05KHZ:
-		sample_rate_val = 3;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 2;
-		break;
-	case SAMPLING_RATE_11P025KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-		sample_rate_val = 0;
-		break;
-	default:
-		sample_rate_val = 6;
-		break;
-	}
-
-	ucontrol->value.integer.value[0] = sample_rate_val;
-	pr_debug("%s: usb_audio_tx_sample_rate = %d\n", __func__,
-		 usb_tx_cfg.sample_rate);
-	return 0;
-}
-
-static int usb_audio_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
-					struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 12:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_384KHZ;
-		break;
-	case 11:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_352P8KHZ;
-		break;
-	case 10:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_192KHZ;
-		break;
-	case 9:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_176P4KHZ;
-		break;
-	case 8:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 7:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 6:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 5:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 4:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 3:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_22P05KHZ;
-		break;
-	case 2:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 1:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_11P025KHZ;
-		break;
-	case 0:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	default:
-		usb_tx_cfg.sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-
-	pr_debug("%s: control value = %ld, usb_audio_tx_sample_rate = %d\n",
-		__func__, ucontrol->value.integer.value[0],
-		usb_tx_cfg.sample_rate);
-	return 0;
-}
-
-static int usb_audio_tx_format_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	switch (usb_tx_cfg.bit_format) {
-	case SNDRV_PCM_FORMAT_S32_LE:
-		ucontrol->value.integer.value[0] = 3;
-		break;
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-
-	pr_debug("%s: usb_audio_tx_format = %d, ucontrol value = %ld\n",
-		 __func__, usb_tx_cfg.bit_format,
-		 ucontrol->value.integer.value[0]);
-	return 0;
-}
-
-static int usb_audio_tx_format_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int rc = 0;
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 3:
-		usb_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S32_LE;
-		break;
-	case 2:
-		usb_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S24_3LE;
-		break;
-	case 1:
-		usb_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 0:
-	default:
-		usb_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	pr_debug("%s: usb_audio_tx_format = %d, ucontrol value = %ld\n",
-		 __func__, usb_tx_cfg.bit_format,
-		 ucontrol->value.integer.value[0]);
-
-	return rc;
-}
-
-static int ext_disp_get_port_idx(struct snd_kcontrol *kcontrol)
-{
-	int idx;
-
-	if (strnstr(kcontrol->id.name, "Display Port RX",
-		    sizeof("Display Port RX"))) {
-		idx = DP_RX_IDX;
-	} else {
-		pr_err("%s: unsupported BE: %s\n",
-			__func__, kcontrol->id.name);
-		idx = -EINVAL;
-	}
-
-	return idx;
-}
-
-static int ext_disp_rx_format_get(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	switch (ext_disp_rx_cfg[idx].bit_format) {
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-
-	pr_debug("%s: ext_disp_rx[%d].format = %d, ucontrol value = %ld\n",
-		 __func__, idx, ext_disp_rx_cfg[idx].bit_format,
-		 ucontrol->value.integer.value[0]);
-	return 0;
-}
-
-static int ext_disp_rx_format_put(struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 2:
-		ext_disp_rx_cfg[idx].bit_format = SNDRV_PCM_FORMAT_S24_3LE;
-		break;
-	case 1:
-		ext_disp_rx_cfg[idx].bit_format = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 0:
-	default:
-		ext_disp_rx_cfg[idx].bit_format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	pr_debug("%s: ext_disp_rx[%d].format = %d, ucontrol value = %ld\n",
-		 __func__, idx, ext_disp_rx_cfg[idx].bit_format,
-		 ucontrol->value.integer.value[0]);
-
-	return 0;
-}
-
-static int ext_disp_rx_ch_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.integer.value[0] =
-			ext_disp_rx_cfg[idx].channels - 2;
-
-	pr_debug("%s: ext_disp_rx[%d].ch = %d\n", __func__,
-		 idx, ext_disp_rx_cfg[idx].channels);
-
-	return 0;
-}
-
-static int ext_disp_rx_ch_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ext_disp_rx_cfg[idx].channels =
-			ucontrol->value.integer.value[0] + 2;
-
-	pr_debug("%s: ext_disp_rx[%d].ch = %d\n", __func__,
-		 idx, ext_disp_rx_cfg[idx].channels);
-	return 1;
-}
-
-static int ext_disp_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				       struct snd_ctl_elem_value *ucontrol)
-{
-	int sample_rate_val;
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	switch (ext_disp_rx_cfg[idx].sample_rate) {
-	case SAMPLING_RATE_176P4KHZ:
-		sample_rate_val = 6;
-		break;
-
-	case SAMPLING_RATE_88P2KHZ:
-		sample_rate_val = 5;
-		break;
-
-	case SAMPLING_RATE_44P1KHZ:
-		sample_rate_val = 4;
-		break;
-
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 3;
-		break;
-
-	case SAMPLING_RATE_192KHZ:
-		sample_rate_val = 2;
-		break;
-
-	case SAMPLING_RATE_96KHZ:
-		sample_rate_val = 1;
-		break;
-
-	case SAMPLING_RATE_48KHZ:
-	default:
-		sample_rate_val = 0;
-		break;
-	}
-
-	ucontrol->value.integer.value[0] = sample_rate_val;
-	pr_debug("%s: ext_disp_rx[%d].sample_rate = %d\n", __func__,
-		 idx, ext_disp_rx_cfg[idx].sample_rate);
-
-	return 0;
-}
-
-static int ext_disp_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				       struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = ext_disp_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 6:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_176P4KHZ;
-		break;
-	case 5:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_88P2KHZ;
-		break;
-	case 4:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 3:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 2:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_192KHZ;
-		break;
-	case 1:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 0:
-	default:
-		ext_disp_rx_cfg[idx].sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-
-	pr_debug("%s: control value = %ld, ext_disp_rx[%d].sample_rate = %d\n",
-		 __func__, ucontrol->value.integer.value[0], idx,
-		 ext_disp_rx_cfg[idx].sample_rate);
-	return 0;
-}
-
-static int proxy_rx_ch_get(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s: proxy_rx channels = %d\n",
-		 __func__, proxy_rx_cfg.channels);
-	ucontrol->value.integer.value[0] = proxy_rx_cfg.channels - 2;
-
-	return 0;
-}
-
-static int proxy_rx_ch_put(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	proxy_rx_cfg.channels = ucontrol->value.integer.value[0] + 2;
-	pr_debug("%s: proxy_rx channels = %d\n",
-		 __func__, proxy_rx_cfg.channels);
-
-	return 1;
-}
-
-static int tdm_get_sample_rate(int value)
-{
-	int sample_rate = 0;
-
-	switch (value) {
-	case 0:
-		sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	case 1:
-		sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 2:
-		sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 3:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 4:
-		sample_rate = SAMPLING_RATE_176P4KHZ;
-		break;
-	case 5:
-		sample_rate = SAMPLING_RATE_352P8KHZ;
-		break;
-	default:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-	return sample_rate;
-}
-
-static int aux_pcm_get_sample_rate(int value)
-{
-	int sample_rate;
-
-	switch (value) {
-	case 1:
-		sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 0:
-	default:
-		sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	}
-	return sample_rate;
-}
-
-static int tdm_get_sample_rate_val(int sample_rate)
-{
-	int sample_rate_val = 0;
-
-	switch (sample_rate) {
-	case SAMPLING_RATE_8KHZ:
-		sample_rate_val = 0;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 2;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		sample_rate_val = 3;
-		break;
-	case SAMPLING_RATE_176P4KHZ:
-		sample_rate_val = 4;
-		break;
-	case SAMPLING_RATE_352P8KHZ:
-		sample_rate_val = 5;
-		break;
-	default:
-		sample_rate_val = 3;
-		break;
-	}
-	return sample_rate_val;
-}
-
-static int aux_pcm_get_sample_rate_val(int sample_rate)
-{
-	int sample_rate_val;
-
-	switch (sample_rate) {
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_8KHZ:
-	default:
-		sample_rate_val = 0;
-		break;
-	}
-	return sample_rate_val;
-}
-
-static int tdm_get_port_idx(struct snd_kcontrol *kcontrol,
-			    struct tdm_port *port)
-{
-	if (port) {
-		if (strnstr(kcontrol->id.name, "PRI",
-		    sizeof(kcontrol->id.name))) {
-			port->mode = TDM_PRI;
-		} else if (strnstr(kcontrol->id.name, "SEC",
-		    sizeof(kcontrol->id.name))) {
-			port->mode = TDM_SEC;
-		} else if (strnstr(kcontrol->id.name, "TERT",
-		    sizeof(kcontrol->id.name))) {
-			port->mode = TDM_TERT;
-		} else if (strnstr(kcontrol->id.name, "QUAT",
-		    sizeof(kcontrol->id.name))) {
-			port->mode = TDM_QUAT;
-		} else if (strnstr(kcontrol->id.name, "QUIN",
-		    sizeof(kcontrol->id.name))) {
-			port->mode = TDM_QUIN;
-		} else {
-			pr_err("%s: unsupported mode in: %s\n",
-				__func__, kcontrol->id.name);
-			return -EINVAL;
-		}
-
-		if (strnstr(kcontrol->id.name, "RX_0",
-		    sizeof(kcontrol->id.name)) ||
-		    strnstr(kcontrol->id.name, "TX_0",
-		    sizeof(kcontrol->id.name))) {
-			port->channel = TDM_0;
-		} else if (strnstr(kcontrol->id.name, "RX_1",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_1",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_1;
-		} else if (strnstr(kcontrol->id.name, "RX_2",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_2",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_2;
-		} else if (strnstr(kcontrol->id.name, "RX_3",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_3",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_3;
-		} else if (strnstr(kcontrol->id.name, "RX_4",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_4",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_4;
-		} else if (strnstr(kcontrol->id.name, "RX_5",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_5",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_5;
-		} else if (strnstr(kcontrol->id.name, "RX_6",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_6",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_6;
-		} else if (strnstr(kcontrol->id.name, "RX_7",
-			   sizeof(kcontrol->id.name)) ||
-			   strnstr(kcontrol->id.name, "TX_7",
-			   sizeof(kcontrol->id.name))) {
-			port->channel = TDM_7;
-		} else {
-			pr_err("%s: unsupported channel in: %s\n",
-				__func__, kcontrol->id.name);
-			return -EINVAL;
-		}
-	} else {
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int tdm_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		ucontrol->value.enumerated.item[0] = tdm_get_sample_rate_val(
-			tdm_rx_cfg[port.mode][port.channel].sample_rate);
-
-		pr_debug("%s: tdm_rx_sample_rate = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].sample_rate,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_rx_cfg[port.mode][port.channel].sample_rate =
-			tdm_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-		pr_debug("%s: tdm_rx_sample_rate = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].sample_rate,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		ucontrol->value.enumerated.item[0] = tdm_get_sample_rate_val(
-			tdm_tx_cfg[port.mode][port.channel].sample_rate);
-
-		pr_debug("%s: tdm_tx_sample_rate = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].sample_rate,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_tx_cfg[port.mode][port.channel].sample_rate =
-			tdm_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-		pr_debug("%s: tdm_tx_sample_rate = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].sample_rate,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_get_format(int value)
-{
-	int format = 0;
-
-	switch (value) {
-	case 0:
-		format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	case 1:
-		format = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 2:
-		format = SNDRV_PCM_FORMAT_S32_LE;
-		break;
-	default:
-		format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	return format;
-}
-
-static int tdm_get_format_val(int format)
-{
-	int value = 0;
-
-	switch (format) {
-	case SNDRV_PCM_FORMAT_S16_LE:
-		value = 0;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		value = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S32_LE:
-		value = 2;
-		break;
-	default:
-		value = 0;
-		break;
-	}
-	return value;
-}
-
-static int tdm_rx_format_get(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		ucontrol->value.enumerated.item[0] = tdm_get_format_val(
-				tdm_rx_cfg[port.mode][port.channel].bit_format);
-
-		pr_debug("%s: tdm_rx_bit_format = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].bit_format,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_rx_format_put(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_rx_cfg[port.mode][port.channel].bit_format =
-			tdm_get_format(ucontrol->value.enumerated.item[0]);
-
-		pr_debug("%s: tdm_rx_bit_format = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].bit_format,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_tx_format_get(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		ucontrol->value.enumerated.item[0] = tdm_get_format_val(
-				tdm_tx_cfg[port.mode][port.channel].bit_format);
-
-		pr_debug("%s: tdm_tx_bit_format = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].bit_format,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_tx_format_put(struct snd_kcontrol *kcontrol,
-			     struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_tx_cfg[port.mode][port.channel].bit_format =
-			tdm_get_format(ucontrol->value.enumerated.item[0]);
-
-		pr_debug("%s: tdm_tx_bit_format = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].bit_format,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_rx_ch_get(struct snd_kcontrol *kcontrol,
-			 struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-
-		ucontrol->value.enumerated.item[0] =
-			tdm_rx_cfg[port.mode][port.channel].channels - 1;
-
-		pr_debug("%s: tdm_rx_ch = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].channels - 1,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_rx_ch_put(struct snd_kcontrol *kcontrol,
-			 struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_rx_cfg[port.mode][port.channel].channels =
-			ucontrol->value.enumerated.item[0] + 1;
-
-		pr_debug("%s: tdm_rx_ch = %d, item = %d\n", __func__,
-			 tdm_rx_cfg[port.mode][port.channel].channels,
-			 ucontrol->value.enumerated.item[0] + 1);
-	}
-	return ret;
-}
-
-static int tdm_tx_ch_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		ucontrol->value.enumerated.item[0] =
-			tdm_tx_cfg[port.mode][port.channel].channels - 1;
-
-		pr_debug("%s: tdm_tx_ch = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].channels - 1,
-			 ucontrol->value.enumerated.item[0]);
-	}
-	return ret;
-}
-
-static int tdm_tx_ch_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	struct tdm_port port;
-	int ret = tdm_get_port_idx(kcontrol, &port);
-
-	if (ret) {
-		pr_err("%s: unsupported control: %s\n",
-			__func__, kcontrol->id.name);
-	} else {
-		tdm_tx_cfg[port.mode][port.channel].channels =
-			ucontrol->value.enumerated.item[0] + 1;
-
-		pr_debug("%s: tdm_tx_ch = %d, item = %d\n", __func__,
-			 tdm_tx_cfg[port.mode][port.channel].channels,
-			 ucontrol->value.enumerated.item[0] + 1);
-	}
-	return ret;
-}
-
-static int aux_pcm_get_port_idx(struct snd_kcontrol *kcontrol)
-{
-	int idx;
-
-	if (strnstr(kcontrol->id.name, "PRIM_AUX_PCM",
-		    sizeof("PRIM_AUX_PCM"))) {
-		idx = PRIM_AUX_PCM;
-	} else if (strnstr(kcontrol->id.name, "SEC_AUX_PCM",
-			 sizeof("SEC_AUX_PCM"))) {
-		idx = SEC_AUX_PCM;
-	} else if (strnstr(kcontrol->id.name, "TERT_AUX_PCM",
-			 sizeof("TERT_AUX_PCM"))) {
-		idx = TERT_AUX_PCM;
-	} else if (strnstr(kcontrol->id.name, "QUAT_AUX_PCM",
-			 sizeof("QUAT_AUX_PCM"))) {
-		idx = QUAT_AUX_PCM;
-	} else if (strnstr(kcontrol->id.name, "QUIN_AUX_PCM",
-			 sizeof("QUIN_AUX_PCM"))) {
-		idx = QUIN_AUX_PCM;
-	} else {
-		pr_err("%s: unsupported port: %s\n",
-			__func__, kcontrol->id.name);
-		idx = -EINVAL;
-	}
-
-	return idx;
-}
-
-static int aux_pcm_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	aux_pcm_rx_cfg[idx].sample_rate =
-		aux_pcm_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 idx, aux_pcm_rx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int aux_pcm_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-	     aux_pcm_get_sample_rate_val(aux_pcm_rx_cfg[idx].sample_rate);
-
-	pr_debug("%s: idx[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 idx, aux_pcm_rx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int aux_pcm_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	aux_pcm_tx_cfg[idx].sample_rate =
-		aux_pcm_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_tx_sample_rate = %d, item = %d\n", __func__,
-		 idx, aux_pcm_tx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int aux_pcm_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-	     aux_pcm_get_sample_rate_val(aux_pcm_tx_cfg[idx].sample_rate);
-
-	pr_debug("%s: idx[%d]_tx_sample_rate = %d, item = %d\n", __func__,
-		 idx, aux_pcm_tx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int mi2s_get_port_idx(struct snd_kcontrol *kcontrol)
-{
-	int idx;
-
-	if (strnstr(kcontrol->id.name, "PRIM_MI2S_RX",
-	    sizeof("PRIM_MI2S_RX"))) {
-		idx = PRIM_MI2S;
-	} else if (strnstr(kcontrol->id.name, "SEC_MI2S_RX",
-		 sizeof("SEC_MI2S_RX"))) {
-		idx = SEC_MI2S;
-	} else if (strnstr(kcontrol->id.name, "TERT_MI2S_RX",
-		 sizeof("TERT_MI2S_RX"))) {
-		idx = TERT_MI2S;
-	} else if (strnstr(kcontrol->id.name, "QUAT_MI2S_RX",
-		 sizeof("QUAT_MI2S_RX"))) {
-		idx = QUAT_MI2S;
-	} else if (strnstr(kcontrol->id.name, "QUIN_MI2S_RX",
-		 sizeof("QUIN_MI2S_RX"))) {
-		idx = QUIN_MI2S;
-	} else if (strnstr(kcontrol->id.name, "PRIM_MI2S_TX",
-		 sizeof("PRIM_MI2S_TX"))) {
-		idx = PRIM_MI2S;
-	} else if (strnstr(kcontrol->id.name, "SEC_MI2S_TX",
-		 sizeof("SEC_MI2S_TX"))) {
-		idx = SEC_MI2S;
-	} else if (strnstr(kcontrol->id.name, "TERT_MI2S_TX",
-		 sizeof("TERT_MI2S_TX"))) {
-		idx = TERT_MI2S;
-	} else if (strnstr(kcontrol->id.name, "QUAT_MI2S_TX",
-		 sizeof("QUAT_MI2S_TX"))) {
-		idx = QUAT_MI2S;
-	} else if (strnstr(kcontrol->id.name, "QUIN_MI2S_TX",
-		 sizeof("QUIN_MI2S_TX"))) {
-		idx = QUIN_MI2S;
-	} else {
-		pr_err("%s: unsupported channel: %s\n",
-			__func__, kcontrol->id.name);
-		idx = -EINVAL;
-	}
-
-	return idx;
-}
-
-static int mi2s_get_sample_rate_val(int sample_rate)
-{
-	int sample_rate_val;
-
-	switch (sample_rate) {
-	case SAMPLING_RATE_8KHZ:
-		sample_rate_val = 0;
-		break;
-	case SAMPLING_RATE_11P025KHZ:
-		sample_rate_val = 1;
-		break;
-	case SAMPLING_RATE_16KHZ:
-		sample_rate_val = 2;
-		break;
-	case SAMPLING_RATE_22P05KHZ:
-		sample_rate_val = 3;
-		break;
-	case SAMPLING_RATE_32KHZ:
-		sample_rate_val = 4;
-		break;
-	case SAMPLING_RATE_44P1KHZ:
-		sample_rate_val = 5;
-		break;
-	case SAMPLING_RATE_48KHZ:
-		sample_rate_val = 6;
-		break;
-	case SAMPLING_RATE_96KHZ:
-		sample_rate_val = 7;
-		break;
-	case SAMPLING_RATE_192KHZ:
-		sample_rate_val = 8;
-		break;
-	default:
-		sample_rate_val = 6;
-		break;
-	}
-	return sample_rate_val;
-}
-
-static int mi2s_get_sample_rate(int value)
-{
-	int sample_rate;
-
-	switch (value) {
-	case 0:
-		sample_rate = SAMPLING_RATE_8KHZ;
-		break;
-	case 1:
-		sample_rate = SAMPLING_RATE_11P025KHZ;
-		break;
-	case 2:
-		sample_rate = SAMPLING_RATE_16KHZ;
-		break;
-	case 3:
-		sample_rate = SAMPLING_RATE_22P05KHZ;
-		break;
-	case 4:
-		sample_rate = SAMPLING_RATE_32KHZ;
-		break;
-	case 5:
-		sample_rate = SAMPLING_RATE_44P1KHZ;
-		break;
-	case 6:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	case 7:
-		sample_rate = SAMPLING_RATE_96KHZ;
-		break;
-	case 8:
-		sample_rate = SAMPLING_RATE_192KHZ;
-		break;
-	default:
-		sample_rate = SAMPLING_RATE_48KHZ;
-		break;
-	}
-	return sample_rate;
-}
-
-static int mi2s_auxpcm_get_format(int value)
-{
-	int format;
-
-	switch (value) {
-	case 0:
-		format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	case 1:
-		format = SNDRV_PCM_FORMAT_S24_LE;
-		break;
-	case 2:
-		format = SNDRV_PCM_FORMAT_S24_3LE;
-		break;
-	case 3:
-		format = SNDRV_PCM_FORMAT_S32_LE;
-		break;
-	default:
-		format = SNDRV_PCM_FORMAT_S16_LE;
-		break;
-	}
-	return format;
-}
-
-static int mi2s_auxpcm_get_format_value(int format)
-{
-	int value;
-
-	switch (format) {
-	case SNDRV_PCM_FORMAT_S16_LE:
-		value = 0;
-		break;
-	case SNDRV_PCM_FORMAT_S24_LE:
-		value = 1;
-		break;
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		value = 2;
-		break;
-	case SNDRV_PCM_FORMAT_S32_LE:
-		value = 3;
-		break;
-	default:
-		value = 0;
-		break;
-	}
-	return value;
-}
-
-static int mi2s_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_rx_cfg[idx].sample_rate =
-		mi2s_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 idx, mi2s_rx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int mi2s_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_get_sample_rate_val(mi2s_rx_cfg[idx].sample_rate);
-
-	pr_debug("%s: idx[%d]_rx_sample_rate = %d, item = %d\n", __func__,
-		 idx, mi2s_rx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int mi2s_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_tx_cfg[idx].sample_rate =
-		mi2s_get_sample_rate(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_tx_sample_rate = %d, item = %d\n", __func__,
-		 idx, mi2s_tx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int mi2s_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
-				   struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_get_sample_rate_val(mi2s_tx_cfg[idx].sample_rate);
-
-	pr_debug("%s: idx[%d]_tx_sample_rate = %d, item = %d\n", __func__,
-		 idx, mi2s_tx_cfg[idx].sample_rate,
-		 ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_mi2s_rx_ch_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	pr_debug("%s: msm_mi2s_[%d]_rx_ch  = %d\n", __func__,
-		 idx, mi2s_rx_cfg[idx].channels);
-	ucontrol->value.enumerated.item[0] = mi2s_rx_cfg[idx].channels - 1;
-
-	return 0;
-}
-
-static int msm_mi2s_rx_ch_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_rx_cfg[idx].channels = ucontrol->value.enumerated.item[0] + 1;
-	pr_debug("%s: msm_mi2s_[%d]_rx_ch  = %d\n", __func__,
-		 idx, mi2s_rx_cfg[idx].channels);
-
-	return 1;
-}
-
-static int msm_mi2s_tx_ch_get(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	pr_debug("%s: msm_mi2s_[%d]_tx_ch  = %d\n", __func__,
-		 idx, mi2s_tx_cfg[idx].channels);
-	ucontrol->value.enumerated.item[0] = mi2s_tx_cfg[idx].channels - 1;
-
-	return 0;
-}
-
-static int msm_mi2s_tx_ch_put(struct snd_kcontrol *kcontrol,
-			      struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_tx_cfg[idx].channels = ucontrol->value.enumerated.item[0] + 1;
-	pr_debug("%s: msm_mi2s_[%d]_tx_ch  = %d\n", __func__,
-		 idx, mi2s_tx_cfg[idx].channels);
-
-	return 1;
-}
-
-static int msm_mi2s_rx_format_get(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_auxpcm_get_format_value(mi2s_rx_cfg[idx].bit_format);
-
-	pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
-		idx, mi2s_rx_cfg[idx].bit_format,
-		ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_mi2s_rx_format_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_rx_cfg[idx].bit_format =
-		mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
-		  idx, mi2s_rx_cfg[idx].bit_format,
-		  ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_mi2s_tx_format_get(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_auxpcm_get_format_value(mi2s_tx_cfg[idx].bit_format);
-
-	pr_debug("%s: idx[%d]_tx_format = %d, item = %d\n", __func__,
-		idx, mi2s_tx_cfg[idx].bit_format,
-		ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_mi2s_tx_format_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = mi2s_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	mi2s_tx_cfg[idx].bit_format =
-		mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_tx_format = %d, item = %d\n", __func__,
-		  idx, mi2s_tx_cfg[idx].bit_format,
-		  ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_aux_pcm_rx_format_get(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_auxpcm_get_format_value(aux_pcm_rx_cfg[idx].bit_format);
-
-	pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
-		idx, aux_pcm_rx_cfg[idx].bit_format,
-		ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_aux_pcm_rx_format_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	aux_pcm_rx_cfg[idx].bit_format =
-		mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_rx_format = %d, item = %d\n", __func__,
-		  idx, aux_pcm_rx_cfg[idx].bit_format,
-		  ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_aux_pcm_tx_format_get(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	ucontrol->value.enumerated.item[0] =
-		mi2s_auxpcm_get_format_value(aux_pcm_tx_cfg[idx].bit_format);
-
-	pr_debug("%s: idx[%d]_tx_format = %d, item = %d\n", __func__,
-		idx, aux_pcm_tx_cfg[idx].bit_format,
-		ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_aux_pcm_tx_format_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	int idx = aux_pcm_get_port_idx(kcontrol);
-
-	if (idx < 0)
-		return idx;
-
-	aux_pcm_tx_cfg[idx].bit_format =
-		mi2s_auxpcm_get_format(ucontrol->value.enumerated.item[0]);
-
-	pr_debug("%s: idx[%d]_tx_format = %d, item = %d\n", __func__,
-		  idx, aux_pcm_tx_cfg[idx].bit_format,
-		  ucontrol->value.enumerated.item[0]);
-
-	return 0;
-}
-
-static int msm_hifi_ctrl(struct snd_soc_component *component)
-{
-	struct snd_soc_dapm_context *dapm =
-			snd_soc_component_get_dapm(component);
-	struct snd_soc_card *card = component->card;
-	struct msm_asoc_mach_data *pdata =
-				snd_soc_card_get_drvdata(card);
-
-	dev_dbg(component->dev, "%s: msm_hifi_control = %d\n", __func__,
-		msm_hifi_control);
-
-	if (!pdata || !pdata->hph_en1_gpio_p) {
-		dev_err(component->dev, "%s: hph_en1_gpio is invalid\n",
-			__func__);
-		return -EINVAL;
-	}
-	if (msm_hifi_control == MSM_HIFI_ON) {
-		msm_cdc_pinctrl_select_active_state(pdata->hph_en1_gpio_p);
-		/* 5msec delay needed as per HW requirement */
-		usleep_range(5000, 5010);
-	} else {
-		msm_cdc_pinctrl_select_sleep_state(pdata->hph_en1_gpio_p);
-	}
-	snd_soc_dapm_sync(dapm);
-
-	return 0;
-}
-
-static int msm_hifi_get(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
-{
-	pr_debug("%s: msm_hifi_control = %d\n",
-		 __func__, msm_hifi_control);
-	ucontrol->value.integer.value[0] = msm_hifi_control;
-
-	return 0;
-}
-
-static int msm_hifi_put(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_component *component =
-			snd_soc_kcontrol_component(kcontrol);
-
-	dev_dbg(component->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	msm_hifi_control = ucontrol->value.integer.value[0];
-	msm_hifi_ctrl(component);
-
-	return 0;
-}
-
-static const struct snd_kcontrol_new msm_snd_controls[] = {
-	SOC_ENUM_EXT("SLIM_0_RX Channels", slim_0_rx_chs,
-			slim_rx_ch_get, slim_rx_ch_put),
-	SOC_ENUM_EXT("SLIM_2_RX Channels", slim_2_rx_chs,
-			slim_rx_ch_get, slim_rx_ch_put),
-	SOC_ENUM_EXT("SLIM_0_TX Channels", slim_0_tx_chs,
-			slim_tx_ch_get, slim_tx_ch_put),
-	SOC_ENUM_EXT("SLIM_1_TX Channels", slim_1_tx_chs,
-			slim_tx_ch_get, slim_tx_ch_put),
-	SOC_ENUM_EXT("SLIM_5_RX Channels", slim_5_rx_chs,
-			slim_rx_ch_get, slim_rx_ch_put),
-	SOC_ENUM_EXT("SLIM_6_RX Channels", slim_6_rx_chs,
-			slim_rx_ch_get, slim_rx_ch_put),
-	SOC_ENUM_EXT("VI_FEED_TX Channels", vi_feed_tx_chs,
-			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
-	SOC_ENUM_EXT("USB_AUDIO_RX Channels", usb_rx_chs,
-			usb_audio_rx_ch_get, usb_audio_rx_ch_put),
-	SOC_ENUM_EXT("USB_AUDIO_TX Channels", usb_tx_chs,
-			usb_audio_tx_ch_get, usb_audio_tx_ch_put),
-	SOC_ENUM_EXT("Display Port RX Channels", ext_disp_rx_chs,
-			ext_disp_rx_ch_get, ext_disp_rx_ch_put),
-	SOC_ENUM_EXT("PROXY_RX Channels", proxy_rx_chs,
-			proxy_rx_ch_get, proxy_rx_ch_put),
-	SOC_ENUM_EXT("SLIM_0_RX Format", slim_0_rx_format,
-			slim_rx_bit_format_get, slim_rx_bit_format_put),
-	SOC_ENUM_EXT("SLIM_5_RX Format", slim_5_rx_format,
-			slim_rx_bit_format_get, slim_rx_bit_format_put),
-	SOC_ENUM_EXT("SLIM_6_RX Format", slim_6_rx_format,
-			slim_rx_bit_format_get, slim_rx_bit_format_put),
-	SOC_ENUM_EXT("SLIM_0_TX Format", slim_0_tx_format,
-			slim_tx_bit_format_get, slim_tx_bit_format_put),
-	SOC_ENUM_EXT("USB_AUDIO_RX Format", usb_rx_format,
-			usb_audio_rx_format_get, usb_audio_rx_format_put),
-	SOC_ENUM_EXT("USB_AUDIO_TX Format", usb_tx_format,
-			usb_audio_tx_format_get, usb_audio_tx_format_put),
-	SOC_ENUM_EXT("Display Port RX Bit Format", ext_disp_rx_format,
-			ext_disp_rx_format_get, ext_disp_rx_format_put),
-	SOC_ENUM_EXT("SLIM_0_RX SampleRate", slim_0_rx_sample_rate,
-			slim_rx_sample_rate_get, slim_rx_sample_rate_put),
-	SOC_ENUM_EXT("SLIM_2_RX SampleRate", slim_2_rx_sample_rate,
-			slim_rx_sample_rate_get, slim_rx_sample_rate_put),
-	SOC_ENUM_EXT("SLIM_0_TX SampleRate", slim_0_tx_sample_rate,
-			slim_tx_sample_rate_get, slim_tx_sample_rate_put),
-	SOC_ENUM_EXT("SLIM_5_RX SampleRate", slim_5_rx_sample_rate,
-			slim_rx_sample_rate_get, slim_rx_sample_rate_put),
-	SOC_ENUM_EXT("SLIM_6_RX SampleRate", slim_6_rx_sample_rate,
-			slim_rx_sample_rate_get, slim_rx_sample_rate_put),
-	SOC_ENUM_EXT("BT SampleRate", bt_sample_rate,
-			msm_bt_sample_rate_get,
-			msm_bt_sample_rate_put),
-	SOC_ENUM_EXT("BT SampleRate RX", bt_sample_rate_rx,
-			msm_bt_sample_rate_rx_get,
-			msm_bt_sample_rate_rx_put),
-	SOC_ENUM_EXT("BT SampleRate TX", bt_sample_rate_tx,
-			msm_bt_sample_rate_tx_get,
-			msm_bt_sample_rate_tx_put),
-	SOC_ENUM_EXT("USB_AUDIO_RX SampleRate", usb_rx_sample_rate,
-			usb_audio_rx_sample_rate_get,
-			usb_audio_rx_sample_rate_put),
-	SOC_ENUM_EXT("USB_AUDIO_TX SampleRate", usb_tx_sample_rate,
-			usb_audio_tx_sample_rate_get,
-			usb_audio_tx_sample_rate_put),
-	SOC_ENUM_EXT("Display Port RX SampleRate", ext_disp_rx_sample_rate,
-			ext_disp_rx_sample_rate_get,
-			ext_disp_rx_sample_rate_put),
-	SOC_ENUM_EXT("PRI_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
-			tdm_rx_sample_rate_get,
-			tdm_rx_sample_rate_put),
-	SOC_ENUM_EXT("PRI_TDM_TX_0 SampleRate", tdm_tx_sample_rate,
-			tdm_tx_sample_rate_get,
-			tdm_tx_sample_rate_put),
-	SOC_ENUM_EXT("PRI_TDM_RX_0 Format", tdm_rx_format,
-			tdm_rx_format_get,
-			tdm_rx_format_put),
-	SOC_ENUM_EXT("PRI_TDM_TX_0 Format", tdm_tx_format,
-			tdm_tx_format_get,
-			tdm_tx_format_put),
-	SOC_ENUM_EXT("PRI_TDM_RX_0 Channels", tdm_rx_chs,
-			tdm_rx_ch_get,
-			tdm_rx_ch_put),
-	SOC_ENUM_EXT("PRI_TDM_TX_0 Channels", tdm_tx_chs,
-			tdm_tx_ch_get,
-			tdm_tx_ch_put),
-	SOC_ENUM_EXT("SEC_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
-			tdm_rx_sample_rate_get,
-			tdm_rx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_TDM_TX_0 SampleRate", tdm_tx_sample_rate,
-			tdm_tx_sample_rate_get,
-			tdm_tx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_TDM_RX_0 Format", tdm_rx_format,
-			tdm_rx_format_get,
-			tdm_rx_format_put),
-	SOC_ENUM_EXT("SEC_TDM_TX_0 Format", tdm_tx_format,
-			tdm_tx_format_get,
-			tdm_tx_format_put),
-	SOC_ENUM_EXT("SEC_TDM_RX_0 Channels", tdm_rx_chs,
-			tdm_rx_ch_get,
-			tdm_rx_ch_put),
-	SOC_ENUM_EXT("SEC_TDM_TX_0 Channels", tdm_tx_chs,
-			tdm_tx_ch_get,
-			tdm_tx_ch_put),
-	SOC_ENUM_EXT("TERT_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
-			tdm_rx_sample_rate_get,
-			tdm_rx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_TDM_TX_0 SampleRate", tdm_tx_sample_rate,
-			tdm_tx_sample_rate_get,
-			tdm_tx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_TDM_RX_0 Format", tdm_rx_format,
-			tdm_rx_format_get,
-			tdm_rx_format_put),
-	SOC_ENUM_EXT("TERT_TDM_TX_0 Format", tdm_tx_format,
-			tdm_tx_format_get,
-			tdm_tx_format_put),
-	SOC_ENUM_EXT("TERT_TDM_RX_0 Channels", tdm_rx_chs,
-			tdm_rx_ch_get,
-			tdm_rx_ch_put),
-	SOC_ENUM_EXT("TERT_TDM_TX_0 Channels", tdm_tx_chs,
-			tdm_tx_ch_get,
-			tdm_tx_ch_put),
-	SOC_ENUM_EXT("QUAT_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
-			tdm_rx_sample_rate_get,
-			tdm_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_TDM_TX_0 SampleRate", tdm_tx_sample_rate,
-			tdm_tx_sample_rate_get,
-			tdm_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_TDM_RX_0 Format", tdm_rx_format,
-			tdm_rx_format_get,
-			tdm_rx_format_put),
-	SOC_ENUM_EXT("QUAT_TDM_TX_0 Format", tdm_tx_format,
-			tdm_tx_format_get,
-			tdm_tx_format_put),
-	SOC_ENUM_EXT("QUAT_TDM_RX_0 Channels", tdm_rx_chs,
-			tdm_rx_ch_get,
-			tdm_rx_ch_put),
-	SOC_ENUM_EXT("QUAT_TDM_TX_0 Channels", tdm_tx_chs,
-			tdm_tx_ch_get,
-			tdm_tx_ch_put),
-	SOC_ENUM_EXT("QUIN_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
-			tdm_rx_sample_rate_get,
-			tdm_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_TDM_TX_0 SampleRate", tdm_tx_sample_rate,
-			tdm_tx_sample_rate_get,
-			tdm_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_TDM_RX_0 Format", tdm_rx_format,
-			tdm_rx_format_get,
-			tdm_rx_format_put),
-	SOC_ENUM_EXT("QUIN_TDM_TX_0 Format", tdm_tx_format,
-			tdm_tx_format_get,
-			tdm_tx_format_put),
-	SOC_ENUM_EXT("QUIN_TDM_RX_0 Channels", tdm_rx_chs,
-			tdm_rx_ch_get,
-			tdm_rx_ch_put),
-	SOC_ENUM_EXT("QUIN_TDM_TX_0 Channels", tdm_tx_chs,
-			tdm_tx_ch_get,
-			tdm_tx_ch_put),
-	SOC_ENUM_EXT("PRIM_AUX_PCM_RX SampleRate", prim_aux_pcm_rx_sample_rate,
-			aux_pcm_rx_sample_rate_get,
-			aux_pcm_rx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_AUX_PCM_RX SampleRate", sec_aux_pcm_rx_sample_rate,
-			aux_pcm_rx_sample_rate_get,
-			aux_pcm_rx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_AUX_PCM_RX SampleRate", tert_aux_pcm_rx_sample_rate,
-			aux_pcm_rx_sample_rate_get,
-			aux_pcm_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_AUX_PCM_RX SampleRate", quat_aux_pcm_rx_sample_rate,
-			aux_pcm_rx_sample_rate_get,
-			aux_pcm_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_AUX_PCM_RX SampleRate", quin_aux_pcm_rx_sample_rate,
-			aux_pcm_rx_sample_rate_get,
-			aux_pcm_rx_sample_rate_put),
-	SOC_ENUM_EXT("PRIM_AUX_PCM_TX SampleRate", prim_aux_pcm_tx_sample_rate,
-			aux_pcm_tx_sample_rate_get,
-			aux_pcm_tx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_AUX_PCM_TX SampleRate", sec_aux_pcm_tx_sample_rate,
-			aux_pcm_tx_sample_rate_get,
-			aux_pcm_tx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_AUX_PCM_TX SampleRate", tert_aux_pcm_tx_sample_rate,
-			aux_pcm_tx_sample_rate_get,
-			aux_pcm_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_AUX_PCM_TX SampleRate", quat_aux_pcm_tx_sample_rate,
-			aux_pcm_tx_sample_rate_get,
-			aux_pcm_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_AUX_PCM_TX SampleRate", quin_aux_pcm_tx_sample_rate,
-			aux_pcm_tx_sample_rate_get,
-			aux_pcm_tx_sample_rate_put),
-	SOC_ENUM_EXT("PRIM_MI2S_RX SampleRate", prim_mi2s_rx_sample_rate,
-			mi2s_rx_sample_rate_get,
-			mi2s_rx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_MI2S_RX SampleRate", sec_mi2s_rx_sample_rate,
-			mi2s_rx_sample_rate_get,
-			mi2s_rx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_MI2S_RX SampleRate", tert_mi2s_rx_sample_rate,
-			mi2s_rx_sample_rate_get,
-			mi2s_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_MI2S_RX SampleRate", quat_mi2s_rx_sample_rate,
-			mi2s_rx_sample_rate_get,
-			mi2s_rx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_MI2S_RX SampleRate", quin_mi2s_rx_sample_rate,
-			mi2s_rx_sample_rate_get,
-			mi2s_rx_sample_rate_put),
-	SOC_ENUM_EXT("PRIM_MI2S_TX SampleRate", prim_mi2s_tx_sample_rate,
-			mi2s_tx_sample_rate_get,
-			mi2s_tx_sample_rate_put),
-	SOC_ENUM_EXT("SEC_MI2S_TX SampleRate", sec_mi2s_tx_sample_rate,
-			mi2s_tx_sample_rate_get,
-			mi2s_tx_sample_rate_put),
-	SOC_ENUM_EXT("TERT_MI2S_TX SampleRate", tert_mi2s_tx_sample_rate,
-			mi2s_tx_sample_rate_get,
-			mi2s_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUAT_MI2S_TX SampleRate", quat_mi2s_tx_sample_rate,
-			mi2s_tx_sample_rate_get,
-			mi2s_tx_sample_rate_put),
-	SOC_ENUM_EXT("QUIN_MI2S_TX SampleRate", quin_mi2s_tx_sample_rate,
-			mi2s_tx_sample_rate_get,
-			mi2s_tx_sample_rate_put),
-	SOC_ENUM_EXT("PRIM_MI2S_RX Channels", prim_mi2s_rx_chs,
-			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("PRIM_MI2S_TX Channels", prim_mi2s_tx_chs,
-			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("SEC_MI2S_RX Channels", sec_mi2s_rx_chs,
-			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("SEC_MI2S_TX Channels", sec_mi2s_tx_chs,
-			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("TERT_MI2S_RX Channels", tert_mi2s_rx_chs,
-			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("TERT_MI2S_TX Channels", tert_mi2s_tx_chs,
-			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("QUAT_MI2S_RX Channels", quat_mi2s_rx_chs,
-			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("QUAT_MI2S_TX Channels", quat_mi2s_tx_chs,
-			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("QUIN_MI2S_RX Channels", quin_mi2s_rx_chs,
-			msm_mi2s_rx_ch_get, msm_mi2s_rx_ch_put),
-	SOC_ENUM_EXT("QUIN_MI2S_TX Channels", quin_mi2s_tx_chs,
-			msm_mi2s_tx_ch_get, msm_mi2s_tx_ch_put),
-	SOC_ENUM_EXT("PRIM_MI2S_RX Format", mi2s_rx_format,
-			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
-	SOC_ENUM_EXT("PRIM_MI2S_TX Format", mi2s_tx_format,
-			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
-	SOC_ENUM_EXT("SEC_MI2S_RX Format", mi2s_rx_format,
-			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
-	SOC_ENUM_EXT("SEC_MI2S_TX Format", mi2s_tx_format,
-			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
-	SOC_ENUM_EXT("TERT_MI2S_RX Format", mi2s_rx_format,
-			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
-	SOC_ENUM_EXT("TERT_MI2S_TX Format", mi2s_tx_format,
-			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
-	SOC_ENUM_EXT("QUAT_MI2S_RX Format", mi2s_rx_format,
-			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
-	SOC_ENUM_EXT("QUAT_MI2S_TX Format", mi2s_tx_format,
-			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
-	SOC_ENUM_EXT("QUIN_MI2S_RX Format", mi2s_rx_format,
-			msm_mi2s_rx_format_get, msm_mi2s_rx_format_put),
-	SOC_ENUM_EXT("QUIN_MI2S_TX Format", mi2s_tx_format,
-			msm_mi2s_tx_format_get, msm_mi2s_tx_format_put),
-	SOC_ENUM_EXT("PRIM_AUX_PCM_RX Format", aux_pcm_rx_format,
-			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
-	SOC_ENUM_EXT("PRIM_AUX_PCM_TX Format", aux_pcm_tx_format,
-			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
-	SOC_ENUM_EXT("SEC_AUX_PCM_RX Format", aux_pcm_rx_format,
-			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
-	SOC_ENUM_EXT("SEC_AUX_PCM_TX Format", aux_pcm_tx_format,
-			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
-	SOC_ENUM_EXT("TERT_AUX_PCM_RX Format", aux_pcm_rx_format,
-			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
-	SOC_ENUM_EXT("TERT_AUX_PCM_TX Format", aux_pcm_tx_format,
-			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
-	SOC_ENUM_EXT("QUAT_AUX_PCM_RX Format", aux_pcm_rx_format,
-			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
-	SOC_ENUM_EXT("QUAT_AUX_PCM_TX Format", aux_pcm_tx_format,
-			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
-	SOC_ENUM_EXT("QUIN_AUX_PCM_RX Format", aux_pcm_rx_format,
-			msm_aux_pcm_rx_format_get, msm_aux_pcm_rx_format_put),
-	SOC_ENUM_EXT("QUIN_AUX_PCM_TX Format", aux_pcm_tx_format,
-			msm_aux_pcm_tx_format_get, msm_aux_pcm_tx_format_put),
-	SOC_ENUM_EXT("HiFi Function", hifi_function, msm_hifi_get,
-			msm_hifi_put),
-
-};
 
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_component *component,
 					int enable, bool dapm)
@@ -3247,6 +757,7 @@ static const struct snd_soc_dapm_widget msm_dapm_widgets_tavil[] = {
 	SND_SOC_DAPM_MIC("Digital Mic5", NULL),
 };
 
+#if 0
 static inline int param_is_mask(int p)
 {
 	return (p >= SNDRV_PCM_HW_PARAM_FIRST_MASK) &&
@@ -3326,18 +837,18 @@ static int msm_ext_disp_get_idx_from_beid(int32_t be_id)
 
 	return idx;
 }
+#endif
 
 static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				struct snd_pcm_hw_params *params)
 {
+	int rc = 0;
+#if 0
 	struct snd_soc_dai_link *dai_link = rtd->dai_link;
 	struct snd_interval *rate = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_RATE);
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
-
-	int rc = 0;
 	int idx;
 	void *config = NULL;
 	struct snd_soc_component *component = NULL;
@@ -3718,6 +1229,7 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	}
 
 done:
+#endif
 	return rc;
 }
 
@@ -3772,6 +1284,7 @@ static bool msm_swap_gnd_mic(struct snd_soc_component *component, bool active)
 	return ret;
 }
 
+#if 0
 static int msm_afe_set_config(struct snd_soc_component *component)
 {
 	int ret = 0;
@@ -3826,11 +1339,13 @@ static void msm_afe_clear_config(void)
 	afe_clear_config(AFE_CDC_REGISTERS_CONFIG);
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
 }
+#endif
 
 static int msm_adsp_power_up_config(struct snd_soc_component *component,
 				    struct snd_card *card)
 {
 	int ret = 0;
+#if 0
 	unsigned long timeout;
 	int adsp_ready = 0;
 	bool snd_card_online = 0;
@@ -3877,6 +1392,7 @@ static int msm_adsp_power_up_config(struct snd_soc_component *component,
 	return 0;
 
 err:
+#endif
 	return ret;
 }
 
@@ -3893,6 +1409,7 @@ static void msm_adsp_power_up_config_work(struct work_struct *work)
 	msm_adsp_power_up_config(component, card);
 }
 
+#if 0
 static int sm8150_notifier_service_cb(struct notifier_block *this,
 					 unsigned long opcode, void *ptr)
 {
@@ -3954,7 +1471,7 @@ static struct notifier_block service_nb = {
 	.notifier_call  = sm8150_notifier_service_cb,
 	.priority = -INT_MAX,
 };
-
+#endif
 static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 {
 	int ret = 0;
@@ -3984,7 +1501,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	pr_debug("%s: dev_name:%s\n", __func__, dev_name(cpu_dai->dev));
 
 	rtd->pmdown_time = 0;
-
+#if 0
 	component = snd_soc_rtdcom_lookup(rtd, "tavil_codec");
 	if (!component) {
 		pr_err("%s: component is NULL\n", __func__);
@@ -3999,6 +1516,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 			__func__, ret);
 		return ret;
 	}
+#endif
 
 	snd_soc_dapm_new_controls(dapm, msm_dapm_widgets_tavil,
 			ARRAY_SIZE(msm_dapm_widgets_tavil));
@@ -4041,6 +1559,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dai_set_channel_map(codec_dai, ARRAY_SIZE(tx_ch),
 				    tx_ch, ARRAY_SIZE(rx_ch), rx_ch);
 
+#if 0
 	if (!strcmp(dev_name(codec_dai->dev), "tavil_codec"))
 		msm_codec_fn.get_afe_config_fn = tavil_get_afe_config;
 
@@ -4060,7 +1579,7 @@ static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
 			goto err;
 		}
 	}
-
+#endif
 	/*
 	 * Send speaker configuration only for WSA8810.
 	 * Default configuration is for WSA8815.
@@ -4103,6 +1622,7 @@ err:
 	return ret;
 }
 
+#if 0
 static int msm_wcn_init(struct snd_soc_pcm_runtime *rtd)
 {
 	unsigned int rx_ch[WCN_CDC_SLIM_RX_CH_MAX] = {157, 158};
@@ -4112,6 +1632,7 @@ static int msm_wcn_init(struct snd_soc_pcm_runtime *rtd)
 	return snd_soc_dai_set_channel_map(codec_dai, ARRAY_SIZE(tx_ch),
 					   tx_ch, ARRAY_SIZE(rx_ch), rx_ch);
 }
+#endif
 
 static void *def_wcd_mbhc_cal(void)
 {
@@ -4150,6 +1671,7 @@ static void *def_wcd_mbhc_cal(void)
 static int msm_snd_hw_params(struct snd_pcm_substream *substream,
 			     struct snd_pcm_hw_params *params)
 {
+#if 0
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
@@ -4228,8 +1750,11 @@ static int msm_snd_hw_params(struct snd_pcm_substream *substream,
 
 err:
 	return ret;
+#endif
+	return 0;
 }
 
+#if 0
 static int msm_slimbus_2_hw_params(struct snd_pcm_substream *substream,
 					  struct snd_pcm_hw_params *params)
 {
@@ -4361,6 +1886,7 @@ static int msm_get_port_id(int be_id)
 
 	return afe_port_id;
 }
+#endif
 
 static u32 get_mi2s_bits_per_sample(u32 bit_format)
 {
@@ -4406,7 +1932,7 @@ static int msm_mi2s_set_sclk(struct snd_pcm_substream *substream, bool enable)
 	int port_id = 0;
 	int index = cpu_dai->id;
 
-	port_id = msm_get_port_id(rtd->dai_link->id);
+//	port_id = msm_get_port_id(rtd->dai_link->id);
 	if (port_id < 0) {
 		dev_err(rtd->card->dev, "%s: Invalid port_id\n", __func__);
 		ret = port_id;
@@ -4419,12 +1945,11 @@ static int msm_mi2s_set_sclk(struct snd_pcm_substream *substream, bool enable)
 			mi2s_clk[index].clk_freq_in_hz);
 	}
 
-	mi2s_clk[index].enable = enable;
-	ret = afe_set_lpass_clock_v2(port_id,
-				     &mi2s_clk[index]);
+//	mi2s_clk[index].enable = enable;
+	ret = audio_prm_set_lpass_clk_cfg(&mi2s_clk[index], enable);
 	if (ret < 0) {
 		dev_err(rtd->card->dev,
-			"%s: afe lpass clock failed for port 0x%x , err:%d\n",
+			"%s: prm set lpass clock failed for port 0x%x , err:%d\n",
 			__func__, port_id, ret);
 		goto err;
 	}
@@ -4592,6 +2117,7 @@ err:
 	return -EINVAL;
 }
 
+#if 0
 static int msm_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				      struct snd_pcm_hw_params *params)
 {
@@ -4818,6 +2344,7 @@ static int msm_fe_qos_prepare(struct snd_pcm_substream *substream)
 static struct snd_soc_ops msm_fe_qos_ops = {
 	.prepare = msm_fe_qos_prepare,
 };
+#endif
 
 static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 {
@@ -4931,6 +2458,7 @@ static struct snd_soc_ops msm_be_ops = {
 	.hw_params = msm_snd_hw_params,
 };
 
+#if 0
 static struct snd_soc_ops msm_slimbus_2_be_ops = {
 	.hw_params = msm_slimbus_2_hw_params,
 };
@@ -4938,11 +2466,12 @@ static struct snd_soc_ops msm_slimbus_2_be_ops = {
 static struct snd_soc_ops msm_wcn_ops = {
 	.hw_params = msm_wcn_hw_params,
 };
-
+#endif
 
 /* Digital audio interface glue - connects codec <---> CPU */
 static struct snd_soc_dai_link msm_common_dai_links[] = {
 	/* FrontEnd DAI Links */
+#if 0
 	{
 		.name = MSM_DAILINK_NAME(Media1),
 		.stream_name = "MultiMedia1",
@@ -6412,10 +3941,12 @@ static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
 	},
+#endif
 };
 
 static struct snd_soc_dai_link msm_tavil_dai_links[
-			 ARRAY_SIZE(msm_common_dai_links) +
+			 ARRAY_SIZE(msm_common_dai_links)];
+#if 0
 			 ARRAY_SIZE(msm_tavil_fe_dai_links) +
 			 ARRAY_SIZE(msm_common_misc_fe_dai_links) +
 			 ARRAY_SIZE(msm_common_be_dai_links) +
@@ -6424,6 +3955,7 @@ static struct snd_soc_dai_link msm_tavil_dai_links[
 			 ARRAY_SIZE(ext_disp_be_dai_link) +
 			 ARRAY_SIZE(msm_mi2s_be_dai_links) +
 			 ARRAY_SIZE(msm_auxpcm_be_dai_links)];
+#endif
 
 static int msm_snd_card_tavil_late_probe(struct snd_soc_card *card)
 {
@@ -6563,6 +4095,7 @@ err:
 
 static int msm_audrx_stub_init(struct snd_soc_pcm_runtime *rtd)
 {
+#if 0
 	int ret = 0;
 	struct snd_soc_component *component =
 			snd_soc_rtdcom_lookup(rtd, "msm-stub-codec");
@@ -6579,7 +4112,7 @@ static int msm_audrx_stub_init(struct snd_soc_pcm_runtime *rtd)
 			__func__, ret);
 		return ret;
 	}
-
+#endif
 	return 0;
 }
 
@@ -6700,8 +4233,8 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 	int len_1, len_2, len_3, len_4;
 	int total_links;
 	const struct of_device_id *match;
-	int ret = 0;
-	u32 val = 0;
+//	int ret = 0;
+//	u32 val = 0;
 
 	match = of_match_node(sm8150_asoc_machine_of_match, dev->of_node);
 	if (!match) {
@@ -6712,6 +4245,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 
 	if (!strcmp(match->data, "tavil_codec")) {
 		card = &snd_soc_card_tavil_msm;
+#if 0
 		len_1 = ARRAY_SIZE(msm_common_dai_links);
 		len_2 = len_1 + ARRAY_SIZE(msm_tavil_fe_dai_links);
 		len_3 = len_2 + ARRAY_SIZE(msm_common_misc_fe_dai_links);
@@ -6771,6 +4305,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 			sizeof(msm_auxpcm_be_dai_links));
 			total_links += ARRAY_SIZE(msm_auxpcm_be_dai_links);
 		}
+#endif
 		dailink = msm_tavil_dai_links;
 	} else if (!strcmp(match->data, "stub_codec")) {
 		card = &snd_soc_card_stub_msm;
@@ -7216,12 +4751,14 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	}
 
 	msm_i2s_auxpcm_init(pdev);
+#if 0
 	is_initial_boot = true;
 	ret = audio_notifier_register("sm8150", AUDIO_NOTIFIER_ADSP_DOMAIN,
 				      &service_nb);
 	if (ret < 0)
 		pr_err("%s: Audio notifier register failed ret = %d\n",
 			__func__, ret);
+#endif
 
 	return 0;
 err:
@@ -7232,7 +4769,7 @@ err:
 
 static int msm_asoc_machine_remove(struct platform_device *pdev)
 {
-	audio_notifier_deregister("sm8150");
+//	audio_notifier_deregister("sm8150");
 	msm_i2s_auxpcm_deinit();
 
 	msm_release_pinctrl(pdev);
