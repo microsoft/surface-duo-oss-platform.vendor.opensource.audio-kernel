@@ -99,9 +99,7 @@ static int voice_send_cvp_topology_commit_cmd(struct voice_data *v);
 static int voice_send_cvp_channel_info_cmd(struct voice_data *v);
 static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 					  uint32_t param_type);
-#ifndef CONFIG_SND_SOC_MDM9607
 static int voice_get_avcs_version_per_service(uint32_t service_id);
-#endif
 
 static void voice_load_topo_modules(int cal_index);
 static void voice_unload_topo_modules(void);
@@ -4294,7 +4292,6 @@ static int voice_send_cvp_mfc_config_cmd(struct voice_data *v)
 	return ret;
 }
 
-#ifndef CONFIG_SND_SOC_MDM9607
 static int voice_get_avcs_version_per_service(uint32_t service_id)
 {
 	int ret = 0;
@@ -4323,7 +4320,6 @@ done:
 	kfree(ver_info);
 	return ret;
 }
-#endif
 
 static void voice_mic_break_work_fn(struct work_struct *work)
 {
@@ -4354,38 +4350,39 @@ static int voice_setup_vocproc(struct voice_data *v)
 		goto fail;
 	}
 
-#ifndef CONFIG_SND_SOC_MDM9607
-	if (common.is_avcs_version_queried == false)
-		common.cvp_version = voice_get_avcs_version_per_service(
-				     APRV2_IDS_SERVICE_ID_ADSP_CVP_V);
+	if (voice_get_cvd_int_version(common.cvd_version) !=
+			CVD_INT_VERSION_2_3) {
+		if (common.is_avcs_version_queried == false)
+			common.cvp_version = voice_get_avcs_version_per_service(
+					APRV2_IDS_SERVICE_ID_ADSP_CVP_V);
 
-	if (common.cvp_version < 0) {
-		pr_err("%s: Invalid CVP version %d\n",
-		       __func__, common.cvp_version);
-		ret = -EINVAL;
-		goto fail;
-	}
-	pr_debug("%s: CVP Version %d\n", __func__, common.cvp_version);
-
-	ret = voice_send_cvp_media_fmt_info_cmd(v);
-	if (ret < 0) {
-		pr_err("%s: Set media format info failed err:%d\n", __func__,
-		       ret);
-		goto fail;
-	}
-
-	/* Send MFC config only when the no of channels are more than 1 */
-	if (v->dev_rx.no_of_channels > NUM_CHANNELS_MONO) {
-		ret = voice_send_cvp_mfc_config_cmd(v);
-		if (ret < 0) {
-			pr_warn("%s: Set mfc config failed err:%d\n",
-				__func__, ret);
+		if (common.cvp_version < 0) {
+			pr_err("%s: Invalid CVP version %d\n",
+					__func__, common.cvp_version);
+			ret = -EINVAL;
+			goto fail;
 		}
-	}
+		pr_debug("%s: CVP Version %d\n", __func__, common.cvp_version);
 
-	mod_inst_info.module_id = MODULE_ID_VOICE_MODULE_ST;
-	mod_inst_info.instance_id = INSTANCE_ID_0;
-#endif
+		ret = voice_send_cvp_media_fmt_info_cmd(v);
+		if (ret < 0) {
+			pr_err("%s: Set media format info failed err:%d\n", __func__,
+					ret);
+			goto fail;
+		}
+
+		/* Send MFC config only when the no of channels are more than 1 */
+		if (v->dev_rx.no_of_channels > NUM_CHANNELS_MONO) {
+			ret = voice_send_cvp_mfc_config_cmd(v);
+			if (ret < 0) {
+				pr_warn("%s: Set mfc config failed err:%d\n",
+						__func__, ret);
+			}
+		}
+
+		mod_inst_info.module_id = MODULE_ID_VOICE_MODULE_ST;
+		mod_inst_info.instance_id = INSTANCE_ID_0;
+	}
 
 	ret = voice_send_cvp_topology_commit_cmd(v);
 	if (ret < 0) {
@@ -4544,6 +4541,10 @@ done:
 static int voice_send_cvp_media_fmt_info_cmd(struct voice_data *v)
 {
 	int ret = 0;
+
+	if (voice_get_cvd_int_version(common.cvd_version) ==
+			CVD_INT_VERSION_2_3)
+		goto done;
 
 	if (common.cvp_version < CVP_VERSION_2)
 		ret = voice_send_cvp_device_channels_cmd(v);
@@ -10048,6 +10049,7 @@ int __init voice_init(void)
 
 	if (rc == 0)
 		module_initialized = true;
+	voc_get_cvd_version(common.cvd_version);
 
 	pr_debug("%s: rc=%d\n", __func__, rc);
 	return rc;
