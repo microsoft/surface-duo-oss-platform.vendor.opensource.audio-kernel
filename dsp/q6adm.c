@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -614,6 +614,17 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 		pr_err("%s: Invalid port_id %#x\n", __func__, port_id);
 		return -EINVAL;
 	}
+
+	/*
+	 * check if PSPD is already configured
+	 * if it is configured already, return 0 without applying PSPD.
+	 */
+	if (atomic_read(&this_adm.copp.cnt[port_idx][copp_idx]) > 1) {
+		pr_debug("%s: copp.cnt:%#x\n", __func__,
+			atomic_read(&this_adm.copp.cnt[port_idx][copp_idx]));
+		return 0;
+	}
+
 	/*
 	 * First 8 bytes are 4 bytes as rule number, 2 bytes as output
 	 * channel and 2 bytes as input channel.
@@ -5370,6 +5381,10 @@ done:
 }
 EXPORT_SYMBOL(adm_get_sound_focus);
 
+/**
+ * address returned for fd i/p is physical and for sharing
+ * physical address with ADSP, SID bit is not set in this function.
+ */
 int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
 				   int port_id, int copp_idx)
 {
@@ -5388,7 +5403,7 @@ int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
 		return ret;
 	}
 	params.shm_buf_addr_lsw    = lower_32_bits(paddr);
-	params.shm_buf_addr_msw    = msm_audio_populate_upper_32_bits(paddr);
+	params.shm_buf_addr_msw    = upper_32_bits(paddr);
 	params.buf_size            = pa_len;
 	params.shm_buf_num_regions = 1;
 	params.shm_buf_mem_pool_id = ADSP_MEMORY_MAP_SHMEM8_4K_POOL;
