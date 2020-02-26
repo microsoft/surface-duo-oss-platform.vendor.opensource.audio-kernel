@@ -191,8 +191,6 @@ struct sdx_wsa881x_dev_info {
 };
 
 static void *def_tavil_mbhc_cal(void);
-static void *adsp_state_notifier;
-static bool dummy_device_registered;
 
 static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.read_fw_bin = false,
@@ -3726,6 +3724,7 @@ static int sdx_asoc_machine_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 	struct sdx_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
+	snd_event_master_deregister(&pdev->dev);
 	pdata->mclk_freq = 0;
 	gpio_free(pdata->hph_en1_gpio);
 	gpio_free(pdata->hph_en0_gpio);
@@ -3749,55 +3748,20 @@ static struct platform_driver sdx_asoc_machine_driver = {
 	.remove = sdx_asoc_machine_remove,
 };
 
-static int dummy_machine_probe(struct platform_device *pdev)
-{
-	return 0;
-}
-
-static int dummy_machine_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
-static struct platform_device dummy_machine_device = {
-	.name = "dummymachinedriver",
-};
-
-static struct platform_driver sdx_asoc_machine_dummy_driver = {
-	.driver = {
-		.name = "dummymachinedriver",
-		.owner = THIS_MODULE,
-	},
-	.probe = dummy_machine_probe,
-	.remove = dummy_machine_remove,
-};
-
-static int  sdx_adsp_state_callback(struct notifier_block *nb,
-					unsigned long value, void *priv)
-{
-	if (!dummy_device_registered && SUBSYS_AFTER_POWERUP == value) {
-		platform_driver_register(&sdx_asoc_machine_dummy_driver);
-		platform_device_register(&dummy_machine_device);
-		dummy_device_registered = true;
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block adsp_state_notifier_block = {
-	.notifier_call = sdx_adsp_state_callback,
-	.priority = -INT_MAX,
-};
-
 static int __init sdx_soc_platform_init(void)
 {
-	adsp_state_notifier = subsys_notif_register_notifier("modem",
-						&adsp_state_notifier_block);
 	platform_driver_register(&sdx_asoc_machine_driver);
 	return 0;
 }
 
 module_init(sdx_soc_platform_init);
+
+static void sdx_soc_platform_exit(void)
+{
+	platform_driver_unregister(&sdx_asoc_machine_driver);
+}
+
+module_exit(sdx_soc_platform_exit);
 
 MODULE_DESCRIPTION("ALSA SoC sdx");
 MODULE_LICENSE("GPL v2");
