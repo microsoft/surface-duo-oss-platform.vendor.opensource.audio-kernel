@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1760,8 +1760,6 @@ static int msm_sdw_notifier_service_cb(struct notifier_block *nb,
 		msm_sdw->int_mclk1_enabled = false;
 		msm_sdw->dev_up = false;
 		mutex_unlock(&msm_sdw->cdc_int_mclk1_mutex);
-		snd_soc_card_change_online_state(
-			msm_sdw->codec->component.card, 0);
 		for (i = 0; i < msm_sdw->nr; i++)
 			swrm_wcd_notify(msm_sdw->sdw_ctrl_data[i].sdw_pdev,
 					SWR_DEVICE_DOWN, NULL);
@@ -1798,8 +1796,6 @@ powerup:
 			regcache_sync(msm_sdw->regmap);
 			msm_sdw_set_spkr_mode(msm_sdw->codec,
 					      msm_sdw->spkr_mode);
-			snd_soc_card_change_online_state(
-				msm_sdw->codec->component.card, 1);
 		}
 		break;
 	default:
@@ -1965,8 +1961,7 @@ static int msm_sdw_probe(struct platform_device *pdev)
 	int adsp_state;
 
 	adsp_state = apr_get_subsys_state();
-	if (adsp_state != APR_SUBSYS_LOADED ||
-		!q6core_is_adsp_ready()) {
+	if (adsp_state != APR_SUBSYS_LOADED) {
 		dev_err(&pdev->dev, "Adsp is not loaded yet %d\n",
 				adsp_state);
 		return -EPROBE_DEFER;
