@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -3150,10 +3150,26 @@ int q6asm_open_read_compressed(struct audio_client *ac, uint32_t format,
 		open.mode_flags = 0x1;
 		open.frames_per_buf = 1;
 		pr_debug("%s: Flag 1 IEC61937 output\n", __func__);
+	} else if (format == FORMAT_DSD) {
+		open.mode_flags = ASM_DSD_FORMAT_FLAG;
+		open.frames_per_buf = 1;
+		pr_debug("%s: Flag 2 DSD output\n", __func__);
 	} else {
 		open.mode_flags = 0;
 		open.frames_per_buf = 1;
 		pr_debug("%s: Flag 0 RAW_COMPR output\n", __func__);
+	}
+
+	if (ac->perf_mode == LOW_LATENCY_PCM_MODE) {
+		open.mode_flags |= ASM_LOW_LATENCY_TX_STREAM_SESSION <<
+			ASM_SHIFT_STREAM_PERF_MODE_FLAG_IN_OPEN_READ;
+		pr_debug("%s: Perf mode is enabled, flags 0x%x\n",
+			__func__, open.mode_flags);
+	} else {
+		open.mode_flags |= ASM_LEGACY_STREAM_SESSION <<
+			ASM_SHIFT_STREAM_PERF_MODE_FLAG_IN_OPEN_READ;
+		pr_debug("%s: Perf mode is disabled, flags 0x%x\n",
+			__func__, open.mode_flags);
 	}
 
 	rc = apr_send_pkt(ac->apr, (uint32_t *) &open);
