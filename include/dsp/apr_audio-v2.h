@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1393,6 +1393,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define RT_PROXY_PORT_001_RX	0x2000
 #define RT_PROXY_PORT_001_TX	0x2001
 #define AFE_LOOPBACK_TX	0x6001
+#define HDMI_RX_MS			0x6002
 #define DISPLAY_PORT_RX	0x6020
 
 #define AFE_LANE_MASK_INVALID 0
@@ -1599,6 +1600,8 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_SLIMBUS_MULTI_CHAN_9_RX      0x4012
 /* SLIMbus Tx port on channel 9. */
 #define AFE_PORT_ID_SLIMBUS_MULTI_CHAN_9_TX      0x4013
+/*AFE Rx port for audio over hdmi*/
+#define AFE_PORT_ID_HDMI_MS					0x6002
 /* AFE Rx port for audio over Display port */
 #define AFE_PORT_ID_HDMI_OVER_DP_RX              0x6020
 /*USB AFE port */
@@ -11759,6 +11762,35 @@ struct afe_clk_cfg {
 #define AFE_PARAM_ID_LPAIF_CLK_CONFIG	0x00010238
 #define AFE_MODULE_CLOCK_SET		0x0001028F
 #define AFE_PARAM_ID_CLOCK_SET		0x00010290
+
+struct afe_set_clk_drift {
+	/*
+	 * Clock ID
+	 *	@values
+	 *	- 0x100 to 0x10E
+	 *	- 0x200 to 0x20C
+	 *	- 0x500 to 0x505
+	 */
+	uint32_t clk_id;
+
+	/*
+	 * Clock drift  (in PPB) to be set.
+	 *	@values
+	 *	- need to get values from DSP team
+	 */
+	int32_t clk_drift;
+
+	/*
+	 * Clock rest.
+	 *	@values
+	 *	- 1 -- Reset PLL with the original frequency
+	 *	- 0 -- Adjust the clock with the clk drift value
+	 */
+	uint32_t clk_reset;
+} __packed;
+
+/* This param id is used to adjust audio interface PLL*/
+#define AFE_PARAM_ID_CLOCK_ADJUST       0x000102C6
 
 enum afe_lpass_digital_clk_src {
 	Q6AFE_LPASS_DIGITAL_ROOT_INVALID,
