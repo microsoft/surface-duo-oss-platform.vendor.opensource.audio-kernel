@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -314,7 +314,6 @@ static int msm_audio_ion_smmu_map(void *handle,
 	struct msm_audio_smmu_vm_map_cmd_rsp cmd_rsp;
 	struct msm_audio_alloc_data *alloc_data = NULL;
 	unsigned long delay = jiffies + (HZ / 2);
-	void *vaddr;
 
 	*len = ((struct dma_buf*)handle)->size;
 
@@ -323,14 +322,13 @@ static int msm_audio_ion_smmu_map(void *handle,
 			    list) {
 		if (alloc_data->handle == handle) {
 			found = true;
-			vaddr = alloc_data->vaddr;
 
 			/* Export the buffer to physical VM */
-			rc = habmm_export(msm_audio_ion_hab_handle, vaddr, *len,
-				&export_id, 0);
+			rc = habmm_export(msm_audio_ion_hab_handle, handle, *len,
+				&export_id, HABMM_EXPIMP_FLAGS_DMABUF);
 			if (rc) {
-				pr_err("%s: habmm_export failed vaddr = %pK, len = %zd, rc = %d\n",
-					__func__, vaddr, *len, rc);
+				pr_err("%s: habmm_export failed handle = %pK, len = %zd, rc = %d\n",
+					__func__, handle, *len, rc);
 				goto err;
 			}
 
@@ -572,6 +570,7 @@ static int msm_audio_ion_map_buf(void *handle, dma_addr_t *paddr,
 		if (rc) {
 			pr_err("%s: failed to do smmu map, err = %d\n",
 				__func__, rc);
+			msm_audio_dma_buf_unmap((struct dma_buf *) handle);
 			goto err;
 		}
 	}
