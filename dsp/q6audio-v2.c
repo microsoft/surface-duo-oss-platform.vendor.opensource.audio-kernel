@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,6 +53,7 @@ int q6audio_get_port_index(u16 port_id)
 	case MI2S_RX: return IDX_MI2S_RX;
 	case MI2S_TX: return IDX_MI2S_TX;
 	case HDMI_RX: return IDX_HDMI_RX;
+	case HDMI_RX_MS: return IDX_HDMI_RX_MS;
 	case DISPLAY_PORT_RX: return IDX_DISPLAY_PORT_RX;
 	case AFE_PORT_ID_PRIMARY_SPDIF_RX: return IDX_PRIMARY_SPDIF_RX;
 	case AFE_PORT_ID_PRIMARY_SPDIF_TX: return IDX_PRIMARY_SPDIF_TX;
@@ -394,6 +395,8 @@ int q6audio_get_port_id(u16 port_id)
 	case MI2S_RX: return AFE_PORT_ID_PRIMARY_MI2S_RX;
 	case MI2S_TX: return AFE_PORT_ID_PRIMARY_MI2S_TX;
 	case HDMI_RX: return AFE_PORT_ID_MULTICHAN_HDMI_RX;
+	case HDMI_RX_MS:
+		return AFE_PORT_ID_HDMI_MS;
 	case DISPLAY_PORT_RX:
 			return AFE_PORT_ID_HDMI_OVER_DP_RX;
 	case AFE_PORT_ID_PRIMARY_SPDIF_RX:
@@ -925,6 +928,7 @@ int q6audio_validate_port(u16 port_id)
 	case MI2S_RX:
 	case MI2S_TX:
 	case HDMI_RX:
+	case HDMI_RX_MS:
 	case DISPLAY_PORT_RX:
 	case RSVD_2:
 	case RSVD_3:
@@ -1125,6 +1129,7 @@ static u16 port_id_index[MAX_PORT_IDS][2] = {
 	{MI2S_RX, IDX_MI2S_RX},
 	{MI2S_TX, IDX_MI2S_TX},
 	{HDMI_RX, IDX_HDMI_RX},
+	{HDMI_RX_MS, IDX_HDMI_RX_MS},
 	{DISPLAY_PORT_RX, IDX_DISPLAY_PORT_RX},
 	{AFE_PORT_ID_PRIMARY_SPDIF_RX, IDX_PRIMARY_SPDIF_RX},
 	{AFE_PORT_ID_PRIMARY_SPDIF_TX, IDX_PRIMARY_SPDIF_TX},
