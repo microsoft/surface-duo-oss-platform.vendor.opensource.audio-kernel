@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -996,8 +996,14 @@ static const struct dev_pm_ops soundwire_pm = {
 		)
 };
 
+void soundwire_dev_release(struct device *dev)
+{
+
+};
+
 struct device soundwire_dev = {
 	.init_name = "soundwire",
+	.release = soundwire_dev_release,
 };
 
 struct bus_type soundwire_type = {
