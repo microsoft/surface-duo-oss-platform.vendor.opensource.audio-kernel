@@ -545,7 +545,10 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 			((buff_addr->timestamp & 0xFFFFFFFF00000000LL) >> 32);
 		param.lsw_ts = (uint32_t) (buff_addr->timestamp & 0xFFFFFFFFLL);
 		param.paddr += prtd->ts_header_offset;
-		param.flags = SET_TIMESTAMP;
+		if (buff_addr->flags == SNDRV_COMPRESS_TIMESTAMP_CONTINUE)
+			param.flags = SET_CONTINUE_FLAG;
+		else
+			param.flags = SET_TIMESTAMP;
 		param.metadata_len = prtd->ts_header_offset;
 	} else {
 		param.msw_ts = 0;
@@ -556,8 +559,8 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 	param.uid	= buffer_length;
 	param.last_buffer = prtd->last_buffer;
 
-	pr_debug("%s: sending %d bytes to DSP byte_offset = %d\n",
-		__func__, param.len, prtd->byte_offset);
+	pr_debug("%s: sending %d bytes to DSP byte_offset = %d flags 0x%x\n",
+		__func__, param.len, prtd->byte_offset, param.flags);
 	if (q6asm_async_write(prtd->audio_client, &param) < 0) {
 		pr_err("%s:q6asm_async_write failed\n", __func__);
 	} else {
