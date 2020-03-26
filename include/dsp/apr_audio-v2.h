@@ -4655,6 +4655,19 @@ struct asm_aptx_ad_dec_cfg_t {
 	 */
 } __packed;
 
+/*
+ * Payload of the APTX CLASSIC decoder configuration parameters in the
+ * #ASM_MEDIA_FMT_APTX_CLASSIC media format.
+ */
+struct asm_aptx_classic_dec_cfg_t {
+	uint32_t          sample_rate;
+	/*
+	 * Number of samples per second.
+	 *
+	 * @values 0x0(48000Hz), 0x1(44100Hz)
+	 */
+} __packed;
+
 union afe_enc_config_data {
 	struct asm_sbc_enc_cfg_t sbc_config;
 	struct asm_aac_enc_cfg_t aac_config;
@@ -4727,6 +4740,7 @@ union afe_dec_config_data {
 	struct asm_aac_dec_cfg_v2_t aac_config;
 	struct asm_mp3_dec_cfg_t mp3_config;
 	struct asm_aptx_ad_dec_cfg_t aptx_ad_config;
+	struct asm_aptx_classic_dec_cfg_t aptx_classic_config;
 };
 
 struct afe_dec_config {
