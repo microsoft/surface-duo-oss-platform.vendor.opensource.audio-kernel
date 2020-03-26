@@ -62,6 +62,7 @@ enum {
 	ENC_FMT_AAC_V2 = ASM_MEDIA_FMT_AAC_V2,
 	DEC_FMT_AAC_V2 = ASM_MEDIA_FMT_AAC_V2,
 	ENC_FMT_APTX = ASM_MEDIA_FMT_APTX,
+	DEC_FMT_APTX = ASM_MEDIA_FMT_APTX,
 	ENC_FMT_APTX_HD = ASM_MEDIA_FMT_APTX_HD,
 	ENC_FMT_CELT = ASM_MEDIA_FMT_CELT,
 	ENC_FMT_LDAC = ASM_MEDIA_FMT_LDAC,
@@ -3411,6 +3412,11 @@ static int msm_dai_q6_afe_dec_cfg_get(struct snd_kcontrol *kcontrol,
 			&dai_data->dec_config.data,
 			sizeof(struct asm_aptx_ad_dec_cfg_t));
 		break;
+	case DEC_FMT_APTX:
+		memcpy(ucontrol->value.bytes.data + format_size,
+			&dai_data->dec_config.data,
+			sizeof(struct asm_aptx_classic_dec_cfg_t));
+		break;
 	case DEC_FMT_SBC:
 	case DEC_FMT_MP3:
 		/* No decoder specific data available */
@@ -3460,6 +3466,11 @@ static int msm_dai_q6_afe_dec_cfg_put(struct snd_kcontrol *kcontrol,
 		memcpy(&dai_data->dec_config.data,
 			ucontrol->value.bytes.data + format_size,
 			sizeof(struct asm_aptx_ad_dec_cfg_t));
+		break;
+	case DEC_FMT_APTX:
+		memcpy(&dai_data->dec_config.data,
+			ucontrol->value.bytes.data + format_size,
+			sizeof(struct asm_aptx_classic_dec_cfg_t));
 		break;
 	default:
 		pr_err("%s: Invalid format %d\n",
