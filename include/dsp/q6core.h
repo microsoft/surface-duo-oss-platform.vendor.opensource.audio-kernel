@@ -341,4 +341,7 @@ int q6core_request_island_transition(uint32_t client_handle,
 				     uint32_t island_allow_mode);
 int q6core_is_avs_up(int32_t *avs_state);
 
+int q6core_get_avcs_avs_build_version_info(
+	uint32_t *build_major_version, uint32_t *build_minor_version,
+					uint32_t *build_branch_version);
 #endif /* __Q6CORE_H__ */
