@@ -2541,6 +2541,7 @@ static int msm_dai_q6_hw_params(struct snd_pcm_substream *substream,
 	case VOICE_PLAYBACK_TX:
 	case VOICE2_PLAYBACK_TX:
 	case VOICE_RECORD_RX:
+	case VOICE2_RECORD_RX:
 	case VOICE_RECORD_TX:
 		rc = msm_dai_q6_pseudo_port_hw_params(params,
 						dai, substream->stream);
@@ -4124,6 +4125,24 @@ static struct snd_soc_dai_driver msm_dai_q6_incall_record_dai[] = {
 		.probe = msm_dai_q6_dai_probe,
 		.remove = msm_dai_q6_dai_remove,
 	},
+	{
+		.capture = {
+			.stream_name = "Voice2 Downlink Capture",
+			.aif_name = "INCALL2_RECORD_RX",
+			.rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_8000 |
+			SNDRV_PCM_RATE_16000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =     8000,
+			.rate_max =     48000,
+		},
+		.ops = &msm_dai_q6_ops,
+		.id = VOICE2_RECORD_RX,
+		.probe = msm_dai_q6_dai_probe,
+		.remove = msm_dai_q6_dai_remove,
+	},
+
 };
 
 static struct snd_soc_dai_driver msm_dai_q6_usb_rx_dai = {
@@ -7124,6 +7143,9 @@ register_voice_playback:
 		break;
 	case VOICE_RECORD_RX:
 		strlcpy(stream_name, "Voice Downlink Capture", 80);
+		goto register_uplink_capture;
+	case VOICE2_RECORD_RX:
+		strlcpy(stream_name, "Voice2 Downlink Capture", 80);
 		goto register_uplink_capture;
 	case VOICE_RECORD_TX:
 		strlcpy(stream_name, "Voice Uplink Capture", 80);

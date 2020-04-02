@@ -5748,8 +5748,7 @@ static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode,
 		cvs_start_record.hdr.token = 0;
 		cvs_start_record.hdr.opcode = VSS_IRECORD_CMD_START;
 
-		cvs_start_record.rec_mode.port_id =
-					VSS_IRECORD_PORT_ID_DEFAULT;
+		cvs_start_record.rec_mode.port_id = port_id;
 		if (rec_mode == VOC_REC_UPLINK) {
 			cvs_start_record.rec_mode.rx_tap_point =
 					VSS_IRECORD_TAP_POINT_NONE;
@@ -5818,9 +5817,11 @@ static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode,
 		pr_debug("%s: Start record already sent\n", __func__);
 	}
 
+
 	return 0;
 
 fail:
+
 	return ret;
 }
 
@@ -5921,123 +5922,129 @@ int voc_start_record(uint32_t port_id, uint32_t set, uint32_t session_id)
 	}
 
 	voice_itr_init(&itr, session_id);
-	pr_debug("%s: session_id:%u\n", __func__, session_id);
+
 
 	while (voice_itr_get_next_session(&itr, &v)) {
-		if (v == NULL) {
-			pr_err("%s: v is NULL, sessionid:%u\n", __func__,
-				session_id);
+		if ((v != NULL) &&
+			((((port_id == VOICE_RECORD_RX) ||
+			(port_id == VOICE_RECORD_TX)) &&
+			is_sub1_vsid(v->session_id)) ||
+			((port_id == VOICE2_RECORD_RX) &&
+			is_sub2_vsid(v->session_id)))) {
 
-			break;
-		}
-		pr_debug("%s: port_id: %d, set: %d, v: %pK\n",
-			 __func__, port_id, set, v);
+			pr_debug("%s: port_id: %d, set: %d, v: %pK\n",
+				 __func__, port_id, set, v);
 
-		mutex_lock(&v->lock);
-		rec_mode = v->rec_info.rec_mode;
-		v->rec_info.port_id = port_id;
-		rec_set = set;
-		if (set) {
-			if ((v->rec_route_state.ul_flag != 0) &&
-				(v->rec_route_state.dl_flag != 0)) {
-				pr_debug("%s: rec mode already set.\n",
+			mutex_lock(&v->lock);
+			rec_mode = v->rec_info.rec_mode;
+			v->rec_info.port_id = port_id;
+			rec_set = set;
+			if (set) {
+				if ((v->rec_route_state.ul_flag != 0) &&
+					(v->rec_route_state.dl_flag != 0)) {
+					pr_debug("%s: rec mode already set.\n",
 					__func__);
 
-				mutex_unlock(&v->lock);
-				continue;
-			}
+					mutex_unlock(&v->lock);
+					continue;
+				}
 
-			if (port_id == VOICE_RECORD_TX) {
-				if ((v->rec_route_state.ul_flag == 0)
-				&& (v->rec_route_state.dl_flag == 0)) {
-					rec_mode = VOC_REC_UPLINK;
-					v->rec_route_state.ul_flag = 1;
-				} else if ((v->rec_route_state.ul_flag == 0)
-					&& (v->rec_route_state.dl_flag != 0)) {
-					voice_cvs_stop_record(v);
-					rec_mode = VOC_REC_BOTH;
-					v->rec_route_state.ul_flag = 1;
+				if (port_id == VOICE_RECORD_TX) {
+					if ((v->rec_route_state.ul_flag == 0)
+						&& (v->rec_route_state.dl_flag == 0)) {
+						rec_mode = VOC_REC_UPLINK;
+						v->rec_route_state.ul_flag = 1;
+					} else if ((v->rec_route_state.ul_flag == 0)
+						&& (v->rec_route_state.dl_flag != 0)) {
+						voice_cvs_stop_record(v);
+						rec_mode = VOC_REC_BOTH;
+						v->rec_route_state.ul_flag = 1;
+					}
+				} else if ((port_id == VOICE_RECORD_RX) ||
+						  (port_id == VOICE2_RECORD_RX)) {
+					if ((v->rec_route_state.ul_flag == 0)
+						&& (v->rec_route_state.dl_flag == 0)) {
+						rec_mode = VOC_REC_DOWNLINK;
+						v->rec_route_state.dl_flag = 1;
+					} else if ((v->rec_route_state.ul_flag != 0)
+						&& (v->rec_route_state.dl_flag == 0)) {
+						voice_cvs_stop_record(v);
+						rec_mode = VOC_REC_BOTH;
+						v->rec_route_state.dl_flag = 1;
+					}
 				}
-			} else if (port_id == VOICE_RECORD_RX) {
-				if ((v->rec_route_state.ul_flag == 0)
-					&& (v->rec_route_state.dl_flag == 0)) {
-					rec_mode = VOC_REC_DOWNLINK;
-					v->rec_route_state.dl_flag = 1;
-				} else if ((v->rec_route_state.ul_flag != 0)
-					&& (v->rec_route_state.dl_flag == 0)) {
-					voice_cvs_stop_record(v);
-					rec_mode = VOC_REC_BOTH;
-					v->rec_route_state.dl_flag = 1;
+				rec_set = 1;
+			} else {
+				if ((v->rec_route_state.ul_flag == 0) &&
+					(v->rec_route_state.dl_flag == 0)) {
+					pr_debug("%s: rec already stops.\n",
+						__func__);
+					mutex_unlock(&v->lock);
+					continue;
 				}
-			}
-			rec_set = 1;
-		} else {
-			if ((v->rec_route_state.ul_flag == 0) &&
-				(v->rec_route_state.dl_flag == 0)) {
-				pr_debug("%s: rec already stops.\n",
-					__func__);
-				mutex_unlock(&v->lock);
-				continue;
-			}
 
-			if (port_id == VOICE_RECORD_TX) {
-				if ((v->rec_route_state.ul_flag != 0)
-					&& (v->rec_route_state.dl_flag == 0)) {
-					v->rec_route_state.ul_flag = 0;
-					rec_set = 0;
-				} else if ((v->rec_route_state.ul_flag != 0)
-					&& (v->rec_route_state.dl_flag != 0)) {
-					voice_cvs_stop_record(v);
-					v->rec_route_state.ul_flag = 0;
-					rec_mode = VOC_REC_DOWNLINK;
-					rec_set = 1;
-				}
-			} else if (port_id == VOICE_RECORD_RX) {
-				if ((v->rec_route_state.ul_flag == 0)
-					&& (v->rec_route_state.dl_flag != 0)) {
-					v->rec_route_state.dl_flag = 0;
-					rec_set = 0;
-				} else if ((v->rec_route_state.ul_flag != 0)
-					&& (v->rec_route_state.dl_flag != 0)) {
-					voice_cvs_stop_record(v);
-					v->rec_route_state.dl_flag = 0;
-					rec_mode = VOC_REC_UPLINK;
-					rec_set = 1;
+				if (port_id == VOICE_RECORD_TX) {
+					if ((v->rec_route_state.ul_flag != 0)
+						&& (v->rec_route_state.dl_flag == 0)) {
+						v->rec_route_state.ul_flag = 0;
+						rec_set = 0;
+					} else if ((v->rec_route_state.ul_flag != 0)
+						&& (v->rec_route_state.dl_flag != 0)) {
+						voice_cvs_stop_record(v);
+						v->rec_route_state.ul_flag = 0;
+						rec_mode = VOC_REC_DOWNLINK;
+						rec_set = 1;
+					}
+				} else if ((port_id == VOICE_RECORD_RX) ||
+						  (port_id == VOICE2_RECORD_RX)) {
+					if ((v->rec_route_state.ul_flag == 0)
+						&& (v->rec_route_state.dl_flag != 0)) {
+						v->rec_route_state.dl_flag = 0;
+						rec_set = 0;
+					} else if ((v->rec_route_state.ul_flag != 0)
+						&& (v->rec_route_state.dl_flag != 0)) {
+						voice_cvs_stop_record(v);
+						v->rec_route_state.dl_flag = 0;
+						rec_mode = VOC_REC_UPLINK;
+						rec_set = 1;
+					}
 				}
 			}
-		}
-		pr_debug("%s: mode =%d, set =%d\n", __func__,
+			pr_debug("%s: mode =%d, set =%d\n", __func__,
 			 rec_mode, rec_set);
-		cvs_handle = voice_get_cvs_handle(v);
 
-		if (cvs_handle != 0) {
-			if (rec_set)
-				ret = voice_cvs_start_record(v, rec_mode,
+			cvs_handle = voice_get_cvs_handle(v);
+
+			if (cvs_handle != 0) {
+				if (rec_set)
+					ret = voice_cvs_start_record(v, rec_mode,
 						port_id);
 			else
 				ret = voice_cvs_stop_record(v);
-		}
+			}
 
-		/* During SRVCC, recording will switch from VoLTE session to
-		 * voice session.
-		 * Then stop recording, need to stop recording on voice session.
-		 */
-		if ((!rec_set) && common.srvcc_rec_flag) {
-			pr_debug("%s, srvcc_rec_flag:%d\n",  __func__,
+			/* During SRVCC, recording will switch from VoLTE session to
+			 * voice session.
+			 * Then stop recording, need to stop recording on voice session.
+			 */
+			if ((!rec_set) && common.srvcc_rec_flag) {
+				pr_debug("%s, srvcc_rec_flag:%d\n",  __func__,
 				 common.srvcc_rec_flag);
 
-			voice_cvs_stop_record(&common.voice[VOC_PATH_PASSIVE]);
-			common.srvcc_rec_flag = false;
+				voice_cvs_stop_record(&common.voice[VOC_PATH_PASSIVE]);
+				common.srvcc_rec_flag = false;
+			}
+
+			/* Cache the value */
+			v->rec_info.rec_enable = rec_set;
+			v->rec_info.rec_mode = rec_mode;
+
+			mutex_unlock(&v->lock);
+		} else {
+			pr_err("%s: Invalid session\n ", __func__);
 		}
-
-		/* Cache the value */
-		v->rec_info.rec_enable = rec_set;
-		v->rec_info.rec_mode = rec_mode;
-
-		mutex_unlock(&v->lock);
 	}
-
-	return ret;
+		return ret;
 }
 EXPORT_SYMBOL(voc_start_record);
 
