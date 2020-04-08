@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -234,4 +234,6 @@
 #define FAULT_STATUS_TEMP           0x10
 #define FAULT_STATUS_PROTECT        0x20
 
+
+void csra66x0_hw_free_mute(struct snd_soc_codec *codec);
 #endif /* _CSRA66X0_H */
