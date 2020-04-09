@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -605,6 +605,24 @@ static const struct snd_soc_dapm_route csra66x0_dapm_routes[] = {
 	{"PGA", NULL, "DAC"},
 	{"SPKR", NULL, "PGA"},
 };
+/*
+ * csra66x0_hw_free_mute - Update csra66x0 mute register
+ *
+ * @codec - csra66x0 codec
+ *
+ */
+void csra66x0_hw_free_mute(struct snd_soc_codec *codec)
+{
+	int val = 0;
+
+	if (codec == NULL)
+		return;
+
+	val = snd_soc_read(codec, CSRA66X0_MISC_CONTROL_STATUS_1_FA);
+	snd_soc_write(codec,
+		CSRA66X0_MISC_CONTROL_STATUS_1_FA, val | 0x04);
+}
+EXPORT_SYMBOL(csra66x0_hw_free_mute);
 
 static int csra66x0_wait_for_config_state(struct snd_soc_codec *codec)
 {
