@@ -2813,15 +2813,12 @@ static struct snd_soc_dai_link msm_int_dig_be_dai[] = {
 		.ops = &msm8952_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
-};
-
-static struct snd_soc_dai_link msm_tfa98xx_dig_be_dai_link[] = {
 	{
 		.name = LPASS_BE_QUAT_MI2S_RX,
 		.stream_name = "Quaternary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
-		.codec_dai_name = "tfa98xx-aif-2-34",
+		.codec_dai_name = " ",
 		.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
 		SND_SOC_DAIFMT_CBS_CFS,
 		.dpcm_playback = 1,
@@ -2838,8 +2835,7 @@ static struct snd_soc_dai_link msm8952_dai_links[
 ARRAY_SIZE(msm8952_dai) +
 ARRAY_SIZE(msm_int_be_dai) +
 ARRAY_SIZE(msm8952_hdmi_dba_dai_link) +
-ARRAY_SIZE(msm8952_split_a2dp_dai_link) +
-ARRAY_SIZE(msm_tfa98xx_dig_be_dai_link)];
+ARRAY_SIZE(msm8952_split_a2dp_dai_link)];
 
 static int msm8952_wsa881x_init(struct snd_soc_component *component)
 {
@@ -2929,6 +2925,7 @@ static int msm8952_populate_dai_link_component_of_node(
 	struct device *cdev = card->dev;
 	struct snd_soc_dai_link *dai_link = card->dai_link;
 	struct device_node *phandle;
+	const char* ext_smart_pa_name = NULL;
 
 	if (!cdev) {
 		pr_err("%s: Sound card device memory NULL\n", __func__);
@@ -3039,8 +3036,8 @@ codec_dai:
 			}
 		}
 		if ((dai_link[i].id == MSM_BACKEND_DAI_QUATERNARY_MI2S_RX) &&
-			(of_property_read_bool(
-			cdev->of_node, "ext_pa_tfa98xx"))) {
+			(of_property_read_string(
+			cdev->of_node, EXT_SMART_PA, &ext_smart_pa_name) == 0)) {
 			index = of_property_match_string(
 					cdev->of_node,
 					"asoc-codec-names",
@@ -3050,6 +3047,12 @@ codec_dai:
 					cdev->of_node,
 					"asoc-codec", index);
 			dai_link[i].codec_of_node = phandle;
+			if(strcmp(ext_smart_pa_name,"aw8896") == 0)
+				dai_link[i].codec_dai_name = "aw8896-aif";
+			else if(strcmp(ext_smart_pa_name,"tfa98xx") == 0)
+				dai_link[i].codec_dai_name = "tfa98xx-aif-2-34";
+			else
+				pr_err("%s: No support for ext smart pa %s\n",__func__,ext_smart_pa_name);
 		}
 	}
 err:
@@ -3165,13 +3168,6 @@ static struct snd_soc_card *msm8952_populate_sndcard_dailinks(
 		memcpy(dailink + len1, msm8952_split_a2dp_dai_link,
 				sizeof(msm8952_split_a2dp_dai_link));
 		len1 += ARRAY_SIZE(msm8952_split_a2dp_dai_link);
-	}
-
-	if (of_property_read_bool(dev->of_node,
-				"ext_pa_tfa98xx")) {
-		memcpy(dailink + len1, msm_tfa98xx_dig_be_dai_link,
-			sizeof(msm_tfa98xx_dig_be_dai_link));
-		len1 += ARRAY_SIZE(msm_tfa98xx_dig_be_dai_link);
 	}
 
 	card->dai_link = dailink;
