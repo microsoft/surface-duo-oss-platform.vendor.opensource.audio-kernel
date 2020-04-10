@@ -2699,6 +2699,40 @@ static struct snd_soc_dai_link sdx_common_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+	{
+		.name = SDX_DAILINK_NAME(Media8),
+		.stream_name = "MultiMedia8",
+		.cpu_dai_name = "MultiMedia8",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+		    SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		/* this dai link has playback support */
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA8,
+	},
+	{
+		.name = SDX_DAILINK_NAME(Media9),
+		.stream_name = "MultiMedia9",
+		.cpu_dai_name = "MultiMedia9",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+		    SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		/* this dai link has playback support */
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA9,
+	},
 
 };
 
@@ -2792,6 +2826,35 @@ static struct snd_soc_dai_link sdx_common_be_dai_links[] = {
 		.be_hw_params_fixup = sdx_be_hw_params_fixup,
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
+	},
+	/* Incall Music2 BACK END DAI Link */
+	{
+		.name = LPASS_BE_VOICE2_PLAYBACK_TX,
+		.stream_name = "Voice2 Farend Playback",
+		.cpu_dai_name = "msm-dai-q6-dev.32770",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-rx",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_VOICE2_PLAYBACK_TX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	/* Incall2 Record Downlink BACK END DAI Link */
+	{
+		.name = LPASS_BE_INCALL2_RECORD_RX,
+		.stream_name = "Voice2 Downlink Capture",
+		.cpu_dai_name = "msm-dai-q6-dev.32769",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_INCALL2_RECORD_RX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
 	},
 };
 
