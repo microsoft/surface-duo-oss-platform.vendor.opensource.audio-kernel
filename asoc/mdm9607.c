@@ -2406,7 +2406,13 @@ static int __init mdm_soc_platform_init(void)
 	return 0;
 }
 
+static void mdm_soc_platform_exit(void)
+{
+	platform_driver_unregister(&mdm_asoc_machine_driver);
+}
+
 module_init(mdm_soc_platform_init);
+module_exit(mdm_soc_platform_exit);
 
 MODULE_DESCRIPTION("ALSA SoC msm");
 MODULE_LICENSE("GPL v2");
