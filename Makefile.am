@@ -17,6 +17,9 @@ endif
 ifeq ($(TARGET_SUPPORT), sdmsteppe)
 KBUILD_OPTIONS += CONFIG_ARCH_SM6150=y
 endif
+ifeq ($(TARGET_SUPPORT),sm8250)
+KBUILD_OPTIONS += CONFIG_ARCH_KONA=y
+endif
 
 obj-m := ipc/
 obj-m += dsp/
@@ -49,6 +52,10 @@ endif
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sa6155))
 KBUILD_OPTIONS += CONFIG_SND_SOC_SA6155=m
 endif
+endif
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sm8250))
+obj-m += asoc/codecs/bolero/
+obj-m += asoc/codecs/wcd938x/
 endif
 
 all:
