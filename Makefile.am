@@ -56,6 +56,7 @@ endif
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sm8250))
 obj-m += asoc/codecs/bolero/
 obj-m += asoc/codecs/wcd938x/
+KBUILD_CFLAGS += -Wno-error
 endif
 
 all:
