@@ -83,6 +83,7 @@ const DECLARE_TLV_DB_LINEAR(msm_compr_vol_gain, 0,
 #define STREAM_ARRAY_INDEX(stream_id) (stream_id - 1)
 
 #define MAX_NUMBER_OF_STREAMS 2
+#define NUM_PRE_BUFFERS 2
 
 #ifndef COMPRESSED_PERF_MODE_FLAG
 #define COMPRESSED_PERF_MODE_FLAG 0
@@ -181,6 +182,7 @@ struct msm_compr_audio {
 	atomic_t eos;
 	atomic_t drain;
 	atomic_t xrun;
+	atomic_t fill_pre_buffer;
 	atomic_t close;
 	atomic_t wait_on_close;
 	atomic_t error;
@@ -189,6 +191,8 @@ struct msm_compr_audio {
 	wait_queue_head_t drain_wait;
 	wait_queue_head_t close_wait;
 	wait_queue_head_t wait_for_stream_avail;
+
+	bool enable_pre_buffering;
 
 	spinlock_t lock;
 };
@@ -248,6 +252,8 @@ static int msm_compr_set_render_mode(struct msm_compr_audio *prtd,
 	case SNDRV_COMPRESS_RENDER_MODE_TTP:
 		render_mode = ASM_SESSION_MTMX_STRTR_PARAM_RENDER_LOCAL_STC;
 		prtd->run_mode = ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP;
+		if (prtd->audio_client->perf_mode == LOW_LATENCY_PCM_MODE)
+			prtd->enable_pre_buffering = true;
 		break;
 	default:
 		pr_err("%s, Invalid render mode %u\n", __func__,
@@ -491,32 +497,13 @@ static int msm_compr_send_thd_cfg(struct audio_client *ac,
 	}
 	return 0;
 }
-static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
+
+static void msm_compr_send_buffer_v2(struct msm_compr_audio *prtd)
 {
 	int buffer_length;
 	uint64_t bytes_available;
 	struct audio_aio_write_param param;
 	struct snd_codec_metadata *buff_addr;
-
-	if (!atomic_read(&prtd->start)) {
-		pr_err("%s: stream is not in started state\n", __func__);
-		return -EINVAL;
-	}
-
-
-	if (atomic_read(&prtd->xrun)) {
-		WARN(1, "%s called while xrun is true", __func__);
-		return -EPERM;
-	}
-
-	pr_debug("%s: bytes_received = %llu copied_total = %llu\n",
-		__func__, prtd->bytes_received, prtd->copied_total);
-	if (prtd->first_buffer &&  prtd->gapless_state.use_dsp_gapless_mode &&
-		prtd->compr_passthr == LEGACY_PCM)
-		q6asm_stream_send_meta_data(prtd->audio_client,
-				prtd->audio_client->stream_id,
-				prtd->gapless_state.initial_samples_drop,
-				prtd->gapless_state.trailing_samples_drop);
 
 	buffer_length = prtd->codec_param.buffer.fragment_size;
 	bytes_available = prtd->bytes_received - prtd->copied_total;
@@ -567,6 +554,55 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 		prtd->bytes_sent += buffer_length;
 		if (prtd->first_buffer)
 			prtd->first_buffer = 0;
+	}
+}
+
+static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
+{
+	uint32_t buffers_available = 0, i = 0;
+	uint64_t bytes_available = 0;
+
+	if (!atomic_read(&prtd->start)) {
+		pr_err("%s: stream is not in started state\n", __func__);
+		return -EINVAL;
+	}
+
+	if (atomic_read(&prtd->xrun)) {
+		WARN(1, "%s called while xrun is true", __func__);
+		return -EPERM;
+	}
+
+	pr_debug("%s: bytes_received = %llu copied_total = %llu\n",
+		__func__, prtd->bytes_received, prtd->copied_total);
+	if (prtd->first_buffer &&  prtd->gapless_state.use_dsp_gapless_mode &&
+		prtd->compr_passthr == LEGACY_PCM)
+		q6asm_stream_send_meta_data(prtd->audio_client,
+				prtd->audio_client->stream_id,
+				prtd->gapless_state.initial_samples_drop,
+				prtd->gapless_state.trailing_samples_drop);
+
+	bytes_available = prtd->bytes_received - prtd->copied_total;
+	buffers_available =
+		bytes_available / prtd->codec_param.buffer.fragment_size;
+
+	pr_debug("%s: bytes_available = %llu available_buffers = %d\n",
+		  __func__, bytes_available, buffers_available);
+	if ((prtd->enable_pre_buffering == true) && (prtd->first_buffer)) {
+		if (buffers_available < NUM_PRE_BUFFERS) {
+			pr_err("%s: pre_buffers are not filled\n", __func__);
+			atomic_set(&prtd->fill_pre_buffer, 1);
+			return 0;
+		}
+
+		for (i = 0; i < NUM_PRE_BUFFERS; i++) {
+			if (i > 0)
+				prtd->byte_offset +=
+					prtd->codec_param.buffer.fragment_size;
+
+			msm_compr_send_buffer_v2(prtd);
+		}
+	} else {
+		msm_compr_send_buffer_v2(prtd);
 	}
 
 	return 0;
@@ -627,7 +663,7 @@ static void compr_event_handler(uint32_t opcode,
 	struct audio_client *ac;
 	uint32_t chan_mode = 0;
 	uint32_t sample_rate = 0;
-	uint64_t bytes_available;
+	uint64_t bytes_available, buffer_bytes_available;
 	int stream_id;
 	uint32_t stream_index;
 	unsigned long flags;
@@ -635,6 +671,7 @@ static void compr_event_handler(uint32_t opcode,
 	uint32_t *buff_addr;
 	struct snd_soc_pcm_runtime *rtd;
 	int ret = 0;
+	uint32_t num_buffers_available = 0;
 
 	if (!prtd) {
 		pr_err("%s: prtd is NULL\n", __func__);
@@ -679,6 +716,10 @@ static void compr_event_handler(uint32_t opcode,
 				 prtd->byte_offset, token);
 		}
 
+		buffer_bytes_available =
+			prtd->bytes_received - prtd->copied_total;
+		num_buffers_available = buffer_bytes_available /
+					prtd->codec_param.buffer.fragment_size;
 		/*
 		 * Token for WRITE command represents the amount of data
 		 * written to ADSP in the last write, update offset and
@@ -716,6 +757,11 @@ static void compr_event_handler(uint32_t opcode,
 		if (bytes_available < cstream->runtime->fragment_size) {
 			pr_debug("WRITE_DONE Insufficient data to send. break out\n");
 			atomic_set(&prtd->xrun, 1);
+			if (prtd->enable_pre_buffering == true) {
+				prtd->first_buffer = 1;
+				prtd->byte_offset = 0;
+				prtd->app_pointer = 0;
+			}
 
 			if (prtd->last_buffer)
 				prtd->last_buffer = 0;
@@ -730,6 +776,14 @@ static void compr_event_handler(uint32_t opcode,
 			prtd->last_buffer = 1;
 			msm_compr_send_buffer(prtd);
 			prtd->last_buffer = 0;
+		} else if ((prtd->enable_pre_buffering == true) &&
+			   (num_buffers_available <= NUM_PRE_BUFFERS)) {
+			/**
+			 * Avoid sending older data if buffers available
+			 * is same as number of fragments
+			 */
+			pr_debug("avoid sending old data, send updated data from copy call\n");
+			atomic_set(&prtd->fill_pre_buffer, 1);
 		} else
 			msm_compr_send_buffer(prtd);
 
@@ -857,10 +911,24 @@ static void compr_event_handler(uint32_t opcode,
 			if (!prtd->bytes_sent) {
 				bytes_available = prtd->bytes_received -
 						  prtd->copied_total;
+				num_buffers_available = bytes_available /
+					prtd->codec_param.buffer.fragment_size;
 				if (bytes_available <
 				    cstream->runtime->fragment_size) {
 					pr_debug("CMD_RUN_V2 Insufficient data to send. break out\n");
 					atomic_set(&prtd->xrun, 1);
+				} else if ((prtd->enable_pre_buffering == true)
+					&& (num_buffers_available <
+					NUM_PRE_BUFFERS)) {
+					/**
+					 * Make sure pre buffers are filled.
+					 * Once the prebuffers are filled,
+					 * buffers are transferred to DSP
+					 * from copy call.
+					 */
+					pr_debug("CMD_RUN_V2 buffers available %d pre buffers not filled, break out\n",
+						  num_buffers_available);
+					atomic_set(&prtd->fill_pre_buffer, 1);
 				} else {
 					msm_compr_send_buffer(prtd);
 				}
@@ -1781,6 +1849,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	prtd->first_buffer = 1;
 	prtd->partial_drain_delay = 0;
 	prtd->next_stream = 0;
+	prtd->enable_pre_buffering = false;
 	memset(&prtd->gapless_state, 0, sizeof(struct msm_compr_gapless_state));
 	/*
 	 * Update the use_dsp_gapless_mode from gapless struture with the value
@@ -1799,6 +1868,7 @@ static int msm_compr_playback_open(struct snd_compr_stream *cstream)
 	atomic_set(&prtd->close, 0);
 	atomic_set(&prtd->wait_on_close, 0);
 	atomic_set(&prtd->error, 0);
+	atomic_set(&prtd->fill_pre_buffer, 0);
 
 	init_waitqueue_head(&prtd->eos_wait);
 	init_waitqueue_head(&prtd->drain_wait);
@@ -2540,6 +2610,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		prtd->marker_timestamp = 0;
 
 		atomic_set(&prtd->xrun, 0);
+		atomic_set(&prtd->fill_pre_buffer, 0);
 		spin_unlock_irqrestore(&prtd->lock, flags);
 		break;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
@@ -3031,8 +3102,10 @@ static int msm_compr_playback_copy(struct snd_compr_stream *cstream,
 	size_t copy;
 	uint64_t bytes_available = 0;
 	unsigned long flags;
+	uint32_t num_buffers_available = 0;
 
-	pr_debug("%s: count = %zd\n", __func__, count);
+	pr_debug("%s: count = %zd, app pointer = %d\n", __func__, count,
+		  prtd->app_pointer);
 	if (!prtd->buffer) {
 		pr_err("%s: Buffer is not allocated yet ??", __func__);
 		return 0;
@@ -3068,7 +3141,25 @@ static int msm_compr_playback_copy(struct snd_compr_stream *cstream,
 	spin_lock_irqsave(&prtd->lock, flags);
 	prtd->bytes_received += count;
 	if (atomic_read(&prtd->start)) {
-		if (atomic_read(&prtd->xrun)) {
+		if (prtd->enable_pre_buffering == true) {
+			if ((atomic_read(&prtd->xrun)) ||
+			    (atomic_read(&prtd->fill_pre_buffer))) {
+				pr_debug("%s: in %s, count = %zd\n",
+					  __func__, (atomic_read(&prtd->xrun))
+					 ? "xrun" : "fill pre buffers", count);
+				bytes_available = prtd->bytes_received -
+						  prtd->copied_total;
+				num_buffers_available = bytes_available /
+					prtd->codec_param.buffer.fragment_size;
+				if (num_buffers_available >= NUM_PRE_BUFFERS) {
+					pr_debug("%s: bytes_to_write = %llu\n",
+						 __func__, bytes_available);
+					atomic_set(&prtd->xrun, 0);
+					atomic_set(&prtd->fill_pre_buffer, 0);
+					msm_compr_send_buffer(prtd);
+				} /* else not sufficient data */
+			}
+		} else if (atomic_read(&prtd->xrun)) {
 			pr_debug("%s: in xrun, count = %zd\n", __func__, count);
 			bytes_available = prtd->bytes_received -
 					  prtd->copied_total;
