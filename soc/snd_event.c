@@ -315,10 +315,12 @@ void snd_event_mstr_add_client(struct snd_event_clients **snd_clients,
 		client->cl_arr = new;
 	}
 
-	client->cl_arr[client->num_clients].dev = NULL;
-	client->cl_arr[client->num_clients].data = data;
-	client->cl_arr[client->num_clients].compare = compare;
-	client->num_clients++;
+        if(client->cl_arr!=NULL) {
+                 client->cl_arr[client->num_clients].dev = NULL;
+                 client->cl_arr[client->num_clients].data = data;
+                 client->cl_arr[client->num_clients].compare = compare;
+                 client->num_clients++;
+        }
 }
 EXPORT_SYMBOL(snd_event_mstr_add_client);
 
