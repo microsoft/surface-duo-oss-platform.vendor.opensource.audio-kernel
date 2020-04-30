@@ -54,7 +54,7 @@
 #define AFE_API_VERSION_V6		6
 /* for external mclk dynamic switch */
 #define AFE_API_VERSION_V8		8
-
+#define AFE_API_VERSION_V9		9
 
 typedef int (*routing_cb)(int port);
 
