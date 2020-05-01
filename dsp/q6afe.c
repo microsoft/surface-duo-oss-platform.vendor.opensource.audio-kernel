@@ -4011,9 +4011,7 @@ static int q6afe_send_dec_config(u16 port_id,
 		break;
 	case ASM_MEDIA_FMT_APTX:
 		media_type.sample_rate =
-		(cfg->data.aptx_classic_config.sample_rate == APTX_44_1) ?
-			AFE_PORT_SAMPLE_RATE_44_1K :
-			AFE_PORT_SAMPLE_RATE_48K;
+			cfg->data.aptx_classic_config.sample_rate;
 		break;
 	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
 		if (!cfg->abr_dec_cfg.is_abr_enabled) {
