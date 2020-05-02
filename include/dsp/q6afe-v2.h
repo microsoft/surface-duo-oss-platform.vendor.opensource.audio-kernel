@@ -52,6 +52,8 @@
 #define AFE_API_VERSION_V4		4
 /* for VAD enable */
 #define AFE_API_VERSION_V6		6
+/* for external mclk dynamic switch */
+#define AFE_API_VERSION_V8		8
 
 
 typedef int (*routing_cb)(int port);
@@ -273,6 +275,8 @@ enum {
 	IDX_AFE_PORT_ID_PRIMARY_META_MI2S_RX,
 	IDX_AFE_PORT_ID_SECONDARY_META_MI2S_RX,
 	IDX_HDMI_RX_MS,
+	/* IDX 193 */
+	IDX_VOICE2_RECORD_RX,
 	AFE_MAX_PORTS
 };
 
@@ -298,6 +302,24 @@ struct vad_config {
 	u32 is_enable;
 	u32 pre_roll;
 };
+
+enum afe_mclk_src_id {
+	MCLK_SRC_INT = 0x00,
+	MCLK_SRC_EXT_0 = 0x01,
+	MCLK_SRC_MAX,
+};
+
+enum afe_mclk_freq {
+	MCLK_FREQ_MIN = 0,
+	MCLK_FREQ_11P2896_MHZ = MCLK_FREQ_MIN,
+	MCLK_FREQ_12P288_MHZ,
+	MCLK_FREQ_16P384_MHZ,
+	MCLK_FREQ_22P5792_MHZ,
+	MCLK_FREQ_24P576_MHZ,
+	MCLK_FREQ_MAX,
+};
+
+#define Q6AFE_EXT_MCLK_FREQ_DEFAULT 0
 
 struct afe_audio_buffer {
 	dma_addr_t phys;
@@ -480,6 +502,16 @@ int afe_get_doa_tracking_mon(u16 port_id,
 int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 			  uint32_t clk_reset);
 int afe_set_clk_id(u16 port_id, uint32_t clk_id);
+
+int afe_set_mclk_src_cfg(u16 port_id, uint32_t mclk_src_id, uint32_t mclk_freq);
+
+typedef int (*afe_enable_mclk_and_get_info_cb_func) (void *private_data,
+			uint32_t enable, uint32_t mclk_freq,
+			struct afe_param_id_clock_set_v2_t *dyn_mclk_cfg);
+
+int afe_register_ext_mclk_cb(afe_enable_mclk_and_get_info_cb_func fn1,
+				void *private_data);
+void afe_unregister_ext_mclk_cb(void);
 
 #define AFE_LPASS_CORE_HW_BLOCK_ID_NONE                        0
 #define AFE_LPASS_CORE_HW_BLOCK_ID_AVTIMER                     2

@@ -545,7 +545,10 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 			((buff_addr->timestamp & 0xFFFFFFFF00000000LL) >> 32);
 		param.lsw_ts = (uint32_t) (buff_addr->timestamp & 0xFFFFFFFFLL);
 		param.paddr += prtd->ts_header_offset;
-		param.flags = SET_TIMESTAMP;
+		if (buff_addr->flags == SNDRV_COMPRESS_TIMESTAMP_CONTINUE)
+			param.flags = SET_CONTINUE_FLAG;
+		else
+			param.flags = SET_TIMESTAMP;
 		param.metadata_len = prtd->ts_header_offset;
 	} else {
 		param.msw_ts = 0;
@@ -556,8 +559,8 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 	param.uid	= buffer_length;
 	param.last_buffer = prtd->last_buffer;
 
-	pr_debug("%s: sending %d bytes to DSP byte_offset = %d\n",
-		__func__, param.len, prtd->byte_offset);
+	pr_debug("%s: sending %d bytes to DSP byte_offset = %d flags 0x%x\n",
+		__func__, param.len, prtd->byte_offset, param.flags);
 	if (q6asm_async_write(prtd->audio_client, &param) < 0) {
 		pr_err("%s:q6asm_async_write failed\n", __func__);
 	} else {
@@ -1029,6 +1032,7 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 	struct asm_ape_cfg ape_cfg;
 	struct asm_dsd_cfg dsd_cfg;
 	struct aptx_dec_bt_addr_cfg aptx_cfg;
+	struct asm_amrwbplus_cfg amrwbplus_cfg;
 	union snd_codec_options *codec_options;
 
 	int ret = 0;
@@ -1324,6 +1328,26 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 	case FORMAT_MAT:
 		pr_debug("SND_AUDIOCODEC_MAT\n");
 		/* no media format block needed */
+		break;
+	case FORMAT_AMRNB:
+		pr_debug("SND_AUDIOCODEC_AMR\n");
+		/* no media format block needed */
+		break;
+	case FORMAT_AMRWB:
+		pr_debug("SND_AUDIOCODEC_AMRWB\n");
+		/* no media format block needed */
+		break;
+	case FORMAT_AMR_WB_PLUS:
+		pr_debug("SND_AUDIOCODEC_AMRWBPLUS\n");
+		memset(&amrwbplus_cfg, 0x0, sizeof(struct asm_amrwbplus_cfg));
+		amrwbplus_cfg.amr_frame_fmt =
+			codec_options->amrwbplus.bit_stream_fmt;
+		ret =  q6asm_media_format_block_amrwbplus(
+				prtd->audio_client,
+				&amrwbplus_cfg);
+		if (ret < 0)
+			pr_err("%s: CMD AMRWBPLUS Format block failed ret %d\n",
+				__func__, ret);
 		break;
 	default:
 		pr_debug("%s, unsupported format, skip", __func__);
@@ -2283,6 +2307,24 @@ static int msm_compr_set_params(struct snd_compr_stream *cstream,
 		pr_debug("%s: SND_AUDIOCODEC_MAT\n", __func__);
 		prtd->codec = FORMAT_MAT;
 		frame_sz = MAT_OUTPUT_FRAME_SZ;
+		break;
+	}
+
+	case SND_AUDIOCODEC_AMR: {
+		pr_debug("%s:SND_AUDIOCODEC_AMR\n", __func__);
+		prtd->codec = FORMAT_AMRNB;
+		break;
+	}
+
+	case SND_AUDIOCODEC_AMRWB: {
+		pr_debug("%s:SND_AUDIOCODEC_AMRWB\n", __func__);
+		prtd->codec = FORMAT_AMRWB;
+		break;
+	}
+
+	case SND_AUDIOCODEC_AMRWBPLUS: {
+		pr_debug("%s:SND_AUDIOCODEC_AMRWBPLUS\n", __func__);
+		prtd->codec = FORMAT_AMR_WB_PLUS;
 		break;
 	}
 
@@ -3344,6 +3386,9 @@ static int msm_compr_set_next_track_param(struct snd_compr_stream *cstream,
 	case FORMAT_ALAC:
 	case FORMAT_APE:
 	case FORMAT_LINEAR_PCM:
+	case FORMAT_AMRNB:
+	case FORMAT_AMRWB:
+	case FORMAT_AMR_WB_PLUS:
 		memcpy(&(prtd->gapless_state.codec_options),
 			codec_options,
 			sizeof(union snd_codec_options));
@@ -3751,6 +3796,9 @@ static int msm_compr_dec_params_put(struct snd_kcontrol *kcontrol,
 	case FORMAT_DSD:
 	case FORMAT_IEC61937:
 	case FORMAT_APTX:
+	case FORMAT_AMRNB:
+	case FORMAT_AMRWB:
+	case FORMAT_AMR_WB_PLUS:
 		pr_debug("%s: no runtime parameters for codec: %d\n", __func__,
 			 prtd->codec);
 		break;

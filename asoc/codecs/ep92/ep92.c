@@ -47,9 +47,10 @@
 #define EP92_CHECK_ARC_EN       6
 #define EP92_CHECK_ARC_WAIT     7
 #define EP92_CHECK_ARC_OFF      8
-#define EP92_START_WAIT_DELAY   500
-#define EP92_EARC_WAIT_DELAY    1000
+#define EP92_START_WAIT_DELAY   300
+#define EP92_EARC_WAIT_DELAY    1200
 #define EP92_ARC_WAIT_DELAY     2000
+#define EP92_CHECK_REPEAT       3
 
 
 #define EP92_RATES (SNDRV_PCM_RATE_32000 |\
@@ -65,6 +66,61 @@ static const unsigned int ep92_samp_freq_table[8] = {
 
 static const unsigned int ep92_dsd_freq_table[4] = {
 	64, 128, 256, 0
+};
+
+/* EP92 register default values */
+static struct reg_default ep92_reg_defaults[] = {
+	{EP92_BI_VENDOR_ID_0,                   0x17},
+	{EP92_BI_VENDOR_ID_1,                   0x7A},
+	{EP92_BI_DEVICE_ID_0,                   0x94},
+	{EP92_BI_DEVICE_ID_1,                   0xA3},
+	{EP92_BI_VERSION_NUM,                   0x10},
+	{EP92_BI_VERSION_YEAR,                  0x09},
+	{EP92_BI_VERSION_MONTH,                 0x07},
+	{EP92_BI_VERSION_DATE,                  0x06},
+	{EP92_BI_GENERAL_INFO_0,                0x00},
+	{EP92_BI_GENERAL_INFO_1,                0x00},
+	{EP92_BI_GENERAL_INFO_2,                0x00},
+	{EP92_BI_GENERAL_INFO_3,                0x00},
+	{EP92_BI_GENERAL_INFO_4,                0x00},
+	{EP92_BI_GENERAL_INFO_5,                0x00},
+	{EP92_BI_GENERAL_INFO_6,                0x00},
+	{EP92_ISP_MODE_ENTER_ISP,               0x00},
+	{EP92_GENERAL_CONTROL_0,                0x20},
+	{EP92_GENERAL_CONTROL_1,                0x00},
+	{EP92_GENERAL_CONTROL_2,                0x00},
+	{EP92_GENERAL_CONTROL_3,                0x10},
+	{EP92_GENERAL_CONTROL_4,                0x00},
+	{EP92_CEC_EVENT_CODE,                   0x00},
+	{EP92_CEC_EVENT_PARAM_1,                0x00},
+	{EP92_CEC_EVENT_PARAM_2,                0x00},
+	{EP92_CEC_EVENT_PARAM_3,                0x00},
+	{EP92_CEC_EVENT_PARAM_4,                0x00},
+	{EP92_AUDIO_INFO_SYSTEM_STATUS_0,       0x00},
+	{EP92_AUDIO_INFO_SYSTEM_STATUS_1,       0x00},
+	{EP92_AUDIO_INFO_AUDIO_STATUS,          0x00},
+	{EP92_AUDIO_INFO_CHANNEL_STATUS_0,      0x00},
+	{EP92_AUDIO_INFO_CHANNEL_STATUS_1,      0x00},
+	{EP92_AUDIO_INFO_CHANNEL_STATUS_2,      0x00},
+	{EP92_AUDIO_INFO_CHANNEL_STATUS_3,      0x00},
+	{EP92_AUDIO_INFO_CHANNEL_STATUS_4,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_0,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_1,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_2,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_3,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_4,      0x00},
+	{EP92_AUDIO_INFO_ADO_INFO_FRAME_5,      0x00},
+	{EP92_OTHER_PACKETS_HDMI_VS_0,          0x00},
+	{EP92_OTHER_PACKETS_HDMI_VS_1,          0x00},
+	{EP92_OTHER_PACKETS_ACP_PACKET,         0x00},
+	{EP92_OTHER_PACKETS_AVI_INFO_FRAME_0,   0x00},
+	{EP92_OTHER_PACKETS_AVI_INFO_FRAME_1,   0x00},
+	{EP92_OTHER_PACKETS_AVI_INFO_FRAME_2,   0x00},
+	{EP92_OTHER_PACKETS_AVI_INFO_FRAME_3,   0x00},
+	{EP92_OTHER_PACKETS_AVI_INFO_FRAME_4,   0x00},
+	{EP92_OTHER_PACKETS_GC_PACKET_0,        0x00},
+	{EP92_OTHER_PACKETS_GC_PACKET_1,        0x00},
+	{EP92_OTHER_PACKETS_GC_PACKET_2,        0x00},
 };
 
 static int ep92_earc_samp_freq(int cs)
@@ -132,14 +188,23 @@ static int ep92_get_ch_count_from_ch_alloc(int ch_alloc)
 	int count = 2;
 
 	/* calculate instead of long switch table */
-	if (ch_alloc & 0x01)
-		count++;
-	if (ch_alloc & 0x02)
-		count++;
-	count += (ch_alloc & 0x1c) >> 2;
-	if (ch_alloc >= 0x14)
-		count -= 3;
-
+	if (ch_alloc < 0x20) {
+		if (ch_alloc & 0x01)
+			count++;
+		if (ch_alloc & 0x02)
+			count++;
+		count += (ch_alloc & 0x1c) >> 2;
+		if (ch_alloc >= 0x14)
+			count -= 3;
+	} else if (ch_alloc < 0x32) {
+		count = 6;
+		if (ch_alloc & 0x01)
+			count++;
+		if (ch_alloc >= 0x28)
+			count++;
+	} else {
+		count = 8;
+	}
 	return count;
 }
 
@@ -180,8 +245,13 @@ struct ep92_pdata {
 	int                  force_inactive;
 	int                  check_earc;
 	int                  check_arc;
+	int                  check_wait_start;
+	int                  check_wait_earc;
+	int                  check_wait_arc;
 	int                  check_state;
 	int                  check_cnt;
+	int                  check_repeat;
+	int                  check_repeat_cnt;
 
 	int                  hyst_tx_plug;
 	int                  hyst_link_on0;
@@ -213,13 +283,87 @@ struct ep92_pdata {
 		u8 ca;
 	} ai; /* Audio Info block */
 
-	u8 old_mode;
+	u8 cur_audio_format;
+	u8 cur_audio_state;
+	u8 cur_arc_en;
+	u8 cur_earc_en;
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 	struct dentry *debugfs_dir;
 	struct dentry *debugfs_file_wo;
 	struct dentry *debugfs_file_ro;
 #endif /* CONFIG_DEBUG_FS */
 };
+
+struct ep92_mclk_cfg_info {
+	uint32_t in_sample_rate;
+	uint32_t out_mclk_freq;
+	uint8_t mul_val;
+};
+
+#define EP92_MCLK_MUL_512		0x3
+#define EP92_MCLK_MUL_384		0x2
+#define EP92_MCLK_MUL_256		0x1
+#define EP92_MCLK_MUL_128		0x0
+#define EP92_MCLK_MUL_MASK		0x3
+
+/**
+ * ep92_set_ext_mclk - Configure the mclk based on sample freq
+ *
+ * @codec: handle pointer to ep92 codec
+ * @mclk_freq: mclk frequency to be set
+ *
+ * Returns 0 for sucess or appropriate negative error code
+ */
+int ep92_set_ext_mclk(struct snd_soc_codec *codec, uint32_t mclk_freq)
+{
+	unsigned int samp_freq = 0;
+	struct ep92_pdata *ep92 = NULL;
+	uint8_t value = 0;
+	int ret = 0;
+
+	if (!codec)
+		return -EINVAL;
+
+	ep92 = snd_soc_codec_get_drvdata(codec);
+
+	samp_freq = ep92_samp_freq_table[(ep92->ai.audio_status) &
+						EP92_AI_RATE_MASK];
+
+	if (!mclk_freq || (mclk_freq % samp_freq)) {
+		pr_err("%s incompatbile mclk:%u and sample freq:%u\n",
+				__func__, mclk_freq, samp_freq);
+		return -EINVAL;
+	}
+
+	switch (mclk_freq / samp_freq) {
+	case 512:
+		value = EP92_MCLK_MUL_512;
+		break;
+	case 384:
+		value = EP92_MCLK_MUL_384;
+		break;
+	case 256:
+		value = EP92_MCLK_MUL_256;
+		break;
+	case 128:
+		value = EP92_MCLK_MUL_128;
+		break;
+	default:
+		dev_err(codec->dev, "unsupported mclk:%u for sample freq:%u\n",
+					mclk_freq, samp_freq);
+		return -EINVAL;
+	}
+
+	pr_debug("%s mclk:%u, in sample freq:%u, write reg:0x%02x val:0x%02x\n",
+		__func__, mclk_freq, samp_freq,
+		EP92_GENERAL_CONTROL_2, EP92_MCLK_MUL_MASK & value);
+
+	ret = snd_soc_update_bits(codec, EP92_GENERAL_CONTROL_2,
+					EP92_MCLK_MUL_MASK, value);
+
+	return (((ret == 0) || (ret == 1)) ? 0 : ret);
+}
+EXPORT_SYMBOL(ep92_set_ext_mclk);
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 static int debugfs_codec_open_op(struct inode *inode, struct file *file)
@@ -531,15 +675,6 @@ static void ep92_read_general_control(struct snd_soc_codec *codec,
 			ep92_send_uevent(ep92, "EP92EVT_POWER=OFF");
 		}
 	}
-	if (change & EP92_GC_EARC_EN_MASK) {
-		val = (ep92->gc.ctl >> EP92_GC_EARC_EN_SHIFT) &
-			EP92_2CHOICE_MASK;
-		dev_dbg(codec->dev, "ep92 earc_en changed to %d\n", val);
-		if (val)
-			ep92_send_uevent(ep92, "EP92EVT_EARC_EN=ON");
-		else
-			ep92_send_uevent(ep92, "EP92EVT_EARC_EN=OFF");
-	}
 	if (change & EP92_GC_AUDIO_PATH_MASK) {
 		val = (ep92->gc.ctl >> EP92_GC_AUDIO_PATH_SHIFT) &
 			EP92_2CHOICE_MASK;
@@ -558,23 +693,30 @@ static void ep92_read_general_control(struct snd_soc_codec *codec,
 		else
 			ep92_send_uevent(ep92, "EP92EVT_CEC_MUTE=MUTED");
 	}
-	if (change & EP92_GC_ARC_EN_MASK) {
-		val = ep92->gc.ctl & EP92_2CHOICE_MASK;
-		if (val && (ep92->gc.ctl & EP92_GC_EARC_EN_MASK)) {
-			dev_dbg(codec->dev, "ep92 arc_en enable ignored in earc mode\n");
-			reg = snd_soc_read(ep92->codec,
-				EP92_GENERAL_CONTROL_0);
-			reg &= ~EP92_GC_ARC_EN_MASK;
-			snd_soc_write(ep92->codec,
-				EP92_GENERAL_CONTROL_0, reg);
-		} else {
-			dev_dbg(codec->dev, "ep92 arc_en changed to %d\n", val);
-			if (val)
-				ep92_send_uevent(ep92, "EP92EVT_ARC_EN=ON");
-			else
-				ep92_send_uevent(ep92, "EP92EVT_ARC_EN=OFF");
-		}
+
+	val = (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) &&
+	      (ep92->gi.tx_info & EP92_GI_EARC_ON_MASK) &&
+	      (ep92->check_state == EP92_CHECK_IDLE);
+	if (ep92->cur_earc_en != val) {
+		dev_dbg(codec->dev, "ep92 earc_en changed to %d\n", val);
+		if (val)
+			ep92_send_uevent(ep92, "EP92EVT_EARC_EN=ON");
+		else
+			ep92_send_uevent(ep92, "EP92EVT_EARC_EN=OFF");
 	}
+	ep92->cur_earc_en = val;
+
+	val = (ep92->gc.ctl & EP92_GC_ARC_EN_MASK) &&
+	      (ep92->gi.tx_info & EP92_GI_ARC_ON_MASK) &&
+	      (ep92->check_state == EP92_CHECK_IDLE);
+	if (ep92->cur_arc_en != val) {
+		dev_dbg(codec->dev, "ep92 arc_en changed to %d\n", val);
+		if (val)
+			ep92_send_uevent(ep92, "EP92EVT_ARC_EN=ON");
+		else
+			ep92_send_uevent(ep92, "EP92EVT_ARC_EN=OFF");
+	}
+	ep92->cur_arc_en = val;
 
 	old = ep92->gc.rx_sel;
 	ep92->gc.rx_sel = snd_soc_read(codec, EP92_GENERAL_CONTROL_1);
@@ -689,9 +831,10 @@ static void ep92_read_general_control(struct snd_soc_codec *codec,
 		dev_dbg(codec->dev, "ep92 check initial wait\n");
 		ep92->check_state = EP92_CHECK_START_WAIT;
 		ep92->check_cnt = 0;
+		ep92->check_repeat_cnt = 0;
 		break;
 	case EP92_CHECK_START_WAIT: /* wait some time */
-		if (ep92->check_cnt < EP92_START_WAIT_DELAY) {
+		if (ep92->check_cnt < ep92->check_wait_start) {
 			ep92->check_cnt += EP92_POLL_INTERVAL_ON_MSEC;
 		} else if ((ep92->gc.ctl & EP92_GC_EARC_EN_MASK) &&
 			   (ep92->gi.tx_info & EP92_GI_EARC_ON_MASK)) {
@@ -728,7 +871,7 @@ static void ep92_read_general_control(struct snd_soc_codec *codec,
 			ep92->check_state = EP92_CHECK_IDLE;
 			dev_dbg(codec->dev, "ep92 in eARC mode\n");
 		} else {
-			if (ep92->check_cnt < EP92_EARC_WAIT_DELAY)
+			if (ep92->check_cnt < ep92->check_wait_earc)
 				ep92->check_cnt += EP92_POLL_INTERVAL_ON_MSEC;
 			else
 				ep92->check_state = EP92_CHECK_EARC_OFF;
@@ -759,18 +902,27 @@ static void ep92_read_general_control(struct snd_soc_codec *codec,
 			ep92->check_state = EP92_CHECK_IDLE;
 			dev_dbg(codec->dev, "ep92 in ARC mode\n");
 		} else {
-			if (ep92->check_cnt < EP92_ARC_WAIT_DELAY)
+			if (ep92->check_cnt < ep92->check_wait_arc)
 				ep92->check_cnt += EP92_POLL_INTERVAL_ON_MSEC;
 			else
 				ep92->check_state = EP92_CHECK_ARC_OFF;
 		}
 		break;
-	case EP92_CHECK_ARC_OFF: /* set arc_en=0 and stop sequence */
-		dev_dbg(codec->dev, "ep92 not in ARC mode\n");
+	case EP92_CHECK_ARC_OFF: /* set arc_en=0, repeat or stop sequence */
 		reg = snd_soc_read(ep92->codec, EP92_GENERAL_CONTROL_0);
 		reg &= ~EP92_GC_ARC_EN_MASK;
 		snd_soc_write(ep92->codec, EP92_GENERAL_CONTROL_0, reg);
-		ep92->check_state = EP92_CHECK_IDLE;
+
+		ep92->check_repeat_cnt++;
+		if (ep92->check_repeat_cnt < ep92->check_repeat) {
+			dev_dbg(codec->dev, "ep92 check repeat %d\n",
+				ep92->check_repeat_cnt);
+			ep92->check_state = EP92_CHECK_START_WAIT;
+			ep92->check_cnt = 0;
+		} else {
+			dev_dbg(codec->dev, "ep92 not in ARC mode\n");
+			ep92->check_state = EP92_CHECK_IDLE;
+		}
 		break;
 	case EP92_CHECK_IDLE:
 	default:
@@ -803,7 +955,7 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 	}
 	change = ep92->ai.system_status_0 ^ old;
 	if (change & EP92_AI_MCLK_ON_MASK) {
-		dev_dbg(codec->dev, "ep92 status changed to %d\n",
+		dev_dbg(codec->dev, "ep92 mclk changed to %d\n",
 			(ep92->ai.system_status_0 >> EP92_AI_MCLK_ON_SHIFT) &
 			EP92_2CHOICE_MASK);
 		send_uevent = true;
@@ -843,6 +995,27 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 		send_uevent = true;
 	}
 
+	change = ep92->cur_audio_state;
+	if (ep92->cur_earc_en) {
+		if (ep92->mute_active)
+			change = 0;
+		else
+			change = 1;
+		if (ep92->check_state != EP92_CHECK_IDLE)
+			change = 0;
+	} else {
+		change = (ep92->ai.system_status_0 &
+			EP92_AI_MCLK_ON_MASK) >>
+			EP92_AI_MCLK_ON_SHIFT;
+		if (ep92->check_state != EP92_CHECK_IDLE)
+			change = 0;
+	}
+	if (ep92->cur_audio_state != change) {
+		dev_dbg(codec->dev, "ep92 audio_state changed to %d\n", change);
+		send_uevent = true;
+	}
+	ep92->cur_audio_state = change;
+
 	old = ep92->ai.audio_status;
 	ep92->ai.audio_status = snd_soc_read(codec,
 		EP92_AUDIO_INFO_AUDIO_STATUS);
@@ -879,8 +1052,8 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 		send_uevent = true;
 	}
 
-	new_mode = ep92->old_mode;
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
+	new_mode = ep92->cur_audio_format;
+	if (ep92->cur_earc_en) {
 		change = ep92->ai.cs[0] & EP92_AI_EARC_MODE_MASK;
 		if (((change != EP92_AI_EARC_MODE_LPCM_2CH) &&
 		     (change != EP92_AI_EARC_MODE_LPCM_MCH)) ||
@@ -899,11 +1072,11 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 		new_mode = 1; /* Compr */
 	}
 
-	if (ep92->old_mode != new_mode) {
+	if (ep92->cur_audio_format != new_mode) {
 		dev_dbg(codec->dev, "ep92 mode changed to %d\n", new_mode);
 		send_uevent = true;
 	}
-	ep92->old_mode = new_mode;
+	ep92->cur_audio_format = new_mode;
 
 	old = ep92->ai.cs[3];
 	ep92->ai.cs[3] = snd_soc_read(codec,
@@ -942,7 +1115,7 @@ static void ep92_read_audio_info(struct snd_soc_codec *codec,
 	}
 	change = ep92->ai.ca ^ old;
 	if (change & EP92_AI_CH_ALLOC_MASK) {
-		if (ep92->old_mode != 1) {
+		if (ep92->cur_audio_format != 1) {
 			dev_dbg(codec->dev, "ep92 ch_alloc changed to 0x%02x\n",
 				(ep92->ai.ca) & EP92_AI_CH_ALLOC_MASK);
 			send_uevent = true;
@@ -1197,21 +1370,10 @@ static ssize_t ep92_sysfs_rda_audio_state(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
-		val = (ep92->gi.tx_info & EP92_GI_EARC_ON_MASK) >>
-			EP92_GI_EARC_ON_SHIFT;
-		if (ep92->mute_active)
-			val = 0;
-		dev_dbg(dev, "%s: earc mode '%d'\n", __func__, val);
-	} else {
-		val = (ep92->ai.system_status_0 &
-			EP92_AI_MCLK_ON_MASK) >>
-			EP92_AI_MCLK_ON_SHIFT;
-		if (ep92->check_state != EP92_CHECK_IDLE)
-			val = 0;
-		dev_dbg(dev, "%s: '%d'\n", __func__, val);
-	}
+	val = ep92->cur_audio_state;
+
 	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
 
 	return ret;
 }
@@ -1228,7 +1390,7 @@ static ssize_t ep92_sysfs_rda_audio_format(struct device *dev,
 		return -ENODEV;
 	}
 
-	val = ep92->old_mode;
+	val = ep92->cur_audio_format;
 
 	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
 	dev_dbg(dev, "%s: '%d'\n", __func__, val);
@@ -1269,7 +1431,7 @@ static ssize_t ep92_sysfs_rda_audio_rate(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
+	if (ep92->cur_earc_en) {
 		val = ep92_earc_samp_freq(ep92->ai.cs[3]);
 		if (val > 192000) {
 			/* 768kHz rate is sent over 4 lines with 1/4 speed */
@@ -1298,8 +1460,8 @@ static ssize_t ep92_sysfs_rda_audio_layout(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
-		if (ep92->old_mode) {
+	if (ep92->cur_earc_en) {
+		if (ep92->cur_audio_format) {
 			/* compressed */
 			if (ep92_earc_samp_freq(ep92->ai.cs[3]) <= 192000) {
 				val = 0;
@@ -1338,7 +1500,7 @@ static ssize_t ep92_sysfs_rda_audio_ch_count(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
+	if (ep92->cur_earc_en) {
 		val = ep92_get_ch_count_from_ch_alloc(ep92->ai.ca &
 			EP92_AI_CH_ALLOC_MASK);
 		dev_dbg(dev, "%s: earc mode '%d'\n", __func__, val);
@@ -1367,7 +1529,7 @@ static ssize_t ep92_sysfs_rda_audio_ch_alloc(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
+	if (ep92->cur_earc_en) {
 		val = ep92->ai.ca & EP92_AI_CH_ALLOC_MASK;
 		dev_dbg(dev, "%s: earc mode '%d'\n", __func__, val);
 	} else {
@@ -1391,7 +1553,7 @@ static ssize_t ep92_sysfs_rda_audio_preemph(struct device *dev,
 		return -ENODEV;
 	}
 
-	if (ep92->gc.ctl & EP92_GC_EARC_EN_MASK) {
+	if (ep92->cur_earc_en) {
 		val = 0;
 		dev_dbg(dev, "%s: earc mode '%d'\n", __func__, val);
 	} else {
@@ -1699,6 +1861,13 @@ static ssize_t ep92_sysfs_wta_arc_disable(struct device *dev,
 	snd_soc_write(ep92->codec, EP92_GENERAL_CONTROL_2, reg);
 	ep92->gc.ctl2 &= ~EP92_GC_ARC_DIS_MASK;
 	ep92->gc.ctl2 |= (val << EP92_GC_ARC_DIS_SHIFT) & EP92_GC_ARC_DIS_MASK;
+
+	if (val == 1) {
+		/* also stop arc mode, in case it was enabled */
+		reg = snd_soc_read(ep92->codec, EP92_GENERAL_CONTROL_0);
+		reg &= ~EP92_GC_ARC_EN_MASK;
+		snd_soc_write(ep92->codec, EP92_GENERAL_CONTROL_0, reg);
+	}
 
 	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
 end:
@@ -2040,7 +2209,244 @@ end:
 	return rc;
 }
 
+/* for autodetect timing adjustment */
+static ssize_t ep92_sysfs_rda_check_wait_start(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->check_wait_start;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_wta_check_wait_start(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val, rc;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		dev_err(dev, "%s: kstrtoint failed. rc=%d\n", __func__, rc);
+		goto end;
+	}
+	if ((val < 0) || (val > 1000000)) {
+		dev_err(dev, "%s: value out of range.\n", __func__);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	ep92->check_wait_start = val;
+
+	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
+end:
+	return rc;
+}
+
+static ssize_t ep92_sysfs_rda_check_wait_earc(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->check_wait_earc;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_wta_check_wait_earc(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val, rc;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		dev_err(dev, "%s: kstrtoint failed. rc=%d\n", __func__, rc);
+		goto end;
+	}
+	if ((val < 0) || (val > 1000000)) {
+		dev_err(dev, "%s: value out of range.\n", __func__);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	ep92->check_wait_earc = val;
+
+	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
+end:
+	return rc;
+}
+
+static ssize_t ep92_sysfs_rda_check_wait_arc(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->check_wait_arc;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_wta_check_wait_arc(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val, rc;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		dev_err(dev, "%s: kstrtoint failed. rc=%d\n", __func__, rc);
+		goto end;
+	}
+	if ((val < 0) || (val > 1000000)) {
+		dev_err(dev, "%s: value out of range.\n", __func__);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	ep92->check_wait_arc = val;
+
+	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
+end:
+	return rc;
+}
+
+static ssize_t ep92_sysfs_rda_check_repeat(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->check_repeat;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_wta_check_repeat(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val, rc;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	rc = kstrtoint(buf, 10, &val);
+	if (rc) {
+		dev_err(dev, "%s: kstrtoint failed. rc=%d\n", __func__, rc);
+		goto end;
+	}
+	if ((val < 0) || (val > 1000000)) {
+		dev_err(dev, "%s: value out of range.\n", __func__);
+		rc = -EINVAL;
+		goto end;
+	}
+
+	ep92->check_repeat = val;
+
+	rc = strnlen(buf, EP92_SYSFS_ENTRY_MAX_LEN);
+end:
+	return rc;
+}
+
+static ssize_t ep92_sysfs_rda_check_state(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->check_state;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
 static ssize_t ep92_sysfs_rda_arc_enable(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
+	val = ep92->cur_arc_en;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_rda_arc_en_int(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2060,7 +2466,7 @@ static ssize_t ep92_sysfs_rda_arc_enable(struct device *dev,
 	return ret;
 }
 
-static ssize_t ep92_sysfs_wta_arc_enable(struct device *dev,
+static ssize_t ep92_sysfs_wta_arc_en_int(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int reg, val, rc;
@@ -2105,6 +2511,26 @@ static ssize_t ep92_sysfs_rda_earc_enable(struct device *dev,
 		return -ENODEV;
 	}
 
+	val = ep92->cur_earc_en;
+
+	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
+	dev_dbg(dev, "%s: '%d'\n", __func__, val);
+
+	return ret;
+}
+
+static ssize_t ep92_sysfs_rda_earc_en_int(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret;
+	int val;
+	struct ep92_pdata *ep92 = dev_get_drvdata(dev);
+
+	if (!ep92 || !ep92->codec) {
+		dev_err(dev, "%s: device error\n", __func__);
+		return -ENODEV;
+	}
+
 	val = (ep92->gc.ctl >> EP92_GC_EARC_EN_SHIFT) & EP92_2CHOICE_MASK;
 
 	ret = snprintf(buf, EP92_SYSFS_ENTRY_MAX_LEN, "%d\n", val);
@@ -2113,7 +2539,7 @@ static ssize_t ep92_sysfs_rda_earc_enable(struct device *dev,
 	return ret;
 }
 
-static ssize_t ep92_sysfs_wta_earc_enable(struct device *dev,
+static ssize_t ep92_sysfs_wta_earc_en_int(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int reg, val, rc;
@@ -2364,10 +2790,21 @@ static DEVICE_ATTR(check_arc, 0644, ep92_sysfs_rda_check_arc,
 	ep92_sysfs_wta_check_arc);
 static DEVICE_ATTR(check_earc, 0644, ep92_sysfs_rda_check_earc,
 	ep92_sysfs_wta_check_earc);
-static DEVICE_ATTR(arc_enable, 0644, ep92_sysfs_rda_arc_enable,
-	ep92_sysfs_wta_arc_enable);
-static DEVICE_ATTR(earc_enable, 0644, ep92_sysfs_rda_earc_enable,
-	ep92_sysfs_wta_earc_enable);
+static DEVICE_ATTR(check_wait_start, 0644, ep92_sysfs_rda_check_wait_start,
+	ep92_sysfs_wta_check_wait_start);
+static DEVICE_ATTR(check_wait_earc, 0644, ep92_sysfs_rda_check_wait_earc,
+	ep92_sysfs_wta_check_wait_earc);
+static DEVICE_ATTR(check_wait_arc, 0644, ep92_sysfs_rda_check_wait_arc,
+	ep92_sysfs_wta_check_wait_arc);
+static DEVICE_ATTR(check_repeat, 0644, ep92_sysfs_rda_check_repeat,
+	ep92_sysfs_wta_check_repeat);
+static DEVICE_ATTR(check_state, 0444, ep92_sysfs_rda_check_state, NULL);
+static DEVICE_ATTR(arc_enable, 0444, ep92_sysfs_rda_arc_enable, NULL);
+static DEVICE_ATTR(arc_en_int, 0644, ep92_sysfs_rda_arc_en_int,
+	ep92_sysfs_wta_arc_en_int);
+static DEVICE_ATTR(earc_enable, 0444, ep92_sysfs_rda_earc_enable, NULL);
+static DEVICE_ATTR(earc_en_int, 0644, ep92_sysfs_rda_earc_en_int,
+	ep92_sysfs_wta_earc_en_int);
 static DEVICE_ATTR(cec_mute, 0644, ep92_sysfs_rda_cec_mute,
 	ep92_sysfs_wta_cec_mute);
 static DEVICE_ATTR(cec_volume, 0644, ep92_sysfs_rda_cec_volume,
@@ -2406,8 +2843,15 @@ static struct attribute *ep92_fs_attrs[] = {
 	&dev_attr_src_sel.attr,
 	&dev_attr_check_arc.attr,
 	&dev_attr_check_earc.attr,
+	&dev_attr_check_wait_start.attr,
+	&dev_attr_check_wait_earc.attr,
+	&dev_attr_check_wait_arc.attr,
+	&dev_attr_check_repeat.attr,
+	&dev_attr_check_state.attr,
 	&dev_attr_arc_enable.attr,
+	&dev_attr_arc_en_int.attr,
 	&dev_attr_earc_enable.attr,
+	&dev_attr_earc_en_int.attr,
 	&dev_attr_cec_mute.attr,
 	&dev_attr_cec_volume.attr,
 	&dev_attr_runout.attr,
@@ -2518,6 +2962,10 @@ static int ep92_i2c_probe(struct i2c_client *client,
 	/* enable automatic eARC and ARC check */
 	ep92->check_earc = 1;
 	ep92->check_arc = 1;
+	ep92->check_wait_start = EP92_START_WAIT_DELAY;
+	ep92->check_wait_earc = EP92_EARC_WAIT_DELAY;
+	ep92->check_wait_arc = EP92_ARC_WAIT_DELAY;
+	ep92->check_repeat = EP92_CHECK_REPEAT;
 
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 	/* debugfs interface */
