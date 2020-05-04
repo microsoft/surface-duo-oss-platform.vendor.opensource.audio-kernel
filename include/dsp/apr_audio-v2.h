@@ -1358,6 +1358,8 @@ struct adm_cmd_connect_afe_port_v5 {
 #define RSVD_2 9
 #define RSVD_3 10
 #define DIGI_MIC_TX 11
+
+#define VOICE2_RECORD_RX 0x8001
 #define VOICE2_PLAYBACK_TX 0x8002
 #define VOICE_RECORD_RX 0x8003
 #define VOICE_RECORD_TX 0x8004
@@ -4653,6 +4655,19 @@ struct asm_aptx_ad_dec_cfg_t {
 	 */
 } __packed;
 
+/*
+ * Payload of the APTX CLASSIC decoder configuration parameters in the
+ * #ASM_MEDIA_FMT_APTX_CLASSIC media format.
+ */
+struct asm_aptx_classic_dec_cfg_t {
+	uint32_t          sample_rate;
+	/*
+	 * Number of samples per second.
+	 *
+	 * @values 0x0(48000Hz), 0x1(44100Hz)
+	 */
+} __packed;
+
 union afe_enc_config_data {
 	struct asm_sbc_enc_cfg_t sbc_config;
 	struct asm_aac_enc_cfg_t aac_config;
@@ -4725,6 +4740,7 @@ union afe_dec_config_data {
 	struct asm_aac_dec_cfg_v2_t aac_config;
 	struct asm_mp3_dec_cfg_t mp3_config;
 	struct asm_aptx_ad_dec_cfg_t aptx_ad_config;
+	struct asm_aptx_classic_dec_cfg_t aptx_classic_config;
 };
 
 struct afe_dec_config {
@@ -11723,6 +11739,27 @@ struct afe_clk_set {
 	uint32_t enable;
 };
 
+#define AVS_BUILD_MAJOR_VERSION_V2		2
+#define AVS_BUILD_MINOR_VERSION_V9		9
+#define AVS_BUILD_BRANCH_VERSION_V3		3
+
+#define AFE_PARAM_ID_CLOCK_SET_V2		0x000102E6
+
+#define AFE_API_VERSION_CLOCK_SET_V2		0x1
+
+struct afe_param_id_clock_set_v2_t {
+	uint32_t	clk_set_minor_version;
+	uint32_t	clk_id;
+	uint32_t	clk_freq_in_hz;
+	uint16_t	clk_attri;
+	uint16_t	clk_root;
+	uint32_t	enable;
+	uint32_t	divider_2x;
+	uint32_t	m;
+	uint32_t	n;
+	uint32_t	d;
+};
+
 struct afe_clk_cfg {
 /* Minor version used for tracking the version of the I2S
  * configuration interface.
@@ -12762,6 +12799,12 @@ struct afe_doa_tracking_mon_get_param_resp {
 #define AUDPROC_MODULE_ID_FFECNS 0x00010952
 #define AUDPROC_MODULE_ID_FFNS 0x00010962
 #define AUDPROC_PARAM_ID_FFV_DOA_TRACKING_PARAM 0x0001097C
+
+/*
+* ID of the DTMF Detection Module.
+*/
+#define AUDPROC_MODULE_ID_DTMF_DETECTION        0x00010940
+
 #define AUDPROC_PARAM_ID_FFV_DOA_TRACKING_MONITOR 0x0001097D
 
 struct admx_sec_primary_mic_ch {
