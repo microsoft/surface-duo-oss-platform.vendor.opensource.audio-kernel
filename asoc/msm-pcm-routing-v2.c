@@ -848,7 +848,7 @@ static int last_be_id_configured[MSM_FRONTEND_DAI_MAX][MAX_SESSION_TYPES];
 
 static int msm_map_adsp_lib_ion_fd(int fd, int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0, sec_key = 0;
 
@@ -888,7 +888,7 @@ static int msm_map_adsp_lib_ion_fd(int fd, int id)
 
 static int msm_unmap_adsp_lib_ion_fd(int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0;
 	int sec_key = 0;
@@ -927,7 +927,7 @@ static int msm_unmap_adsp_lib_ion_fd(int id)
 
 int msm_audio_ion_shm_phyfree(int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0;
 	int sec_key = 0;
