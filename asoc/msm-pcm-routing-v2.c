@@ -3535,7 +3535,7 @@ static const char *const ch_mixer[] = {"Disable", "Enable"};
 /* If new backend is added, need update this array */
 static const char *const be_name[] = {
 "ZERO", "PRI_I2S_RX", "PRI_I2S_TX", "SLIM_0_RX",
-"SLIM_0_TX", "HDMI_RX", "HDMI_RX_MS", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
+"SLIM_0_TX", "HDMI_RX", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
 "INT_FM_RX", "INT_FM_TX", "AFE_PCM_RX", "AFE_PCM_TX",
 "AUXPCM_RX", "AUXPCM_TX", "VOICE_PLAYBACK_TX", "VOICE2_PLAYBACK_TX",
 "INCALL_RECORD_RX", "INCALL2_RECORD_RX", "INCALL_RECORD_TX",
@@ -3583,7 +3583,7 @@ static const char *const be_name[] = {
 "TX_CDC_DMA_TX_4", "RX_CDC_DMA_RX_5", "TX_CDC_DMA_TX_5", "RX_CDC_DMA_RX_6",
 "RX_CDC_DMA_RX_7", "PRI_SPDIF_TX", "SEC_SPDIF_RX", "SEC_SPDIF_TX",
 "SLIM_9_RX", "SLIM_9_TX", "AFE_LOOPBACK_TX", "PRI_META_MI2S_RX",
-"SEC_META_MI2S_RX"
+"SEC_META_MI2S_RX", "HDMI_RX_MS"
 };
 
 static SOC_ENUM_SINGLE_DECL(mm1_channel_mux,
