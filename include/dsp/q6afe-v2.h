@@ -59,8 +59,12 @@
 /* for external mclk dynamic switch */
 #define AFE_API_VERSION_V8		8
 #define AFE_API_VERSION_V9		9
+/* for pullable pll clock source name*/
+#define AFE_API_VERSION_V10		10
 /* for spdif playback and channel status update event */
 #define AFE_API_VERSION_V11		11
+
+#define AFE_SAMPLING_RATE_8KHZ 8000
 
 typedef int (*routing_cb)(int port);
 
@@ -518,7 +522,8 @@ int afe_get_doa_tracking_mon(u16 port_id,
 int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 			  uint32_t clk_reset);
 int afe_set_clk_id(u16 port_id, uint32_t clk_id);
-
+int afe_set_source_clk(u16 port_id, const char *clk_src);
+void afe_set_clk_src_array(const char *clk_src[CLK_SRC_MAX]);
 int afe_set_mclk_src_cfg(u16 port_id, uint32_t mclk_src_id, uint32_t mclk_freq);
 
 typedef int (*afe_enable_mclk_and_get_info_cb_func) (void *private_data,
