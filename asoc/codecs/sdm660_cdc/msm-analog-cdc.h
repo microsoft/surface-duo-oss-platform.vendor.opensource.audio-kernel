@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -233,6 +233,7 @@ extern int msm_anlg_cdc_hs_detect(struct snd_soc_codec *codec,
 		    struct wcd_mbhc_config *mbhc_cfg);
 extern void msm_anlg_cdc_hs_detect_exit(struct snd_soc_codec *codec);
 extern void sdm660_cdc_update_int_spk_boost(bool enable);
+extern void msm_anlg_cdc_update_int_spk_boost(bool enable);
 extern void msm_anlg_cdc_spk_ext_pa_cb(
 		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
 		int enable), struct snd_soc_codec *codec);
@@ -268,6 +269,10 @@ static inline int msm_anlg_codec_info_create_codec_entry(
 					struct snd_soc_codec *codec)
 {
 	return 0;
+}
+static inline void msm_anlg_cdc_update_int_spk_boost(bool enable)
+{
+
 }
 #endif /* CONFIG_SND_SOC_ANALOG_CDC */
 #endif
