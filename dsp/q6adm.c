@@ -616,16 +616,6 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 	}
 
 	/*
-	 * check if PSPD is already configured
-	 * if it is configured already, return 0 without applying PSPD.
-	 */
-	if (atomic_read(&this_adm.copp.cnt[port_idx][copp_idx]) > 1) {
-		pr_debug("%s: copp.cnt:%#x\n", __func__,
-			atomic_read(&this_adm.copp.cnt[port_idx][copp_idx]));
-		return 0;
-	}
-
-	/*
 	 * First 8 bytes are 4 bytes as rule number, 2 bytes as output
 	 * channel and 2 bytes as input channel.
 	 * 2 * ch_mixer->output_channel means output channel mapping.
@@ -5602,7 +5592,7 @@ int adm_get_source_tracking(int port_id, int copp_idx,
 	 */
 	param_hdr.param_size =
 		sizeof(struct adm_param_fluence_sourcetracking_t) +
-		sizeof(union param_hdrs);
+		sizeof(struct param_hdr_v3);
 
 	/*
 	 * Retrieving parameters out of band, so no need to provide a buffer for
@@ -5631,7 +5621,7 @@ int adm_get_source_tracking(int port_id, int copp_idx,
 	source_tracking_params =
 		(struct adm_param_fluence_sourcetracking_t
 			 *) (this_adm.sourceTrackingData.memmap.kvaddr +
-			     sizeof(struct param_hdr_v1));
+			     sizeof(struct param_hdr_v3));
 	for (i = 0; i < MAX_SECTORS; i++) {
 		sourceTrackingData->vad[i] = source_tracking_params->vad[i];
 		pr_debug("%s: vad[%d] = %d\n",
