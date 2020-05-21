@@ -93,8 +93,8 @@ include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
 endif # target specific build
 include $(CLEAR_VARS)
-LOCAL_MODULE              := $(AUDIO_CHIPSET)_gecko_core.ko
-LOCAL_MODULE_KBUILD_NAME  := gecko_core_dlkm.ko
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_spf_core.ko
+LOCAL_MODULE_KBUILD_NAME  := spf_core_dlkm.ko
 LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
