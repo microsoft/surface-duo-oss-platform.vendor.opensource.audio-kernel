@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2014, 2016-2019 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2014, 2016-2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1087,16 +1087,14 @@ static int apr_notifier_service_cb(struct notifier_block *this,
 		 * recovery notifications during initial boot
 		 * up since everything is expected to be down.
 		 */
-		if (cb_data->domain == AUDIO_NOTIFIER_MODEM_DOMAIN) {
+		if (is_initial_boot) {
 			is_initial_boot = false;
-			apr_modem_down(opcode);
-		} else {
-			if (is_initial_boot) {
-				is_initial_boot = false;
-				break;
-			}
-			apr_adsp_down(opcode);
+			break;
 		}
+		if (cb_data->domain == AUDIO_NOTIFIER_MODEM_DOMAIN)
+			apr_modem_down(opcode);
+		else
+			apr_adsp_down(opcode);
 		break;
 	case AUDIO_NOTIFIER_SERVICE_UP:
 		is_initial_boot = false;
@@ -1182,23 +1180,22 @@ static int apr_probe(struct platform_device *pdev)
 	if (!apr_pkt_ctx)
 		pr_err("%s: Unable to create ipc log context\n", __func__);
 
-	is_initial_boot = true;
-	subsys_notif_register("apr_adsp", AUDIO_NOTIFIER_ADSP_DOMAIN,
-			      &adsp_service_nb);
-	subsys_notif_register("apr_modem", AUDIO_NOTIFIER_MODEM_DOMAIN,
-			      &modem_service_nb);
-
-	apr_tal_init();
-	apr_dev_ptr = &pdev->dev;
-	INIT_DELAYED_WORK(&add_chld_dev_work, apr_add_child_devices);
-
 	ret = snd_event_client_register(&pdev->dev, &apr_ssr_ops, NULL);
 	if (ret) {
 		pr_err("%s: Registration with SND event fwk failed ret = %d\n",
 			__func__, ret);
 		ret = 0;
 	} else
-		snd_event_notify(apr_dev_ptr, SND_EVENT_UP);
+		snd_event_notify(&pdev->dev, SND_EVENT_UP);
+	is_initial_boot = true;
+	subsys_notif_register("apr_adsp", AUDIO_NOTIFIER_ADSP_DOMAIN,
+			      &adsp_service_nb);
+	subsys_notif_register("apr_modem", AUDIO_NOTIFIER_MODEM_DOMAIN,
+			      &modem_service_nb);
+	apr_tal_init();
+	apr_dev_ptr = &pdev->dev;
+	INIT_DELAYED_WORK(&add_chld_dev_work, apr_add_child_devices);
+
 
 	return apr_debug_init();
 }
