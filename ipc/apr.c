@@ -257,6 +257,7 @@ static void apr_modem_down(unsigned long opcode)
 {
 	apr_set_modem_state(APR_SUBSYS_DOWN);
 	dispatch_event(opcode, APR_DEST_MODEM);
+	snd_event_notify(apr_priv->dev, SND_EVENT_DOWN);
 }
 
 static void apr_modem_up(void)
@@ -265,6 +266,7 @@ static void apr_modem_up(void)
 							APR_SUBSYS_DOWN)
 		wake_up(&modem_wait);
 	is_modem_up = 1;
+	snd_event_notify(apr_priv->dev, SND_EVENT_UP);
 }
 
 enum apr_subsys_state apr_get_q6_state(void)
@@ -1232,23 +1234,32 @@ static int apr_probe(struct platform_device *pdev)
 		subsys_notif_register("apr_adsp",
 				       AUDIO_NOTIFIER_ADSP_DOMAIN,
 				       &adsp_service_nb);
+		apr_tal_init();
+
+		ret = snd_event_client_register(&pdev->dev, &apr_ssr_ops, NULL);
+		if (ret) {
+			pr_err("%s: Registration with SND event fwk failed ret = %d\n",
+			__func__, ret);
+			ret = 0;
+		}
 	} else if (!strcmp(subsys_name, "apr_modem")) {
+
+		ret = snd_event_client_register(&pdev->dev, &apr_ssr_ops, NULL);
+		if (ret) {
+			pr_err("%s: Registration with SND event fwk failed ret = %d\n",
+			__func__, ret);
+			ret = 0;
+		}
+
 		subsys_notif_register("apr_modem",
 				       AUDIO_NOTIFIER_MODEM_DOMAIN,
 				       &modem_service_nb);
+		apr_tal_init();
 	} else {
 		pr_err("%s: invalid subsys-name %s\n", __func__, subsys_name);
 		return -EINVAL;
 	}
 
-	apr_tal_init();
-
-	ret = snd_event_client_register(&pdev->dev, &apr_ssr_ops, NULL);
-	if (ret) {
-		pr_err("%s: Registration with SND event fwk failed ret = %d\n",
-			__func__, ret);
-		ret = 0;
-	}
 	INIT_WORK(&apr_cb_work, state_notify_cb);
 	return apr_debug_init();
 }
