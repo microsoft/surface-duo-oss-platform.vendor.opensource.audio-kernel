@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2017, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -166,6 +166,7 @@ static int audio_notifer_reg_service(int service, int domain)
 		handle = audio_ssr_register(
 			service_data[service][domain].domain_id,
 			service_data[service][domain].nb);
+		curr_state = AUDIO_NOTIFIER_SERVICE_UP;
 		break;
 	case AUDIO_NOTIFIER_PDR_SERVICE:
 		handle = audio_pdr_service_register(
@@ -281,7 +282,8 @@ static int audio_notifer_reg_client_service(struct client_data *client_data,
 	 * PDR registration returns current state
 	 * Force callback of client with current state for PDR
 	 */
-	if (client_data->service == AUDIO_NOTIFIER_PDR_SERVICE) {
+	if ((client_data->service == AUDIO_NOTIFIER_PDR_SERVICE) ||
+		(client_data->service == AUDIO_NOTIFIER_SSR_SERVICE)) {
 		data.service = service;
 		data.domain = domain;
 		(void)client_data->nb->notifier_call(client_data->nb,
