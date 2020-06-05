@@ -304,17 +304,10 @@ static struct dev_config usb_tx_cfg = {
 	.channels = 1,
 };
 
-static struct dev_config proxy_rx_cfg[] = {
-	{
-		.sample_rate = SAMPLING_RATE_48KHZ,
-		.bit_format = SNDRV_PCM_FORMAT_S16_LE,
-		.channels = 2,
-	},
-	{
-		.sample_rate = SAMPLING_RATE_48KHZ,
-		.bit_format = SNDRV_PCM_FORMAT_S16_LE,
-		.channels = 2,
-	}
+static struct dev_config proxy_rx_cfg = {
+	.sample_rate = SAMPLING_RATE_48KHZ,
+	.bit_format = SNDRV_PCM_FORMAT_S16_LE,
+	.channels = 2,
 };
 
 /* Default configuration of MI2S channels */
@@ -1309,16 +1302,9 @@ static int ext_disp_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
 static int proxy_rx_ch_get(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
-	if(strnstr(kcontrol->id.name, "RX1", sizeof(kcontrol->id.name))) {
-		ucontrol->value.integer.value[0] = proxy_rx_cfg[1].channels - 2;
-		pr_debug("%s: proxy_rx1 channels = %d\n",
-			 __func__, proxy_rx_cfg[1].channels);
-	}
-	else {
-		ucontrol->value.integer.value[0] = proxy_rx_cfg[0].channels - 2;
-		pr_debug("%s: proxy_rx channels = %d\n",
-			 __func__, proxy_rx_cfg[0].channels);
-	}
+	pr_debug("%s: proxy_rx channels = %d\n",
+		 __func__, proxy_rx_cfg.channels);
+	ucontrol->value.integer.value[0] = proxy_rx_cfg.channels - 2;
 
 	return 0;
 }
@@ -1326,16 +1312,9 @@ static int proxy_rx_ch_get(struct snd_kcontrol *kcontrol,
 static int proxy_rx_ch_put(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
-	if(strnstr(kcontrol->id.name, "RX1", sizeof(kcontrol->id.name))) {
-		proxy_rx_cfg[1].channels = ucontrol->value.integer.value[0] + 2;
-		pr_debug("%s: proxy_rx1 channels = %d\n",
-			 __func__, proxy_rx_cfg[1].channels);
-	}
-	else {
-		proxy_rx_cfg[0].channels = ucontrol->value.integer.value[0] + 2;
-		pr_debug("%s: proxy_rx channels = %d\n",
-			 __func__, proxy_rx_cfg[0].channels);
-	}
+	proxy_rx_cfg.channels = ucontrol->value.integer.value[0] + 2;
+	pr_debug("%s: proxy_rx channels = %d\n",
+		 __func__, proxy_rx_cfg.channels);
 
 	return 1;
 }
@@ -2648,8 +2627,6 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			ext_disp_rx_ch_get, ext_disp_rx_ch_put),
 	SOC_ENUM_EXT("PROXY_RX Channels", proxy_rx_chs,
 			proxy_rx_ch_get, proxy_rx_ch_put),
-	SOC_ENUM_EXT("PROXY_RX1 Channels", proxy_rx_chs,
-			proxy_rx_ch_get, proxy_rx_ch_put),
 	SOC_ENUM_EXT("USB_AUDIO_RX Format", usb_rx_format,
 			usb_audio_rx_format_get, usb_audio_rx_format_put),
 	SOC_ENUM_EXT("USB_AUDIO_TX Format", usb_tx_format,
@@ -3387,12 +3364,7 @@ static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		break;
 
 	case MSM_BACKEND_DAI_AFE_PCM_RX:
-		channels->min = channels->max = proxy_rx_cfg[0].channels;
-		rate->min = rate->max = SAMPLING_RATE_48KHZ;
-		break;
-
-	case MSM_BACKEND_DAI_AFE_PCM_RX1:
-		channels->min = channels->max = proxy_rx_cfg[1].channels;
+		channels->min = channels->max = proxy_rx_cfg.channels;
 		rate->min = rate->max = SAMPLING_RATE_48KHZ;
 		break;
 
@@ -5971,16 +5943,6 @@ static struct snd_soc_dai_link msm_auto_fe_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA25
 	},
-	{
-		.name = "MSM AFE-PCM TX1",
-		.stream_name = "AFE-PROXY TX1",
-		.cpu_dai_name = "msm-dai-q6-dev.242",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
-		.platform_name  = "msm-pcm-afe",
-		.dpcm_capture = 1,
-		.ignore_suspend = 1,
-	},
 };
 
 static struct snd_soc_dai_link msm_custom_fe_dai_links[] = {
@@ -6868,21 +6830,6 @@ static struct snd_soc_dai_link msm_auto_be_dai_links[] = {
 		.id = MSM_BACKEND_DAI_QUIN_TDM_TX_7,
 		.be_hw_params_fixup = msm_tdm_be_hw_params_fixup,
 		.ops = &sa6155_tdm_be_ops,
-		.ignore_suspend = 1,
-	},
-	{
-		.name = LPASS_BE_AFE_PCM_RX1,
-		.stream_name = "AFE Playback1",
-		.cpu_dai_name = "msm-dai-q6-dev.226",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_AFE_PCM_RX1,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		/* this dainlink has playback support */
-		.ignore_pmdown_time = 1,
 		.ignore_suspend = 1,
 	},
 };
