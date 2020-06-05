@@ -26,6 +26,8 @@
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
 
+#define DTMF_MAX_DURATION 65535
+
 enum {
 	DTMF_IN_RX,
 	DTMF_IN_TX,
@@ -100,8 +102,10 @@ static int msm_dtmf_rx_generate_put(struct snd_kcontrol *kcontrol,
 	int64_t duration = ucontrol->value.integer.value[2];
 	uint16_t gain = ucontrol->value.integer.value[3];
 
-	pr_debug("%s: low_freq=%d high_freq=%d duration=%d gain=%d\n",
-		 __func__, low_freq, high_freq, (int)duration, gain);
+	pr_debug("%s: low_freq=%d high_freq=%d duration=%lld gain=%d\n",
+		 __func__, low_freq, high_freq, duration, gain);
+	if (duration == DTMF_MAX_DURATION)
+		duration = -1;
 	afe_dtmf_generate_rx(duration, high_freq, low_freq, gain);
 	return 0;
 }
@@ -154,7 +158,7 @@ static int msm_dtmf_detect_volte_rx_get(struct snd_kcontrol *kcontrol,
 
 static struct snd_kcontrol_new msm_dtmf_controls[] = {
 	SOC_SINGLE_MULTI_EXT("DTMF_Generate Rx Low High Duration Gain",
-			     SND_SOC_NOPM, 0, 5000, 0, 4,
+			     SND_SOC_NOPM, 0, 65535, 0, 4,
 			     msm_dtmf_rx_generate_get,
 			     msm_dtmf_rx_generate_put),
 	SOC_SINGLE_EXT("DTMF_Detect Rx Voice enable", SND_SOC_NOPM, 0, 1, 0,

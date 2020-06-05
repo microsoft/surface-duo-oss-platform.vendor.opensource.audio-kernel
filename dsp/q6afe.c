@@ -95,8 +95,8 @@ enum {
 };
 
 enum {
-	APTX_AD_48 = 0,
-	APTX_AD_44_1 = 1
+	APTX_48 = 0,
+	APTX_44_1 = 1
 };
 
 struct wlock {
@@ -4009,10 +4009,18 @@ static int q6afe_send_dec_config(u16 port_id,
 		media_type.sample_rate =
 			cfg->data.sbc_config.sample_rate;
 		break;
+	case ASM_MEDIA_FMT_APTX:
+		media_type.sample_rate =
+			cfg->data.aptx_classic_config.sample_rate;
+		break;
+	case ASM_MEDIA_FMT_APTX_HD:
+		media_type.sample_rate =
+			cfg->data.aptx_hd_config.sample_rate;
+		break;
 	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
 		if (!cfg->abr_dec_cfg.is_abr_enabled) {
 			media_type.sample_rate =
-			(cfg->data.aptx_ad_config.sample_rate == APTX_AD_44_1) ?
+			(cfg->data.aptx_ad_config.sample_rate == APTX_44_1) ?
 				AFE_PORT_SAMPLE_RATE_44_1K :
 				AFE_PORT_SAMPLE_RATE_48K;
 			break;
@@ -4044,7 +4052,8 @@ static int q6afe_send_dec_config(u16 port_id,
 	}
 
 	if (format != ASM_MEDIA_FMT_SBC && format != ASM_MEDIA_FMT_AAC_V2 &&
-		format != ASM_MEDIA_FMT_APTX_ADAPTIVE) {
+		format != ASM_MEDIA_FMT_APTX_ADAPTIVE && format != ASM_MEDIA_FMT_APTX_HD &&
+		format != ASM_MEDIA_FMT_APTX) {
 		pr_debug("%s:Unsuppported dec format. Ignore AFE config %u\n",
 				__func__, format);
 		goto exit;
@@ -4075,6 +4084,8 @@ static int q6afe_send_dec_config(u16 port_id,
 	switch (cfg->format) {
 	case ASM_MEDIA_FMT_AAC_V2:
 	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
+	case ASM_MEDIA_FMT_APTX:
+	case ASM_MEDIA_FMT_APTX_HD:
 		param_hdr.param_size = sizeof(struct afe_dec_media_fmt_t);
 
 		pr_debug("%s:send AVS_DECODER_PARAM_ID DEC_MEDIA_FMT to DSP payload\n",

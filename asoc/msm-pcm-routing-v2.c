@@ -848,7 +848,7 @@ static int last_be_id_configured[MSM_FRONTEND_DAI_MAX][MAX_SESSION_TYPES];
 
 static int msm_map_adsp_lib_ion_fd(int fd, int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0, sec_key = 0;
 
@@ -888,7 +888,7 @@ static int msm_map_adsp_lib_ion_fd(int fd, int id)
 
 static int msm_unmap_adsp_lib_ion_fd(int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0;
 	int sec_key = 0;
@@ -927,7 +927,7 @@ static int msm_unmap_adsp_lib_ion_fd(int id)
 
 int msm_audio_ion_shm_phyfree(int id)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0;
 	int sec_key = 0;
@@ -2215,7 +2215,13 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 
 	pr_debug("%s: reg %x val %x set %x\n", __func__, reg, val, set);
 
-	if (!is_mm_lsm_fe_id(val)) {
+	if (val == MSM_FRONTEND_DAI_DTMF_RX &&
+		afe_get_port_type(msm_bedais[reg].port_id) ==
+			MSM_AFE_PORT_TYPE_RX) {
+		pr_debug("%s(): set=%d port id=0x%x for dtmf generation\n",
+			__func__, set, msm_bedais[reg].port_id);
+		afe_set_dtmf_gen_rx_portid(msm_bedais[reg].port_id, set);
+	} else if (!is_mm_lsm_fe_id(val)) {
 		/* recheck FE ID in the mixer control defined in this file */
 		pr_err("%s: bad MM ID\n", __func__);
 		return;
@@ -3529,7 +3535,7 @@ static const char *const ch_mixer[] = {"Disable", "Enable"};
 /* If new backend is added, need update this array */
 static const char *const be_name[] = {
 "ZERO", "PRI_I2S_RX", "PRI_I2S_TX", "SLIM_0_RX",
-"SLIM_0_TX", "HDMI_RX", "HDMI_RX_MS", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
+"SLIM_0_TX", "HDMI_RX", "INT_BT_SCO_RX", "INT_BT_SCO_TX",
 "INT_FM_RX", "INT_FM_TX", "AFE_PCM_RX", "AFE_PCM_TX",
 "AUXPCM_RX", "AUXPCM_TX", "VOICE_PLAYBACK_TX", "VOICE2_PLAYBACK_TX",
 "INCALL_RECORD_RX", "INCALL2_RECORD_RX", "INCALL_RECORD_TX",
@@ -3577,7 +3583,7 @@ static const char *const be_name[] = {
 "TX_CDC_DMA_TX_4", "RX_CDC_DMA_RX_5", "TX_CDC_DMA_TX_5", "RX_CDC_DMA_RX_6",
 "RX_CDC_DMA_RX_7", "PRI_SPDIF_TX", "SEC_SPDIF_RX", "SEC_SPDIF_TX",
 "SLIM_9_RX", "SLIM_9_TX", "AFE_LOOPBACK_TX", "PRI_META_MI2S_RX",
-"SEC_META_MI2S_RX"
+"SEC_META_MI2S_RX", "HDMI_RX_MS"
 };
 
 static SOC_ENUM_SINGLE_DECL(mm1_channel_mux,
@@ -7065,7 +7071,10 @@ static const struct snd_kcontrol_new primary_mi2s_rx_mixer_controls[] = {
 	MSM_BACKEND_DAI_PRI_MI2S_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA30, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
-
+	SOC_DOUBLE_EXT("DTMF", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_PRI_MI2S_RX,
+	MSM_FRONTEND_DAI_DTMF_RX, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 };
 
 static const struct snd_kcontrol_new int0_mi2s_rx_mixer_controls[] = {
@@ -16301,6 +16310,9 @@ MSM_BACKEND_DAI_QUAT_TDM_TX_0, MSM_FRONTEND_DAI_VOICEMMODE1,
 	SOC_DOUBLE_EXT("PRI_TDM_TX_3_MMode1", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_PRI_TDM_TX_3, MSM_FRONTEND_DAI_VOICEMMODE1,
 	1, 0, msm_routing_get_voice_mixer, msm_routing_put_voice_mixer),
+	SOC_DOUBLE_EXT("SEC_MI2S_TX_MMode1", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_SECONDARY_MI2S_TX, MSM_FRONTEND_DAI_VOICEMMODE1,
+	1, 0, msm_routing_get_voice_mixer, msm_routing_put_voice_mixer),
 };
 
 static const struct snd_kcontrol_new tx_voicemmode2_mixer_controls[] = {
@@ -23745,6 +23757,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia16", "MM_DL16"},
 	{"PRI_MI2S_RX Audio Mixer", "MultiMedia26", "MM_DL26"},
 	{"PRI_MI2S_RX", NULL, "PRI_MI2S_RX Audio Mixer"},
+	{"PRI_MI2S_RX Audio Mixer", "DTMF", "DTMF_DL_HL"},
 
 	{"INT0_MI2S_RX Audio Mixer", "MultiMedia1", "MM_DL1"},
 	{"INT0_MI2S_RX Audio Mixer", "MultiMedia2", "MM_DL2"},
@@ -25682,6 +25695,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"VoiceMMode1_Tx Mixer", "QUAT_MI2S_TX_MMode1", "QUAT_MI2S_TX"},
 	{"VoiceMMode1_Tx Mixer", "QUIN_MI2S_TX_MMode1", "QUIN_MI2S_TX"},
 	{"VoiceMMode1_Tx Mixer", "PRI_TDM_TX_3_MMode1", "PRI_TDM_TX_3"},
+	{"VoiceMMode1_Tx Mixer", "SEC_MI2S_TX_MMode1", "SEC_MI2S_TX"},
 	{"VOICEMMODE1_UL", NULL, "VoiceMMode1_Tx Mixer"},
 
 	{"VoiceMMode2_Tx Mixer", "PRI_TX_MMode2", "PRI_I2S_TX"},
