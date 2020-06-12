@@ -340,8 +340,8 @@ int wsa881x_codec_info_create_codec_entry(struct snd_info_entry *codec_root,
 
 	wsa881x = snd_soc_component_get_drvdata(component);
 	card = component->card;
-	snprintf(name, sizeof(name), "%s.%x", "wsa881x",
-		 (u32)wsa881x->swr_slave->addr);
+	snprintf(name, sizeof(name), "%s.%llx", "wsa881x",
+		 wsa881x->swr_slave->addr);
 
 	wsa881x->entry = snd_info_create_subdir(codec_root->module,
 						(const char *)name,
