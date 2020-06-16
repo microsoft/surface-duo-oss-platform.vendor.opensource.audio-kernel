@@ -94,6 +94,7 @@ int q6audio_get_port_index(u16 port_id)
 	case INT_FM_TX: return IDX_INT_FM_TX;
 	case RT_PROXY_PORT_001_RX: return IDX_RT_PROXY_PORT_001_RX;
 	case RT_PROXY_PORT_001_TX: return IDX_RT_PROXY_PORT_001_TX;
+	case RT_PROXY_PORT_002_RX: return IDX_RT_PROXY_PORT_002_RX;
 	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 		return IDX_AFE_PORT_ID_PRIMARY_MI2S_RX;
 	case AFE_PORT_ID_PRIMARY_MI2S_TX:
@@ -443,6 +444,7 @@ int q6audio_get_port_id(u16 port_id)
 	case INT_FM_TX: return AFE_PORT_ID_INTERNAL_FM_TX;
 	case RT_PROXY_PORT_001_RX: return AFE_PORT_ID_RT_PROXY_PORT_001_RX;
 	case RT_PROXY_PORT_001_TX: return AFE_PORT_ID_RT_PROXY_PORT_001_TX;
+	case RT_PROXY_PORT_002_RX: return AFE_PORT_ID_RT_PROXY_PORT_002_RX;
 	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 			return AFE_PORT_ID_PRIMARY_MI2S_RX;
 	case AFE_PORT_ID_PRIMARY_MI2S_TX:
@@ -723,7 +725,9 @@ int q6audio_convert_virtual_to_portid(u16 port_id)
 		if (port_id == RT_PROXY_DAI_001_RX ||
 			port_id == RT_PROXY_DAI_001_TX ||
 			port_id == RT_PROXY_DAI_002_RX ||
-			port_id == RT_PROXY_DAI_002_TX)
+			port_id == RT_PROXY_DAI_002_TX ||
+			port_id == RT_PROXY_DAI_003_RX ||
+			port_id == RT_PROXY_DAI_003_TX)
 			ret = VIRTUAL_ID_TO_PORTID(port_id);
 		else
 			ret = -EINVAL;
@@ -967,6 +971,7 @@ int q6audio_validate_port(u16 port_id)
 	case INT_FM_TX:
 	case RT_PROXY_PORT_001_RX:
 	case RT_PROXY_PORT_001_TX:
+	case RT_PROXY_PORT_002_RX:
 	case AFE_PORT_ID_PRIMARY_MI2S_RX:
 	case AFE_PORT_ID_PRIMARY_MI2S_TX:
 	case AFE_PORT_ID_QUATERNARY_MI2S_RX:
@@ -1161,6 +1166,7 @@ static u16 port_id_index[MAX_PORT_IDS][2] = {
 	{INT_FM_TX, IDX_INT_FM_TX},
 	{RT_PROXY_PORT_001_RX, IDX_RT_PROXY_PORT_001_RX},
 	{RT_PROXY_PORT_001_TX, IDX_RT_PROXY_PORT_001_TX},
+	{RT_PROXY_PORT_002_RX, IDX_RT_PROXY_PORT_002_RX},
 	{SLIMBUS_4_RX, IDX_SLIMBUS_4_RX},
 	{SLIMBUS_4_TX, IDX_SLIMBUS_4_TX},
 	{SLIMBUS_5_RX, IDX_SLIMBUS_5_RX},

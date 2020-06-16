@@ -130,6 +130,8 @@ static enum hrtimer_restart afe_hrtimer_rec_callback(struct hrtimer *hrt)
 		container_of(hrt, struct pcm_afe_info, hrt);
 	struct snd_pcm_substream *substream = prtd->substream;
 	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *dai = rtd->cpu_dai;
 	u32 mem_map_handle = 0;
 	int ret;
 
@@ -144,7 +146,7 @@ static enum hrtimer_restart afe_hrtimer_rec_callback(struct hrtimer *hrt)
 		ret = afe_rt_proxy_port_read(
 		(prtd->dma_addr + (prtd->dsp_cnt
 		* snd_pcm_lib_period_bytes(prtd->substream))), mem_map_handle,
-		snd_pcm_lib_period_bytes(prtd->substream));
+		dai->id, snd_pcm_lib_period_bytes(prtd->substream));
 		if (ret < 0) {
 			pr_err("%s: AFE port read fails: %d\n", __func__, ret);
 			prtd->start = 0;
@@ -262,6 +264,8 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 	unsigned long dsp_flags;
 	struct snd_pcm_substream *substream = NULL;
 	struct snd_pcm_runtime *runtime = NULL;
+	struct snd_soc_pcm_runtime * rtd = NULL;
+	struct snd_soc_dai *dai = NULL;
 	uint16_t event;
 	uint64_t period_bytes;
 	uint64_t bytes_one_sec;
@@ -271,6 +275,8 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 		return;
 	substream =  prtd->substream;
 	runtime = substream->runtime;
+	rtd = substream->private_data;
+	dai = rtd->cpu_dai;
 	pr_debug("%s\n", __func__);
 	spin_lock_irqsave(&prtd->dsp_lock, dsp_flags);
 	switch (opcode) {
@@ -309,7 +315,7 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 					(prtd->dsp_cnt *
 					snd_pcm_lib_period_bytes(
 						prtd->substream))),
-					mem_map_handle,
+					mem_map_handle, dai->id,
 					snd_pcm_lib_period_bytes(
 						prtd->substream));
 				prtd->dsp_cnt++;
@@ -549,6 +555,9 @@ static int msm_afe_capture_copy(struct snd_pcm_substream *substream,
 	int ret = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct pcm_afe_info *prtd = runtime->private_data;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_dai *dai = rtd->cpu_dai;
+
 	char *hwbuf = runtime->dma_area + hwoff;
 	u32 mem_map_handle = 0;
 
@@ -567,7 +576,7 @@ static int msm_afe_capture_copy(struct snd_pcm_substream *substream,
 		ret = afe_rt_proxy_port_read((prtd->dma_addr +
 				(prtd->dsp_cnt *
 				snd_pcm_lib_period_bytes(prtd->substream))),
-				mem_map_handle,
+				mem_map_handle, dai->id,
 				snd_pcm_lib_period_bytes(prtd->substream));
 
 		if (ret) {

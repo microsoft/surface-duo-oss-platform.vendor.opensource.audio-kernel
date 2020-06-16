@@ -119,7 +119,7 @@ struct afe_ctl {
 	void (*rx_cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv);
 	void *tx_private_data;
-	void *rx_private_data;
+	void *rx_private_data[NUM_PROXY_PORTS];
 	uint32_t mmap_handle;
 
 	void (*pri_spdif_tx_cb)(uint32_t opcode,
@@ -246,9 +246,9 @@ static struct afe_ctl this_afe;
 #define TIMEOUT_MS 1000
 #define Q6AFE_MAX_VOLUME 0x3FFF
 
-static int pcm_afe_instance[2];
-static int proxy_afe_instance[2];
-bool afe_close_done[2] = {true, true};
+static int pcm_afe_instance[3];
+static int proxy_afe_instance[3];
+bool afe_close_done[3] = {true, true, true};
 
 #define SIZEOF_CFG_CMD(y) \
 		(sizeof(struct apr_hdr) + sizeof(u16) + (sizeof(struct y)))
@@ -677,6 +677,7 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		return -EINVAL;
 	}
 	if (data->opcode == RESET_EVENTS) {
+		int i;
 		pr_debug("%s: reset event = %d %d apr[%pK]\n",
 			__func__,
 			data->reset_event, data->reset_proc, this_afe.apr);
@@ -706,12 +707,14 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 					this_afe.tx_private_data);
 			this_afe.tx_cb = NULL;
 		}
-		if (this_afe.rx_cb) {
-			this_afe.rx_cb(data->opcode, data->token,
-					data->payload,
-					this_afe.rx_private_data);
-			this_afe.rx_cb = NULL;
+		for (i = 0; i < NUM_PROXY_PORTS; i++) {
+			if (this_afe.rx_cb && this_afe.rx_private_data[i]) {
+				this_afe.rx_cb(data->opcode, data->token,
+						data->payload,
+						this_afe.rx_private_data[i]);
+			}
 		}
+		this_afe.rx_cb = NULL;
 
 		return 0;
 	}
@@ -822,7 +825,7 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				port_id = RT_PROXY_PORT_001_TX;
 				break;
 			case AFE_PORT_DATA_CMD_RT_PROXY_PORT_READ_V2:
-				port_id = RT_PROXY_PORT_001_RX;
+				port_id = data->src_port;
 				break;
 			case AFE_CMD_ADD_TOPOLOGIES:
 				atomic_set(&this_afe.state, 0);
@@ -945,11 +948,13 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			}
 			break;
 		}
-		case RT_PROXY_PORT_001_RX: {
-			if (this_afe.rx_cb) {
+		case RT_PROXY_PORT_001_RX:
+		case RT_PROXY_PORT_002_RX:
+		{
+			if(this_afe.rx_cb) {
 				this_afe.rx_cb(data->opcode, data->token,
 					data->payload,
-					this_afe.rx_private_data);
+					this_afe.rx_private_data[PORTID_TO_IDX(port_id)]);
 			}
 			break;
 		}
@@ -1063,6 +1068,7 @@ int afe_sizeof_cfg_cmd(u16 port_id)
 		break;
 	case RT_PROXY_PORT_001_RX:
 	case RT_PROXY_PORT_001_TX:
+	case RT_PROXY_PORT_002_RX:
 		ret_size = SIZEOF_CFG_CMD(afe_param_id_rt_proxy_port_cfg);
 		break;
 	case AFE_PORT_ID_USB_RX:
@@ -4501,28 +4507,30 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	}
 
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
-		(port_id == RT_PROXY_DAI_002_TX)) {
+		(port_id == RT_PROXY_DAI_002_TX) ||
+		(port_id == RT_PROXY_DAI_003_RX)) {
 		pr_debug("%s: before incrementing pcm_afe_instance %d port_id 0x%x\n",
 			__func__,
-			pcm_afe_instance[port_id & 0x1], port_id);
+			pcm_afe_instance[port_id & 0x3], port_id);
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
-		pcm_afe_instance[port_id & 0x1]++;
+		pcm_afe_instance[port_id & 0x3]++;
 		return 0;
 	}
 	if ((port_id == RT_PROXY_DAI_002_RX) ||
-			(port_id == RT_PROXY_DAI_001_TX)) {
+			(port_id == RT_PROXY_DAI_001_TX) ||
+			(port_id == RT_PROXY_DAI_003_TX)) {
 		pr_debug("%s: before incrementing proxy_afe_instance %d port_id 0x%x\n",
 			__func__,
-			proxy_afe_instance[port_id & 0x1], port_id);
+			proxy_afe_instance[port_id & 0x3], port_id);
 
-		if (!afe_close_done[port_id & 0x1]) {
+		if (!afe_close_done[port_id & 0x3]) {
 			/*close pcm dai corresponding to the proxy dai*/
 			afe_close(port_id - 0x10);
-			pcm_afe_instance[port_id & 0x1]++;
+			pcm_afe_instance[port_id & 0x3]++;
 			pr_debug("%s: reconfigure afe port again\n", __func__);
 		}
-		proxy_afe_instance[port_id & 0x1]++;
-		afe_close_done[port_id & 0x1] = false;
+		proxy_afe_instance[port_id & 0x3]++;
+		afe_close_done[port_id & 0x3] = false;
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	}
 
@@ -4708,6 +4716,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		break;
 	case RT_PROXY_PORT_001_RX:
 	case RT_PROXY_PORT_001_TX:
+	case RT_PROXY_PORT_002_RX:
 		cfg_type = AFE_PARAM_ID_RT_PROXY_CONFIG;
 		break;
 	case INT_BT_SCO_RX:
@@ -4989,6 +4998,7 @@ int afe_get_port_index(u16 port_id)
 	case INT_FM_TX: return IDX_INT_FM_TX;
 	case RT_PROXY_PORT_001_RX: return IDX_RT_PROXY_PORT_001_RX;
 	case RT_PROXY_PORT_001_TX: return IDX_RT_PROXY_PORT_001_TX;
+	case RT_PROXY_PORT_002_RX: return IDX_RT_PROXY_PORT_002_RX;
 	case SLIMBUS_4_RX: return IDX_SLIMBUS_4_RX;
 	case SLIMBUS_4_TX: return IDX_SLIMBUS_4_TX;
 	case SLIMBUS_5_RX: return IDX_SLIMBUS_5_RX;
@@ -5314,12 +5324,14 @@ int afe_open(u16 port_id,
 	}
 
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
-		(port_id == RT_PROXY_DAI_002_TX)) {
+		(port_id == RT_PROXY_DAI_002_TX) ||
+		(port_id == RT_PROXY_DAI_003_RX)) {
 		pr_err("%s: wrong port 0x%x\n", __func__, port_id);
 		return -EINVAL;
 	}
 	if ((port_id == RT_PROXY_DAI_002_RX) ||
-		(port_id == RT_PROXY_DAI_001_TX))
+		(port_id == RT_PROXY_DAI_001_TX) ||
+		(port_id == RT_PROXY_DAI_003_TX))
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 
 	ret = afe_q6_interface_prepare();
@@ -6459,7 +6471,8 @@ int afe_register_get_events(u16 port_id,
 		rtac_set_afe_handle(this_afe.apr);
 	}
 	if ((port_id == RT_PROXY_DAI_002_RX) ||
-		(port_id == RT_PROXY_DAI_001_TX)) {
+		(port_id == RT_PROXY_DAI_001_TX) ||
+		(port_id == RT_PROXY_DAI_003_TX)) {
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	} else {
 		pr_err("%s: wrong port id 0x%x\n", __func__, port_id);
@@ -6469,9 +6482,10 @@ int afe_register_get_events(u16 port_id,
 	if (port_id == RT_PROXY_PORT_001_TX) {
 		this_afe.tx_cb = cb;
 		this_afe.tx_private_data = private_data;
-	} else if (port_id == RT_PROXY_PORT_001_RX) {
+	} else if (port_id == RT_PROXY_PORT_001_RX ||
+			port_id == RT_PROXY_PORT_002_RX) {
 		this_afe.rx_cb = cb;
-		this_afe.rx_private_data = private_data;
+		this_afe.rx_private_data[PORTID_TO_IDX(port_id)] = private_data;
 	}
 
 	rtproxy.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
@@ -6504,6 +6518,7 @@ int afe_unregister_get_events(u16 port_id)
 	int ret = 0;
 	struct afe_service_cmd_unregister_rt_port_driver rtproxy;
 	int index = 0;
+	uint16_t i = 0;
 
 	pr_debug("%s:\n", __func__);
 
@@ -6520,7 +6535,8 @@ int afe_unregister_get_events(u16 port_id)
 	}
 
 	if ((port_id == RT_PROXY_DAI_002_RX) ||
-		(port_id == RT_PROXY_DAI_001_TX)) {
+		(port_id == RT_PROXY_DAI_001_TX) ||
+		(port_id == RT_PROXY_DAI_003_TX)) {
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	} else {
 		pr_err("%s: wrong port id 0x%x\n", __func__, port_id);
@@ -6554,9 +6570,15 @@ int afe_unregister_get_events(u16 port_id)
 	if (port_id == RT_PROXY_PORT_001_TX) {
 		this_afe.tx_cb = NULL;
 		this_afe.tx_private_data = NULL;
-	} else if (port_id == RT_PROXY_PORT_001_RX) {
-		this_afe.rx_cb = NULL;
-		this_afe.rx_private_data = NULL;
+	} else if (port_id == RT_PROXY_PORT_001_RX ||
+			port_id == RT_PROXY_PORT_002_RX) {
+		this_afe.rx_private_data[PORTID_TO_IDX(port_id)] = NULL;
+		for (i = 0; i < NUM_PROXY_PORTS; i++) {
+			if (this_afe.rx_private_data[i] != NULL)
+				break;
+		}
+		if (i == NUM_PROXY_PORTS)
+			this_afe.rx_cb = NULL;
 	}
 
 	ret = afe_apr_send_pkt(&rtproxy, &this_afe.wait[index]);
@@ -6627,10 +6649,11 @@ EXPORT_SYMBOL(afe_rt_proxy_port_write);
  * Returns 0 on success or error on failure
  */
 int afe_rt_proxy_port_read(phys_addr_t buf_addr_p,
-		u32 mem_map_handle, int bytes)
+		u32 mem_map_handle, u16 port_id, int bytes)
 {
 	int ret = 0;
 	struct afe_port_data_cmd_rt_proxy_port_read_v2 afecmd_rd;
+	u16 afe_port_id = afe_convert_virtual_to_portid(port_id);
 
 	if (this_afe.apr == NULL) {
 		pr_err("%s: register to AFE is not done\n", __func__);
@@ -6644,10 +6667,10 @@ int afe_rt_proxy_port_read(phys_addr_t buf_addr_p,
 				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
 	afecmd_rd.hdr.pkt_size = sizeof(afecmd_rd);
 	afecmd_rd.hdr.src_port = 0;
-	afecmd_rd.hdr.dest_port = 0;
+	afecmd_rd.hdr.dest_port = afe_port_id;
 	afecmd_rd.hdr.token = 0;
 	afecmd_rd.hdr.opcode = AFE_PORT_DATA_CMD_RT_PROXY_PORT_READ_V2;
-	afecmd_rd.port_id = RT_PROXY_PORT_001_RX;
+	afecmd_rd.port_id = afe_port_id;
 	afecmd_rd.buffer_address_lsw = lower_32_bits(buf_addr_p);
 	afecmd_rd.buffer_address_msw =
 				msm_audio_populate_upper_32_bits(buf_addr_p);
@@ -7333,6 +7356,7 @@ int afe_validate_port(u16 port_id)
 	case INT_FM_TX:
 	case RT_PROXY_PORT_001_RX:
 	case RT_PROXY_PORT_001_TX:
+	case RT_PROXY_PORT_002_RX:
 	case SLIMBUS_4_RX:
 	case SLIMBUS_4_TX:
 	case SLIMBUS_5_RX:
@@ -7499,7 +7523,9 @@ int afe_convert_virtual_to_portid(u16 port_id)
 		if (port_id == RT_PROXY_DAI_001_RX ||
 		    port_id == RT_PROXY_DAI_001_TX ||
 		    port_id == RT_PROXY_DAI_002_RX ||
-		    port_id == RT_PROXY_DAI_002_TX) {
+		    port_id == RT_PROXY_DAI_002_TX ||
+		    port_id == RT_PROXY_DAI_003_RX ||
+		    port_id == RT_PROXY_DAI_003_TX) {
 			ret = VIRTUAL_ID_TO_PORTID(port_id);
 		} else {
 			pr_err("%s: wrong port 0x%x\n",
@@ -7509,6 +7535,7 @@ int afe_convert_virtual_to_portid(u16 port_id)
 	} else
 		ret = port_id;
 
+	pr_debug("%s: port_id = 0x%x\n", __func__, ret);
 	return ret;
 }
 int afe_port_stop_nowait(int port_id)
@@ -7561,42 +7588,46 @@ int afe_close(int port_id)
 	if (this_afe.apr == NULL) {
 		pr_err("%s: AFE is already closed\n", __func__);
 		if ((port_id == RT_PROXY_DAI_001_RX) ||
-		    (port_id == RT_PROXY_DAI_002_TX))
-			pcm_afe_instance[port_id & 0x1] = 0;
+		    (port_id == RT_PROXY_DAI_002_TX) ||
+		    (port_id == RT_PROXY_DAI_003_RX))
+			pcm_afe_instance[port_id & 0x3] = 0;
 		if ((port_id == RT_PROXY_DAI_002_RX) ||
-		    (port_id == RT_PROXY_DAI_001_TX))
-			proxy_afe_instance[port_id & 0x1] = 0;
-		afe_close_done[port_id & 0x1] = true;
+		    (port_id == RT_PROXY_DAI_001_TX) ||
+		    (port_id == RT_PROXY_DAI_003_TX))
+			proxy_afe_instance[port_id & 0x3] = 0;
+		afe_close_done[port_id & 0x3] = true;
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
 	pr_debug("%s: port_id = 0x%x\n", __func__, port_id);
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
-			(port_id == RT_PROXY_DAI_002_TX)) {
+			(port_id == RT_PROXY_DAI_002_TX) ||
+			(port_id == RT_PROXY_DAI_003_RX)) {
 		pr_debug("%s: before decrementing pcm_afe_instance %d\n",
-			__func__, pcm_afe_instance[port_id & 0x1]);
+			__func__, pcm_afe_instance[port_id & 0x3]);
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
-		pcm_afe_instance[port_id & 0x1]--;
-		if ((!(pcm_afe_instance[port_id & 0x1] == 0 &&
-			proxy_afe_instance[port_id & 0x1] == 0)) ||
-			afe_close_done[port_id & 0x1] == true)
+		pcm_afe_instance[port_id & 0x3]--;
+		if ((!(pcm_afe_instance[port_id & 0x3] == 0 &&
+			proxy_afe_instance[port_id & 0x3] == 0)) ||
+			afe_close_done[port_id & 0x3] == true)
 			return 0;
 
-		afe_close_done[port_id & 0x1] = true;
+		afe_close_done[port_id & 0x3] = true;
 	}
 
 	if ((port_id == RT_PROXY_DAI_002_RX) ||
-		(port_id == RT_PROXY_DAI_001_TX)) {
+		(port_id == RT_PROXY_DAI_001_TX) ||
+		(port_id == RT_PROXY_DAI_003_TX)) {
 		pr_debug("%s: before decrementing proxy_afe_instance %d\n",
-			__func__, proxy_afe_instance[port_id & 0x1]);
+			__func__, proxy_afe_instance[port_id & 0x3]);
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
-		proxy_afe_instance[port_id & 0x1]--;
-		if ((!(pcm_afe_instance[port_id & 0x1] == 0 &&
-			proxy_afe_instance[port_id & 0x1] == 0)) ||
-			afe_close_done[port_id & 0x1] == true)
+		proxy_afe_instance[port_id & 0x3]--;
+		if ((!(pcm_afe_instance[port_id & 0x3] == 0 &&
+			proxy_afe_instance[port_id & 0x3] == 0)) ||
+			afe_close_done[port_id & 0x3] == true)
 			return 0;
 
-		afe_close_done[port_id & 0x1] = true;
+		afe_close_done[port_id & 0x3] = true;
 	}
 
 	port_id = q6audio_convert_virtual_to_portid(port_id);

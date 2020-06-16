@@ -41,7 +41,11 @@
 #define RT_PROXY_DAI_001_TX	0xF0
 #define RT_PROXY_DAI_002_RX	0xF1
 #define RT_PROXY_DAI_002_TX	0xE1
+#define RT_PROXY_DAI_003_RX	0xE2
+#define RT_PROXY_DAI_003_TX	0xF2
 #define VIRTUAL_ID_TO_PORTID(val) ((val & 0xF) | 0x2000)
+#define PORTID_TO_IDX(val)	((val & 0xF) >> 1)
+#define NUM_PROXY_PORTS	2
 
 #define AFE_CLK_VERSION_V1    1
 #define AFE_CLK_VERSION_V2    2
@@ -277,6 +281,8 @@ enum {
 	IDX_HDMI_RX_MS,
 	/* IDX 193 */
 	IDX_VOICE2_RECORD_RX,
+	/* IDX 194 */
+	IDX_RT_PROXY_PORT_002_RX,
 	AFE_MAX_PORTS
 };
 
@@ -396,7 +402,7 @@ int afe_unregister_get_events(u16 port_id);
 int afe_rt_proxy_port_write(phys_addr_t buf_addr_p,
 			u32 mem_map_handle, int bytes);
 int afe_rt_proxy_port_read(phys_addr_t buf_addr_p,
-			u32 mem_map_handle, int bytes);
+			u32 mem_map_handle, u16 port_id, int bytes);
 void afe_set_cal_mode(u16 port_id, enum afe_cal_mode afe_cal_mode);
 void afe_set_vad_cfg(u32 vad_enable, u32 preroll_config,
 		     u32 port_id);

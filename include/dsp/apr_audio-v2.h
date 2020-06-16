@@ -1394,6 +1394,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define INT_FM_TX 0x3005
 #define RT_PROXY_PORT_001_RX	0x2000
 #define RT_PROXY_PORT_001_TX	0x2001
+#define RT_PROXY_PORT_002_RX    0x2002
 #define AFE_LOOPBACK_TX	0x6001
 #define HDMI_RX_MS			0x6002
 #define DISPLAY_PORT_RX	0x6020
@@ -1425,7 +1426,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_SLIMBUS_RANGE_SIZE	0xA
 
 /* Size of the range of port IDs for real-time proxy ports. */
-#define  AFE_PORT_ID_RT_PROXY_PORT_RANGE_SIZE	0x2
+#define  AFE_PORT_ID_RT_PROXY_PORT_RANGE_SIZE	0x3
 
 /* Size of the range of port IDs for pseudoports. */
 #define AFE_PORT_ID_PSEUDOPORT_RANGE_SIZE	0x5
@@ -1557,6 +1558,7 @@ struct adm_cmd_connect_afe_port_v5 {
 
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_RX   0x2000
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_TX   0x2001
+#define  AFE_PORT_ID_RT_PROXY_PORT_002_RX   0x2002
 #define AFE_PORT_ID_INTERNAL_BT_SCO_RX      0x3000
 #define AFE_PORT_ID_INTERNAL_BT_SCO_TX      0x3001
 #define AFE_PORT_ID_INTERNAL_BT_A2DP_RX     0x3002
