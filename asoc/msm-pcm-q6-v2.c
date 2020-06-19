@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,6 +40,7 @@
 #include <dsp/q6core.h>
 #include <dsp/q6asm-v2.h>
 #include <dsp/q6adm-v2.h>
+#include <soc/qcom/boot_stats.h>
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
@@ -618,11 +619,16 @@ static int msm_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	int ret = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = runtime->private_data;
+	static int first_time = 1;
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		if (first_time) {
+			place_marker("K - Early chime");
+			first_time = 0;
+		}
 		pr_debug("%s: Trigger start\n", __func__);
 		ret = q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 		break;
