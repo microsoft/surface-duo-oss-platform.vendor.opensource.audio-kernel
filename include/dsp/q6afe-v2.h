@@ -468,6 +468,14 @@ int afe_spdif_reg_event_cfg(u16 port_id, u16 reg_flag,
 		uint32_t token, uint32_t *payload, void *priv),
 		void *private_data);
 
+int afe_send_spdif_chstatus_mask_cfg(struct afe_spdif_chstatus_mask_config
+		*chstatus_mask_cfg, u16 port_id);
+
+int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
+		void (*cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv),
+		void *private_data);
+
 int afe_turn_onoff_hw_mad(u16 mad_type, u16 mad_enable);
 int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type);
 enum afe_mad_type afe_port_get_mad_type(u16 port_id);

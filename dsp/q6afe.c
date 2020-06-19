@@ -132,6 +132,16 @@ struct afe_ctl {
 	int sec_spdif_config_change;
 	struct work_struct afe_spdif_work;
 
+	void (*pri_spdif_tx_chstatus_cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv);
+	void (*sec_spdif_tx_chstatus_cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv);
+	void *pri_spdif_tx_chstatus_priv;
+	void *sec_spdif_tx_chstatus_priv;
+	int pri_spdif_chstatus_change;
+	int sec_spdif_chstatus_change;
+	struct work_struct afe_spdif_chstatus_work;
+
 	int	topology[AFE_MAX_PORTS];
 	struct cal_type_data *cal_data[MAX_AFE_CAL_TYPES];
 
@@ -648,6 +658,29 @@ static void afe_notify_spdif_fmt_update_work_fn(struct work_struct *work)
 	}
 }
 
+static void afe_notify_spdif_chstatus_update_work_fn(struct work_struct *work)
+{
+	int ret = 0;
+	char event_pri[] = "PRI_SPDIF_TX=CHANNEL_STATUS_CHANGE";
+	char event_sec[] = "SEC_SPDIF_TX=CHANNEL_STATUS_CHANGE";
+
+	if (this_afe.pri_spdif_chstatus_change) {
+		this_afe.pri_spdif_chstatus_change = 0;
+		ret = q6core_send_uevent(this_afe.uevent_data, event_pri);
+		if (ret)
+			pr_err("%s: Send UEvent %s failed :%d\n",
+			       __func__, event_pri, ret);
+	}
+	if (this_afe.sec_spdif_chstatus_change) {
+		this_afe.sec_spdif_chstatus_change = 0;
+		ret = q6core_send_uevent(this_afe.uevent_data, event_sec);
+		if (ret)
+			pr_err("%s: Send UEvent %s failed :%d\n",
+			       __func__, event_sec, ret);
+	}
+
+}
+
 static void afe_notify_spdif_fmt_update(void *payload)
 {
 	struct afe_port_mod_evt_rsp_hdr *evt_pl;
@@ -659,6 +692,19 @@ static void afe_notify_spdif_fmt_update(void *payload)
 		this_afe.sec_spdif_config_change = 1;
 
 	schedule_work(&this_afe.afe_spdif_work);
+}
+
+static void afe_notify_spdif_chstatus_update(void *payload)
+{
+	struct afe_port_mod_evt_rsp_hdr *evt_pl;
+
+	evt_pl = (struct afe_port_mod_evt_rsp_hdr *)payload;
+	if (evt_pl->port_id == AFE_PORT_ID_PRIMARY_SPDIF_TX)
+		this_afe.pri_spdif_chstatus_change = 1;
+	else
+		this_afe.sec_spdif_chstatus_change = 1;
+
+	schedule_work(&this_afe.afe_spdif_chstatus_work);
 }
 
 static bool afe_token_is_valid(uint32_t token)
@@ -899,6 +945,8 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			uint32_t *payload = data->payload;
 			struct afe_port_mod_evt_rsp_hdr *evt_pl =
 				(struct afe_port_mod_evt_rsp_hdr *)payload;
+			void (*cb)(uint32_t, uint32_t, uint32_t *, void *);
+			void *priv_data;
 
 			if (!payload || (data->token >= AFE_MAX_PORTS)) {
 				pr_err("%s: Error: size %d payload %pK token %d\n",
@@ -918,6 +966,28 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 					flag_dc_presence[1] == 1) {
 					afe_notify_dc_presence();
 				}
+			} else if (evt_pl->event_id ==
+				   AFE_PORT_SPDIF_CHSTATUS_UPDATE_EVENT) {
+				cb = NULL;
+				priv_data = NULL;
+				switch (evt_pl->port_id) {
+				case AFE_PORT_ID_PRIMARY_SPDIF_TX:
+					cb = this_afe.pri_spdif_tx_chstatus_cb;
+					priv =
+					    this_afe.pri_spdif_tx_chstatus_priv;
+					break;
+
+				case AFE_PORT_ID_SECONDARY_SPDIF_TX:
+					cb = this_afe.sec_spdif_tx_chstatus_cb;
+					priv =
+					    this_afe.sec_spdif_tx_chstatus_priv;
+					break;
+				}
+
+				if (cb)
+					cb(data->opcode, data->token,
+					   data->payload, priv);
+				afe_notify_spdif_chstatus_update(data->payload);
 			} else if (evt_pl->port_id == AFE_PORT_ID_PRIMARY_SPDIF_TX) {
 				if (this_afe.pri_spdif_tx_cb) {
 					this_afe.pri_spdif_tx_cb(data->opcode,
@@ -3244,6 +3314,45 @@ int afe_send_spdif_ch_status_cfg(struct afe_param_id_spdif_ch_status_cfg
 }
 EXPORT_SYMBOL(afe_send_spdif_ch_status_cfg);
 
+/**
+ * afe_send_spdif_chstatus_mask_cfg -
+ *        to configure AFE session with
+ *        specified channel status mask configuration
+ *
+ * @chstatus_mask_cfg: SPDIF channel status mask configutation
+ * @port_id: AFE port id number
+ *
+ * Returns 0 on success or error value on port start failure.
+ */
+int afe_send_spdif_chstatus_mask_cfg(struct afe_spdif_chstatus_mask_config
+		*chstatus_mask_cfg, u16 port_id)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+
+	if (!chstatus_mask_cfg) {
+		pr_err("%s: Error, no configuration data\n", __func__);
+		return -EINVAL;
+	}
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_CH_STATUS_MASK_CONFIG;
+	param_hdr.param_size =
+		sizeof(struct afe_spdif_chstatus_mask_config);
+
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+					       q6audio_get_port_index(port_id),
+					       param_hdr,
+					       (u8 *)chstatus_mask_cfg);
+	if (ret < 0)
+		pr_err("%s: AFE send chstatus mask port 0x%x failed ret = %d\n",
+				__func__, port_id, ret);
+	return ret;
+}
+EXPORT_SYMBOL(afe_send_spdif_chstatus_mask_cfg);
+
 int afe_send_cmd_wakeup_register(void *handle, bool enable)
 {
 	struct afe_svc_cmd_evt_cfg_payload wakeup_irq;
@@ -3413,6 +3522,130 @@ fail_cmd:
 	return ret;
 }
 EXPORT_SYMBOL(afe_spdif_port_start);
+
+/**
+ * afe_spdif_reg_chstatus_event_cfg -
+ *	Register for channel status update event from AFE spdif port.
+ *
+ * @port_id: Port ID to register event
+ * @reg_flag: register or unregister
+ * @cb: callback function to invoke for channel status update events from AFE
+ * @private_data: private data to sent back in callback function
+ *
+ * Returns 0 on success, error on failure
+ */
+int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
+		void (*cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv),
+		void *private_data)
+{
+	struct afe_port_cmd_event_cfg *config;
+	struct afe_port_cmd_mod_evt_cfg_payload pl;
+	int index;
+	int ret;
+	int num_events = 1;
+	int cmd_size = sizeof(struct afe_port_cmd_event_cfg) +
+		(num_events * sizeof(struct afe_port_cmd_mod_evt_cfg_payload));
+	uint32_t build_major_version = 0;
+	uint32_t build_minor_version = 0;
+	uint32_t build_branch_version = 0;
+	int afe_api_version = 0;
+
+	ret = q6core_get_avcs_avs_build_version_info(&build_major_version,
+				&build_minor_version, &build_branch_version);
+	if (ret < 0)
+		return ret;
+
+	ret = q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_AFE_V);
+	if (ret < 0)
+		return ret;
+
+	afe_api_version = ret;
+
+	if ((build_major_version != AVS_BUILD_MAJOR_VERSION_V2) ||
+	    (build_minor_version != AVS_BUILD_MINOR_VERSION_V9) ||
+	    (build_branch_version != AVS_BUILD_BRANCH_VERSION_V3) ||
+	    (afe_api_version < AFE_API_VERSION_V11)) {
+		pr_info("%s: chstatus update evt not supported by AVS\n",
+			__func__);
+		return 0;
+	}
+
+	config = kzalloc(cmd_size, GFP_KERNEL);
+	if (!config)
+		return -ENOMEM;
+
+	if (port_id == AFE_PORT_ID_PRIMARY_SPDIF_TX) {
+		this_afe.pri_spdif_tx_chstatus_cb = cb;
+		this_afe.pri_spdif_tx_chstatus_priv = private_data;
+	} else if (port_id == AFE_PORT_ID_SECONDARY_SPDIF_TX) {
+		this_afe.sec_spdif_tx_chstatus_cb = cb;
+		this_afe.sec_spdif_tx_chstatus_priv = private_data;
+	} else {
+		pr_err("%s: wrong port id 0x%x\n", __func__, port_id);
+		ret = -EINVAL;
+		goto fail_idx;
+	}
+
+	index = q6audio_get_port_index(port_id);
+	if (index < 0) {
+		pr_err("%s: Invalid index number: %d\n", __func__, index);
+		ret = -EINVAL;
+		goto fail_idx;
+	}
+
+	memset(&pl, 0, sizeof(pl));
+	pl.module_id = AFE_MODULE_CUSTOM_EVENTS;
+	pl.event_id = AFE_PORT_SPDIF_CHSTATUS_UPDATE_EVENT;
+	pl.reg_flag = reg_flag;
+
+	config->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+				APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	config->hdr.pkt_size = cmd_size;
+	config->hdr.src_port = 1;
+	config->hdr.dest_port = 1;
+	config->hdr.token = index;
+
+	config->hdr.opcode = AFE_PORT_CMD_MOD_EVENT_CFG;
+	config->port_id = q6audio_get_port_id(port_id);
+	config->num_events = num_events;
+	config->version = 1;
+	memcpy(config->payload, &pl, sizeof(pl));
+	atomic_set(&this_afe.state, 1);
+	atomic_set(&this_afe.status, 0);
+	ret = apr_send_pkt(this_afe.apr, (uint32_t *) config);
+	if (ret < 0) {
+		pr_err("%s: port = 0x%x failed %d\n",
+			__func__, port_id, ret);
+		goto fail_cmd;
+	}
+	ret = wait_event_timeout(this_afe.wait[index],
+		(atomic_read(&this_afe.state) == 0),
+		msecs_to_jiffies(TIMEOUT_MS));
+	if (!ret) {
+		pr_err("%s: wait_event timeout\n", __func__);
+		ret = -EINVAL;
+		goto fail_cmd;
+	}
+	if (atomic_read(&this_afe.status) > 0) {
+		pr_err("%s: config cmd failed [%s]\n",
+			__func__, adsp_err_get_err_str(
+			atomic_read(&this_afe.status)));
+		ret = adsp_err_get_lnx_err_code(
+				atomic_read(&this_afe.status));
+		goto fail_idx;
+	}
+	ret = 0;
+fail_cmd:
+	pr_debug("%s: config.opcode 0x%x status %d\n",
+		__func__, config->hdr.opcode, ret);
+
+fail_idx:
+	kfree(config);
+	return ret;
+}
+EXPORT_SYMBOL(afe_spdif_reg_chstatus_event_cfg);
 
 /**
  * afe_spdif_reg_event_cfg -
@@ -9532,6 +9765,8 @@ int __init afe_init(void)
 	INIT_WORK(&this_afe.afe_dc_work, afe_notify_dc_presence_work_fn);
 	INIT_WORK(&this_afe.afe_spdif_work,
 		  afe_notify_spdif_fmt_update_work_fn);
+	INIT_WORK(&this_afe.afe_spdif_chstatus_work,
+		  afe_notify_spdif_chstatus_update_work_fn);
 
 	this_afe.event_notifier.notifier_call  = afe_aud_event_notify;
 	msm_aud_evt_blocking_register_client(&this_afe.event_notifier);
