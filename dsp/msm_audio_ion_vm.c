@@ -633,6 +633,7 @@ int msm_audio_ion_alloc(void **handle, size_t bufsz,
 		if (rc) {
 			pr_err("%s: failed to map ION buf, rc = %d\n", __func__,
 			       rc);
+			goto err;
 		}
 	} else {
 		rc = msm_audio_dma_buf_map(*handle, *vaddr, paddr,
@@ -642,6 +643,7 @@ int msm_audio_ion_alloc(void **handle, size_t bufsz,
 				rc);
 			dma_free_coherent(msm_audio_ion_data.cb_dev,
 					  bufsz, vaddr, *paddr);
+			goto err;
 		}
 	}
 	pr_debug("%s: mapped address = %pK, size=%zd\n", __func__,
