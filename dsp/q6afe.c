@@ -7595,7 +7595,7 @@ int afe_close(int port_id)
 		    (port_id == RT_PROXY_DAI_001_TX) ||
 		    (port_id == RT_PROXY_DAI_003_TX))
 			proxy_afe_instance[port_id & 0x3] = 0;
-		afe_close_done[port_id & 0x3] = true;
+		afe_close_done[port_id & 0x2] = true;
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
