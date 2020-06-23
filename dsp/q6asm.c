@@ -9192,7 +9192,7 @@ EXPORT_SYMBOL(q6asm_set_aptx_dec_bt_addr);
 int q6asm_audio_map_shm_fd(struct audio_client *ac,
 				void **handle, int fd)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret;
 	int sz = 0;
