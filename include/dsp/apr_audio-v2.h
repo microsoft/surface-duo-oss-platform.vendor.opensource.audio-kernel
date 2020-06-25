@@ -1394,6 +1394,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define INT_FM_TX 0x3005
 #define RT_PROXY_PORT_001_RX	0x2000
 #define RT_PROXY_PORT_001_TX	0x2001
+#define RT_PROXY_PORT_002_RX    0x2002
 #define AFE_LOOPBACK_TX	0x6001
 #define HDMI_RX_MS			0x6002
 #define DISPLAY_PORT_RX	0x6020
@@ -1425,7 +1426,7 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_SLIMBUS_RANGE_SIZE	0xA
 
 /* Size of the range of port IDs for real-time proxy ports. */
-#define  AFE_PORT_ID_RT_PROXY_PORT_RANGE_SIZE	0x2
+#define  AFE_PORT_ID_RT_PROXY_PORT_RANGE_SIZE	0x3
 
 /* Size of the range of port IDs for pseudoports. */
 #define AFE_PORT_ID_PSEUDOPORT_RANGE_SIZE	0x5
@@ -1557,6 +1558,7 @@ struct adm_cmd_connect_afe_port_v5 {
 
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_RX   0x2000
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_TX   0x2001
+#define  AFE_PORT_ID_RT_PROXY_PORT_002_RX   0x2002
 #define AFE_PORT_ID_INTERNAL_BT_SCO_RX      0x3000
 #define AFE_PORT_ID_INTERNAL_BT_SCO_TX      0x3001
 #define AFE_PORT_ID_INTERNAL_BT_A2DP_RX     0x3002
@@ -3931,6 +3933,7 @@ struct afe_param_id_device_hw_delay_cfg {
 } __packed;
 
 #define AFE_PARAM_ID_SET_TOPOLOGY    0x0001025A
+#define AFE_PARAM_ID_DEREGISTER_TOPOLOGY	0x000102E8
 #define AFE_API_VERSION_TOPOLOGY_V1 0x1
 
 struct afe_param_id_set_topology_cfg {
@@ -4668,6 +4671,19 @@ struct asm_aptx_classic_dec_cfg_t {
 	 */
 } __packed;
 
+/*
+ * Payload of the APTX HD decoder configuration parameters in the
+ * #ASM_MEDIA_FMT_APTX_HD media format
+ */
+struct asm_aptx_hd_dec_cfg_t {
+	uint32_t          sample_rate;
+	/*
+	 * Number of samples per second.
+	 *
+	 * @values 0x0(48000Hz), 0x1(44100Hz)
+	 */
+} __packed;
+
 union afe_enc_config_data {
 	struct asm_sbc_enc_cfg_t sbc_config;
 	struct asm_aac_enc_cfg_t aac_config;
@@ -4741,6 +4757,7 @@ union afe_dec_config_data {
 	struct asm_mp3_dec_cfg_t mp3_config;
 	struct asm_aptx_ad_dec_cfg_t aptx_ad_config;
 	struct asm_aptx_classic_dec_cfg_t aptx_classic_config;
+	struct asm_aptx_hd_dec_cfg_t aptx_hd_config;
 };
 
 struct afe_dec_config {

@@ -64,6 +64,7 @@ enum {
 	ENC_FMT_APTX = ASM_MEDIA_FMT_APTX,
 	DEC_FMT_APTX = ASM_MEDIA_FMT_APTX,
 	ENC_FMT_APTX_HD = ASM_MEDIA_FMT_APTX_HD,
+	DEC_FMT_APTX_HD = ASM_MEDIA_FMT_APTX_HD,
 	ENC_FMT_CELT = ASM_MEDIA_FMT_CELT,
 	ENC_FMT_LDAC = ASM_MEDIA_FMT_LDAC,
 	ENC_FMT_APTX_ADAPTIVE = ASM_MEDIA_FMT_APTX_ADAPTIVE,
@@ -2537,6 +2538,8 @@ static int msm_dai_q6_hw_params(struct snd_pcm_substream *substream,
 	case RT_PROXY_DAI_001_RX:
 	case RT_PROXY_DAI_002_TX:
 	case RT_PROXY_DAI_002_RX:
+	case RT_PROXY_DAI_003_TX:
+	case RT_PROXY_DAI_003_RX:
 		rc = msm_dai_q6_afe_rtproxy_hw_params(params, dai);
 		break;
 	case VOICE_PLAYBACK_TX:
@@ -3417,6 +3420,11 @@ static int msm_dai_q6_afe_dec_cfg_get(struct snd_kcontrol *kcontrol,
 			&dai_data->dec_config.data,
 			sizeof(struct asm_aptx_classic_dec_cfg_t));
 		break;
+	case DEC_FMT_APTX_HD:
+		memcpy(ucontrol->value.bytes.data + format_size,
+			&dai_data->dec_config.data,
+			sizeof(struct asm_aptx_hd_dec_cfg_t));
+		break;
 	case DEC_FMT_SBC:
 	case DEC_FMT_MP3:
 		/* No decoder specific data available */
@@ -3471,6 +3479,11 @@ static int msm_dai_q6_afe_dec_cfg_put(struct snd_kcontrol *kcontrol,
 		memcpy(&dai_data->dec_config.data,
 			ucontrol->value.bytes.data + format_size,
 			sizeof(struct asm_aptx_classic_dec_cfg_t));
+		break;
+	case DEC_FMT_APTX_HD:
+		memcpy(&dai_data->dec_config.data,
+			ucontrol->value.bytes.data + format_size,
+			sizeof(struct asm_aptx_hd_dec_cfg_t));
 		break;
 	default:
 		pr_err("%s: Invalid format %d\n",
@@ -3665,6 +3678,10 @@ static const struct soc_enum rt_proxy_1_rx_enum =
 	SOC_ENUM_SINGLE(RT_PROXY_PORT_001_RX, 0, ARRAY_SIZE(afe_cal_mode_text),
 			afe_cal_mode_text);
 
+static const struct soc_enum rt_proxy_2_rx_enum =
+	SOC_ENUM_SINGLE(RT_PROXY_PORT_002_RX, 0, ARRAY_SIZE(afe_cal_mode_text),
+			afe_cal_mode_text);
+
 static const struct soc_enum rt_proxy_1_tx_enum =
 	SOC_ENUM_SINGLE(RT_PROXY_PORT_001_TX, 0, ARRAY_SIZE(afe_cal_mode_text),
 			afe_cal_mode_text);
@@ -3686,6 +3703,9 @@ static const struct snd_kcontrol_new rt_proxy_config_controls[] = {
 		     msm_dai_q6_cal_info_get,
 		     msm_dai_q6_cal_info_put),
 	SOC_ENUM_EXT("RT_PROXY_1_TX SetCalMode", rt_proxy_1_tx_enum,
+		     msm_dai_q6_cal_info_get,
+		     msm_dai_q6_cal_info_put),
+	SOC_ENUM_EXT("RT_PROXY_2_RX SetCalMode", rt_proxy_2_rx_enum,
 		     msm_dai_q6_cal_info_get,
 		     msm_dai_q6_cal_info_put),
 };
@@ -3821,6 +3841,11 @@ static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
 				 snd_ctl_new1(&rt_proxy_config_controls[1],
 				 dai_data));
 		break;
+	case RT_PROXY_DAI_003_RX:
+		rc = snd_ctl_add(dai->component->card->snd_card,
+				 snd_ctl_new1(&rt_proxy_config_controls[2],
+				 dai_data));
+		break;
 	case AFE_PORT_ID_USB_RX:
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				 snd_ctl_new1(&usb_audio_cfg_controls[0],
@@ -3915,6 +3940,24 @@ static struct snd_soc_dai_driver msm_dai_q6_afe_rx_dai[] = {
 		.probe = msm_dai_q6_dai_probe,
 		.remove = msm_dai_q6_dai_remove,
 	},
+	{
+		.playback = {
+			.stream_name = "AFE Playback1",
+			.aif_name = "PCM_RX1",
+			.rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_8000 |
+			SNDRV_PCM_RATE_16000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+			SNDRV_PCM_FMTBIT_S24_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min =     8000,
+			.rate_max =	48000,
+		},
+		.ops = &msm_dai_q6_ops,
+		.id = RT_PROXY_DAI_003_RX,
+		.probe = msm_dai_q6_dai_probe,
+		.remove = msm_dai_q6_dai_remove,
+	},
 };
 
 static struct snd_soc_dai_driver msm_dai_q6_afe_lb_tx_dai[] = {
@@ -3972,6 +4015,22 @@ static struct snd_soc_dai_driver msm_dai_q6_afe_tx_dai[] = {
 		},
 		.ops = &msm_dai_q6_ops,
 		.id = RT_PROXY_DAI_001_TX,
+		.probe = msm_dai_q6_dai_probe,
+		.remove = msm_dai_q6_dai_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "AFE-PROXY TX1",
+			.rates = SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_8000 |
+			SNDRV_PCM_RATE_16000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min =     8000,
+			.rate_max =     48000,
+		},
+		.ops = &msm_dai_q6_ops,
+		.id = RT_PROXY_DAI_003_TX,
 		.probe = msm_dai_q6_dai_probe,
 		.remove = msm_dai_q6_dai_remove,
 	},
@@ -7093,6 +7152,9 @@ register_slim_capture:
 	case RT_PROXY_DAI_001_RX:
 		strlcpy(stream_name, "AFE Playback", 80);
 		goto register_afe_playback;
+	case RT_PROXY_DAI_003_RX:
+		strlcpy(stream_name, "AFE Playback1", 80);
+		goto register_afe_playback;
 	case RT_PROXY_DAI_002_RX:
 		strlcpy(stream_name, "AFE-PROXY RX", 80);
 register_afe_playback:
@@ -7114,6 +7176,9 @@ register_afe_playback:
 		break;
 	case RT_PROXY_DAI_001_TX:
 		strlcpy(stream_name, "AFE-PROXY TX", 80);
+		goto register_afe_capture;
+	case RT_PROXY_DAI_003_TX:
+		strlcpy(stream_name, "AFE-PROXY TX1", 80);
 		goto register_afe_capture;
 	case RT_PROXY_DAI_002_TX:
 		strlcpy(stream_name, "AFE Capture", 80);

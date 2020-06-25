@@ -582,8 +582,8 @@ static int msm_compr_send_buffer(struct msm_compr_audio *prtd)
 				prtd->gapless_state.trailing_samples_drop);
 
 	bytes_available = prtd->bytes_received - prtd->copied_total;
-	buffers_available =
-		bytes_available / prtd->codec_param.buffer.fragment_size;
+	buffers_available = (uint32_t)div_u64(bytes_available,
+				prtd->codec_param.buffer.fragment_size);
 
 	pr_debug("%s: bytes_available = %llu available_buffers = %d\n",
 		  __func__, bytes_available, buffers_available);
@@ -718,8 +718,9 @@ static void compr_event_handler(uint32_t opcode,
 
 		buffer_bytes_available =
 			prtd->bytes_received - prtd->copied_total;
-		num_buffers_available = buffer_bytes_available /
-					prtd->codec_param.buffer.fragment_size;
+		num_buffers_available =
+			(uint32_t)div_u64(buffer_bytes_available,
+			prtd->codec_param.buffer.fragment_size);
 		/*
 		 * Token for WRITE command represents the amount of data
 		 * written to ADSP in the last write, update offset and
@@ -911,8 +912,9 @@ static void compr_event_handler(uint32_t opcode,
 			if (!prtd->bytes_sent) {
 				bytes_available = prtd->bytes_received -
 						  prtd->copied_total;
-				num_buffers_available = bytes_available /
-					prtd->codec_param.buffer.fragment_size;
+				num_buffers_available =
+					(uint32_t)div_u64(bytes_available,
+					prtd->codec_param.buffer.fragment_size);
 				if (bytes_available <
 				    cstream->runtime->fragment_size) {
 					pr_debug("CMD_RUN_V2 Insufficient data to send. break out\n");
@@ -3149,8 +3151,9 @@ static int msm_compr_playback_copy(struct snd_compr_stream *cstream,
 					 ? "xrun" : "fill pre buffers", count);
 				bytes_available = prtd->bytes_received -
 						  prtd->copied_total;
-				num_buffers_available = bytes_available /
-					prtd->codec_param.buffer.fragment_size;
+				num_buffers_available =
+					(uint32_t)div_u64(bytes_available,
+					prtd->codec_param.buffer.fragment_size);
 				if (num_buffers_available >= NUM_PRE_BUFFERS) {
 					pr_debug("%s: bytes_to_write = %llu\n",
 						 __func__, bytes_available);
