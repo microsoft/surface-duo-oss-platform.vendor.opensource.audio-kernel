@@ -314,6 +314,8 @@ int q6asm_open_read_v5(struct audio_client *ac, uint32_t format,
 int q6asm_open_read_with_retry(struct audio_client *ac, uint32_t format,
 		       uint16_t bits_per_sample, bool ts_mode);
 
+int q6asm_open_compressed_with_retry(struct audio_client *ac, uint32_t format, uint32_t passthrough_flag);
+
 int q6asm_open_write(struct audio_client *ac, uint32_t format
 		/*, uint16_t bits_per_sample*/);
 
@@ -335,6 +337,10 @@ int q6asm_open_write_v5(struct audio_client *ac, uint32_t format,
 
 int q6asm_open_write_with_retry(struct audio_client *ac, uint32_t format,
 			uint16_t bits_per_sample);
+
+int q6asm_stream_open_write_with_retry(struct audio_client *ac, uint32_t format,
+            uint16_t bits_per_sample, int32_t stream_id,
+            bool is_gapless_mode);
 
 int q6asm_stream_open_write_v2(struct audio_client *ac, uint32_t format,
 			       uint16_t bits_per_sample, int32_t stream_id,

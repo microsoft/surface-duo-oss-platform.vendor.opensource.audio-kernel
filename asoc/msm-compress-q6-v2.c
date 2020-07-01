@@ -1506,7 +1506,7 @@ static int msm_compr_configure_dsp_for_playback
 		bits_per_sample = 32;
 
 	if (prtd->compr_passthr != LEGACY_PCM) {
-		ret = q6asm_open_write_compressed(ac, prtd->codec,
+		ret = q6asm_open_compressed_with_retry(ac, prtd->codec,
 						  prtd->compr_passthr);
 		if (ret < 0) {
 			pr_err("%s:ASM open write err[%d] for compr_type[%d]\n",
@@ -1514,6 +1514,9 @@ static int msm_compr_configure_dsp_for_playback
 			return ret;
 		}
 		prtd->gapless_state.stream_opened[stream_index] = 1;
+		prtd->session_id = prtd->audio_client->session;
+		pr_debug("%s: session ID %d\n", __func__,
+			prtd->audio_client->session);
 
 		ret = msm_pcm_routing_reg_phy_compr_stream(
 				soc_prtd->dai_link->id,
@@ -1530,26 +1533,21 @@ static int msm_compr_configure_dsp_for_playback
 		pr_debug("%s: stream_id %d bits_per_sample %d\n",
 				__func__, ac->stream_id, bits_per_sample);
 
-		if (q6core_get_avcs_api_version_per_service(
-					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
-					ADSP_ASM_API_VERSION_V2)
-			ret = q6asm_stream_open_write_v5(ac,
-				prtd->codec, bits_per_sample,
-				ac->stream_id,
-				prtd->gapless_state.use_dsp_gapless_mode);
-		else
-			ret = q6asm_stream_open_write_v4(ac,
-				prtd->codec, bits_per_sample,
-				ac->stream_id,
-				prtd->gapless_state.use_dsp_gapless_mode);
+		ret = q6asm_stream_open_write_with_retry(ac,
+			prtd->codec, bits_per_sample,
+			ac->stream_id,
+			prtd->gapless_state.use_dsp_gapless_mode);
+
 		if (ret < 0) {
 			pr_err("%s:ASM open write err[%d] for compr type[%d]\n",
 				__func__, ret, prtd->compr_passthr);
 			return -ENOMEM;
 		}
 		prtd->gapless_state.stream_opened[stream_index] = 1;
+		prtd->session_id = prtd->audio_client->session;
 
-		pr_debug("%s: BE id %d\n", __func__, soc_prtd->dai_link->id);
+		pr_debug("%s: Session ID %d BE id %d\n", __func__,
+				prtd->audio_client->session, soc_prtd->dai_link->id);
 		ret = msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->id,
 				ac->perf_mode,
 				prtd->session_id,
