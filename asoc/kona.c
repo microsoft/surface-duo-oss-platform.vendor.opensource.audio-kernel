@@ -681,6 +681,17 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.codec_name = "snd-soc-dummy",
 		.ignore_suspend = 1,
 	},
+	{
+		.name = LPASS_BE_WSA_CDC_DMA_TX_0,
+		.stream_name = LPASS_BE_WSA_CDC_DMA_TX_0,
+		.cpu_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "bolero_codec",
+		.codec_dai_name = "wsa_macro_vifeedback",
+		.async_ops = ASYNC_DPCM_SND_SOC_PREPARE,
+		.ignore_suspend = 1,
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ops = &msm_common_be_ops,
+	},
 };
 
 static struct snd_soc_dai_link msm_kona_dai_links[
