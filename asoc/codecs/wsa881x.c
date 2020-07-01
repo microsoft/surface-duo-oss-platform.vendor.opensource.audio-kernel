@@ -718,6 +718,22 @@ static int wsa881x_set_compander(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int wsa_get_temp(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component =
+			snd_soc_kcontrol_component(kcontrol);
+	struct wsa881x_priv *wsa881x = snd_soc_component_get_drvdata(component);
+	int temp = 0;
+
+    component = wsa881x->component;
+    wsa881x_get_temp(wsa881x->tz_pdata.tz_dev, &temp);
+
+	ucontrol->value.integer.value[0] = temp;
+
+	return 0;
+}
+
 static int wsa881x_get_boost(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
@@ -804,6 +820,8 @@ static int wsa881x_get_boost_level(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new wsa881x_snd_controls[] = {
+	SOC_SINGLE_EXT("WSA Temp", SND_SOC_NOPM, 0, UINT_MAX, 0,
+			wsa_get_temp, NULL),
 	SOC_SINGLE_EXT("COMP Switch", SND_SOC_NOPM, 0, 1, 0,
 		wsa881x_get_compander, wsa881x_set_compander),
 
