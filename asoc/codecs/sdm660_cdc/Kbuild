@@ -30,6 +30,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sdm670autoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_SDM429W), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -68,6 +73,7 @@ ifdef CONFIG_SND_SOC_DIGITAL_CDC
 	DIGITAL_CDC_OBJS += msm-digital-cdc.o
 	DIGITAL_CDC_OBJS += msm-digital-cdc-regmap.o
 endif
+
 LINUX_INC +=	-Iinclude/linux
 
 INCS +=		$(COMMON_INC) \
