@@ -1717,6 +1717,7 @@ static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 
 	switch (cpu_dai->id) {
 	case AFE_PORT_ID_PRIMARY_TDM_RX:
+	case AFE_PORT_ID_PRIMARY_TDM_RX_1:
 		channels->min = channels->max =
 				tdm_rx_cfg[TDM_PRI][TDM_0].channels;
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
@@ -1726,6 +1727,7 @@ static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		break;
 
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
+	case AFE_PORT_ID_PRIMARY_TDM_TX_1:
 		channels->min = channels->max =
 				tdm_tx_cfg[TDM_PRI][TDM_0].channels;
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
@@ -1735,6 +1737,7 @@ static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		break;
 
 	case AFE_PORT_ID_SECONDARY_TDM_RX:
+	case AFE_PORT_ID_SECONDARY_TDM_RX_1:
 		channels->min = channels->max =
 				tdm_rx_cfg[TDM_SEC][TDM_0].channels;
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
@@ -1744,6 +1747,7 @@ static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 		break;
 
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
+	case AFE_PORT_ID_SECONDARY_TDM_TX_1:
 		channels->min = channels->max =
 				tdm_tx_cfg[TDM_SEC][TDM_0].channels;
 		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
@@ -1771,7 +1775,7 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
-	int slot_width = 32;
+	int slot_width = 16;
 	int channels, slots;
 	unsigned int slot_mask, rate, clk_freq;
 	unsigned int slot_offset[8] = {0, 4, 8, 12, 16, 20, 24, 28};
@@ -1781,15 +1785,19 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
 	switch (cpu_dai->id) {
 	case AFE_PORT_ID_PRIMARY_TDM_RX:
+	case AFE_PORT_ID_PRIMARY_TDM_RX_1:
 		slots = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_RX:
+	case AFE_PORT_ID_SECONDARY_TDM_RX_1:
 		slots = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
+	case AFE_PORT_ID_PRIMARY_TDM_TX_1:
 		slots = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
+	case AFE_PORT_ID_SECONDARY_TDM_TX_1:
 		slots = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
 		break;
 	default:
@@ -1962,29 +1970,30 @@ static int sdx_sec_tdm_startup(struct snd_pcm_substream *substream)
 	struct sdx_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
 	pdata->sec_tdm_mode = sdx_sec_tdm_mode;
-	if (pdata->lpaif_pri_muxsel_virt_addr != NULL) {
-		ret = afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_ON);
+	if (pdata->lpaif_sec_muxsel_virt_addr != NULL) {
+		ret = afe_enable_lpass_core_shared_clock(
+					SECONDARY_I2S_RX, CLOCK_ON);
 		if (ret < 0) {
 			ret = -EINVAL;
 			goto done;
 		}
 		iowrite32(PCM_SEL << I2S_PCM_SEL_OFFSET,
-			  pdata->lpaif_pri_muxsel_virt_addr);
-		if (pdata->lpass_mux_spkr_ctl_virt_addr != NULL) {
+			  pdata->lpaif_sec_muxsel_virt_addr);
+		if (pdata->lpass_mux_mic_ctl_virt_addr != NULL) {
 			if (pdata->sec_tdm_mode == 1)
 				iowrite32(SEC_TLMM_CLKS_EN_MASTER,
-					  pdata->lpass_mux_spkr_ctl_virt_addr);
+					  pdata->lpass_mux_mic_ctl_virt_addr);
 			else
 				iowrite32(SEC_TLMM_CLKS_EN_SLAVE,
-					  pdata->lpass_mux_spkr_ctl_virt_addr);
+					  pdata->lpass_mux_mic_ctl_virt_addr);
 		} else {
-			dev_err(card->dev, "%s lpass_mux_spkr_ctl_virt_addr is NULL\n",
+			dev_err(card->dev, "%s lpass_mux_mic_ctl_virt_addr is NULL\n",
 				__func__);
 			ret = -EINVAL;
 			goto err;
 		}
 	} else {
-		dev_err(card->dev, "%s lpaif_pri_muxsel_virt_addr is NULL\n",
+		dev_err(card->dev, "%s lpaif_sec_muxsel_virt_addr is NULL\n",
 			__func__);
 		ret = -EINVAL;
 		goto done;
@@ -1992,18 +2001,18 @@ static int sdx_sec_tdm_startup(struct snd_pcm_substream *substream)
 
 	if (pdata->sec_tdm_mode == 1) {
 		ret = msm_cdc_pinctrl_select_active_state
-						(pdata->prim_master_p);
+						(pdata->sec_master_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
 	} else {
-		ret = msm_cdc_pinctrl_select_active_state(pdata->prim_slave_p);
+		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_master_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
 	}
 err:
-	afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_OFF);
+	afe_enable_lpass_core_shared_clock(SECONDARY_I2S_RX, CLOCK_OFF);
 done:
 	return ret;
 }
@@ -3068,6 +3077,38 @@ static struct snd_soc_dai_link sdx_tdm_be_dai_links[] = {
 		.ops = &sdx_pri_tdm_be_ops,
 		.ignore_suspend = 1,
 	},
+	/* Primary RX TDM Backend DAI Links */
+	{
+		.name = LPASS_BE_PRI_TDM_RX_1,
+		.stream_name = "Primary TDM1 Playback",
+		.cpu_dai_name = "msm-dai-q6-tdm.36866",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-rx",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_PRI_TDM_RX_1,
+		.be_hw_params_fixup = sdx_tdm_be_hw_params_fixup,
+		.ops = &sdx_pri_tdm_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	/* Primary TX TDM Backend DAI Links */
+
+	{
+		.name = LPASS_BE_PRI_TDM_TX_1,
+		.stream_name = "Primary TDM1 Capture",
+		.cpu_dai_name = "msm-dai-q6-tdm.36867",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_PRI_TDM_TX_1,
+		.be_hw_params_fixup = sdx_tdm_be_hw_params_fixup,
+		.ops = &sdx_pri_tdm_be_ops,
+		.ignore_suspend = 1,
+	},
 
 	/* Secondary RX TDM Backend DAI Links */
 
@@ -3103,6 +3144,39 @@ static struct snd_soc_dai_link sdx_tdm_be_dai_links[] = {
 		.ignore_suspend = 1,
 	},
 
+	/* Secondary RX TDM Backend DAI Links */
+
+	{
+		.name = LPASS_BE_SEC_TDM_RX_1,
+		.stream_name = "Secondary TDM1 Playback",
+		.cpu_dai_name = "msm-dai-q6-tdm.36882",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-rx",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_SEC_TDM_RX_1,
+		.be_hw_params_fixup = sdx_tdm_be_hw_params_fixup,
+		.ops = &sdx_sec_tdm_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	/* Secondary TX TDM Backend DAI Links */
+
+	{
+		.name = LPASS_BE_SEC_TDM_TX_1,
+		.stream_name = "Secondary TDM1 Capture",
+		.cpu_dai_name = "msm-dai-q6-tdm.36883",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_SEC_TDM_TX_1,
+		.be_hw_params_fixup = sdx_tdm_be_hw_params_fixup,
+		.ops = &sdx_sec_tdm_be_ops,
+		.ignore_suspend = 1,
+	},
 };
 
 static struct snd_soc_dai_link sdx_auto_dai[] = {
@@ -3182,7 +3256,8 @@ static struct snd_soc_dai_link sdx_auto_snd_card_dai_links[
 			 ARRAY_SIZE(sdx_common_misc_fe_dai_links) +
 			 ARRAY_SIZE(sdx_common_be_dai_links) +
 			 ARRAY_SIZE(sdx_auto_dai) +
-			 ARRAY_SIZE(sdx_auxpcm_be_dai_links)];
+			 ARRAY_SIZE(sdx_auxpcm_be_dai_links)+
+			 ARRAY_SIZE(sdx_tdm_be_dai_links)];
 
 static int sdx_populate_dai_link_component_of_node(struct snd_soc_card *card)
 {
@@ -3326,7 +3401,8 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		len_2 = len_1 + ARRAY_SIZE(sdx_common_misc_fe_dai_links);
 		len_3 = len_2 + ARRAY_SIZE(sdx_common_be_dai_links);
 		len_4 = len_3 + ARRAY_SIZE(sdx_auto_dai);
-		total_links = len_4 + ARRAY_SIZE(sdx_auxpcm_be_dai_links);
+		len_5 = len_4 + ARRAY_SIZE(sdx_auxpcm_be_dai_links);
+		total_links = len_5 + ARRAY_SIZE(sdx_tdm_be_dai_links);
 		memcpy(sdx_auto_snd_card_dai_links,
 			   sdx_common_dai_links,
 			   sizeof(sdx_common_dai_links));
@@ -3342,6 +3418,9 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		memcpy(sdx_auto_snd_card_dai_links + len_4,
 			   sdx_auxpcm_be_dai_links,
 			   sizeof(sdx_auxpcm_be_dai_links));
+		memcpy(sdx_auto_snd_card_dai_links + len_5,
+			   sdx_tdm_be_dai_links,
+			   sizeof(sdx_tdm_be_dai_links));
 		card = &snd_soc_card_auto_sdx;
 		dailink = sdx_auto_snd_card_dai_links;
 	}
