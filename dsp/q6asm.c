@@ -843,6 +843,8 @@ static int q6asm_unmap_cal_memory(int32_t cal_type,
 		}
 	}
 
+	common_client.port[IN].buf->phys = cal_block->cal_data.paddr;
+
 	result2 = q6asm_memory_unmap_regions(&common_client, IN);
 	if (result2 < 0) {
 		pr_err("%s: unmap failed, err %d\n",
@@ -853,6 +855,32 @@ static int q6asm_unmap_cal_memory(int32_t cal_type,
 	cal_block->map_data.q6map_handle = 0;
 done:
 	return result;
+}
+
+static struct cal_block_data *q6asm_find_cal_by_app_type(int cal_index,
+							  int app_type)
+{
+	struct list_head *ptr, *next;
+	struct cal_block_data *cal_block = NULL;
+	struct audio_cal_info_audstrm * audstrm_info = NULL;
+
+	pr_debug("%s\n", __func__);
+
+	list_for_each_safe(ptr, next,
+			&cal_data[cal_index]->cal_blocks) {
+
+		cal_block = list_entry(ptr,
+				struct cal_block_data, list);
+
+		if (cal_index == ASM_AUDSTRM_CAL) {
+			audstrm_info = cal_block->cal_info;
+			if (audstrm_info->app_type == app_type)
+				return cal_block;
+		}
+	}
+	pr_err("%s: Can't find ASM Cal for cal_index %d app_type %d\n",
+			__func__, cal_index, app_type);
+	return NULL;
 }
 
 int q6asm_unmap_cal_data(int cal_type, struct cal_block_data *cal_block)
@@ -11376,7 +11404,7 @@ int q6asm_send_cal(struct audio_client *ac)
 
 	memset(&mem_hdr, 0, sizeof(mem_hdr));
 	mutex_lock(&cal_data[ASM_AUDSTRM_CAL]->lock);
-	cal_block = cal_utils_get_only_cal_block(cal_data[ASM_AUDSTRM_CAL]);
+	cal_block = q6asm_find_cal_by_app_type(ASM_AUDSTRM_CAL, ac->app_type);
 	if (cal_block == NULL) {
 		pr_err("%s: cal_block is NULL\n",
 			__func__);
