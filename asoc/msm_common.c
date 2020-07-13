@@ -317,7 +317,7 @@ int msm_channel_map_get(struct snd_kcontrol *kcontrol,
 	if (ret || (tx_ch_cnt == 0 && rx_ch_cnt == 0)) {
 		pr_err("%s: get channel map failed for %d\n",
 				__func__, backend_id);
-		return ret;
+		return -EINVAL;
 	}
 	switch (backend_id) {
 	case SLIM: {
