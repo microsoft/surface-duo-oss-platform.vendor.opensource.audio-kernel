@@ -69,26 +69,32 @@ struct msm_audio_alloc_data {
 
 struct msm_audio_smmu_vm_map_cmd {
 	int cmd_id;
+	u32 token;
 	u32 export_id;
 	u32 buf_size;
 };
 
 struct msm_audio_smmu_vm_map_cmd_rsp {
+	u32 token;
 	int status;
 	u64 addr;
 };
 
 struct msm_audio_smmu_vm_unmap_cmd {
 	int cmd_id;
+	u32 token;
 	u32 export_id;
 };
 
 struct msm_audio_smmu_vm_unmap_cmd_rsp {
+	u32 token;
 	int status;
+	u64 padding;
 };
 
 static struct msm_audio_ion_private msm_audio_ion_data = {0,};
 static u32 msm_audio_ion_hab_handle;
+static u32 token_id;
 
 static void msm_audio_ion_add_allocation(
 	struct msm_audio_ion_private *msm_audio_ion_data,
@@ -336,6 +342,10 @@ static int msm_audio_ion_smmu_map(void *handle,
 			smmu_map_cmd.cmd_id = MSM_AUDIO_SMMU_VM_CMD_MAP;
 			smmu_map_cmd.export_id = export_id;
 			smmu_map_cmd.buf_size = *len;
+			smmu_map_cmd.token = token_id;
+			pr_debug("%s: smmu_map_cmd.token %u, export_id %u, pid is %d\n",
+				__func__, smmu_map_cmd.token, smmu_map_cmd.export_id, current->pid);
+			token_id++;
 
 			rc = habmm_socket_send(msm_audio_ion_hab_handle,
 				(void *)&smmu_map_cmd, sizeof(smmu_map_cmd), 0);
@@ -358,6 +368,25 @@ static int msm_audio_ion_smmu_map(void *handle,
 				pr_err("%s: habmm_socket_recv failed %d\n",
 					__func__, rc);
 				goto err;
+			} else {
+				do {
+					if (cmd_rsp.token == smmu_map_cmd.token) {
+						break;
+					} else {
+						pr_err("%s: invalid token %u, expected %u\n",
+							__func__, cmd_rsp.token, smmu_map_cmd.token);
+						cmd_rsp_size = sizeof(cmd_rsp);
+						rc = habmm_socket_recv(msm_audio_ion_hab_handle,
+							(void *)&cmd_rsp,
+							&cmd_rsp_size,
+							0xFFFFFFFF,
+							0);
+						if(cmd_rsp_size == 0) {
+							pr_err("%s:didnt recieve any response \n", __func__);
+							break;
+						}
+					}
+				} while((cmd_rsp_size != 0) && (cmd_rsp.token != smmu_map_cmd.token));
 			}
 
 			if (cmd_rsp_size != sizeof(cmd_rsp)) {
@@ -383,10 +412,10 @@ static int msm_audio_ion_smmu_map(void *handle,
 
 	if (!found) {
 		pr_err("%s: cannot find allocation, handle %pK\n", __func__, handle);
-		return -EINVAL;
+		rc = -EINVAL;
 	}
 
-	return 0;
+	return rc;
 
 err:
 	if (exported)
@@ -419,7 +448,10 @@ static int msm_audio_ion_smmu_unmap(void *handle)
 			found = true;
 			smmu_unmap_cmd.cmd_id = MSM_AUDIO_SMMU_VM_CMD_UNMAP;
 			smmu_unmap_cmd.export_id = alloc_data->export_id;
-
+			smmu_unmap_cmd.token = token_id;
+			pr_debug("%s: smmu_unmap_cmd.token %u, export_id %u, pid is %d\n",
+				__func__, smmu_unmap_cmd.token, smmu_unmap_cmd.export_id, current->pid);
+			token_id++;
 			rc = habmm_socket_send(msm_audio_ion_hab_handle,
 				(void *)&smmu_unmap_cmd,
 				sizeof(smmu_unmap_cmd), 0);
@@ -442,6 +474,25 @@ static int msm_audio_ion_smmu_unmap(void *handle)
 				pr_err("%s: habmm_socket_recv failed %d\n",
 					__func__, rc);
 				goto err;
+			} else {
+				do {
+					if (cmd_rsp.token == smmu_unmap_cmd.token) {
+						break;
+					} else {
+						pr_err("%s: invalid token %u, expected %u\n",
+							__func__, cmd_rsp.token, smmu_unmap_cmd.token);
+						cmd_rsp_size = sizeof(cmd_rsp);
+						rc = habmm_socket_recv(msm_audio_ion_hab_handle,
+							(void *)&cmd_rsp,
+							&cmd_rsp_size,
+							0xFFFFFFFF,
+							0);
+						if(cmd_rsp_size == 0) {
+							pr_err("%s:didnt recieve any response \n", __func__);
+							break;
+						}
+					}
+				} while((cmd_rsp_size != 0) && (cmd_rsp.token != smmu_unmap_cmd.token));
 			}
 
 			if (cmd_rsp_size != sizeof(cmd_rsp)) {

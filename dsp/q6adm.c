@@ -4047,8 +4047,12 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 				pr_err("%s: adm mem unmmap err %d",
 					__func__, ret);
 			}
-			msm_audio_ion_free(
-				this_adm.sourceTrackingData.mem_handle);
+			if(!ret)
+			{
+				pr_debug("%s: calling msm_audio_ion_free",__func__);
+				msm_audio_ion_free(
+					this_adm.sourceTrackingData.mem_handle);
+			}
 			this_adm.sourceTrackingData.mem_handle = NULL;
 			this_adm.sourceTrackingData.memmap.size = 0;
 			this_adm.sourceTrackingData.memmap.kvaddr = NULL;
