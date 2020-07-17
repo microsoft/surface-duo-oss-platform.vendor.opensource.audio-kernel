@@ -1628,6 +1628,7 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 	int num_modules, i;
 	struct msm_adsp_event_data *pp_event_package = NULL;
 	struct adm_usr_info usr_data;
+	int mem_map_index;
 
 	if (data == NULL) {
 		pr_err("%s: data parameter is null\n", __func__);
@@ -1897,10 +1898,10 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 			wake_up(&this_adm.copp.wait[port_idx][copp_idx]);
 			break;
 		case ADM_CMDRSP_SHARED_MEM_MAP_REGIONS:
+			mem_map_index = atomic_read(&this_adm.mem_map_index);
 			pr_debug("%s: ADM_CMDRSP_SHARED_MEM_MAP_REGIONS\n",
 				__func__);
-			atomic_set(&this_adm.mem_map_handles[
-				   atomic_read(&this_adm.mem_map_index)],
+			atomic_set(&this_adm.mem_map_handles[mem_map_index],
 				   *payload);
 			atomic_set(&this_adm.adm_stat, 0);
 			wake_up(&this_adm.adm_wait);
@@ -2065,6 +2066,7 @@ static int adm_memory_unmap_regions(void)
 {
 	struct  avs_cmd_shared_mem_unmap_regions unmap_regions;
 	int     ret = 0;
+	int mem_map_index = atomic_read(&this_adm.mem_map_index);
 
 	pr_debug("%s:\n", __func__);
 	if (this_adm.apr == NULL) {
@@ -2081,7 +2083,7 @@ static int adm_memory_unmap_regions(void)
 	unmap_regions.hdr.token = 0;
 	unmap_regions.hdr.opcode = ADM_CMD_SHARED_MEM_UNMAP_REGIONS;
 	unmap_regions.mem_map_handle = atomic_read(&this_adm.
-		mem_map_handles[atomic_read(&this_adm.mem_map_index)]);
+		mem_map_handles[mem_map_index]);
 	atomic_set(&this_adm.adm_stat, -1);
 	ret = apr_send_pkt(this_adm.apr, (uint32_t *) &unmap_regions);
 	if (ret < 0) {
