@@ -17,6 +17,7 @@
 #include <dsp/spf-core.h>
 #include <dsp/audio_prm.h>
 #include <ipc/gpr-lite.h>
+#include <dsp/audio_notifier.h>
 
 #define VCPM_PARAM_ID_MAILBOX_MEMORY_CONFIG 0x080011E7
 
@@ -68,6 +69,7 @@ struct voice_mhi {
 	wait_queue_head_t voice_mhi_wait;
 	u32 mvm_state;
 	u32 async_err;
+	bool pdr_down;
 };
 typedef struct vcpm_param_id_mailbox_memory_config_t
 {
@@ -108,13 +110,6 @@ static int voice_mhi_pcie_up_callback(struct mhi_device *,
 static void voice_mhi_pcie_down_callback(struct mhi_device *);
 static void voice_mhi_pcie_status_callback(struct mhi_device *, enum MHI_CB);
 static int32_t voice_mhi_gpr_callback(struct gpr_device *adev, void *data);
-//static int voice_mhi_notifier_service_cb(struct notifier_block *nb,
-//					 unsigned long opcode, void *ptr);
-
-// static struct notifier_block voice_mhi_service_nb = {
-	// .notifier_call  = voice_mhi_notifier_service_cb,
-	// .priority = -INT_MAX,
-// };
 
 static const struct mhi_device_id voice_mhi_match_table[] = {
 	{ .chan = "AUDIO_VOICE_0", .driver_data = 0 },
@@ -132,41 +127,50 @@ static struct mhi_driver voice_mhi_driver = {
 	},
 };
 
-// static int voice_mhi_notifier_service_cb(struct notifier_block *nb,
-					 // unsigned long opcode, void *ptr)
-// {
-	// pr_err("%s: opcode 0x%lx\n", __func__, opcode);
+static int voice_mhi_notifier_service_cb(struct notifier_block *this,
+				   unsigned long opcode, void *ptr)
+{
 
-	// switch (opcode) {
-	// case AUDIO_NOTIFIER_SERVICE_DOWN:
-		// if (voice_mhi_lcl.apr_mvm_handle) {
-			// apr_reset(voice_mhi_lcl.apr_mvm_handle);
-			// voice_mhi_lcl.apr_mvm_handle = NULL;
-			// VOICE_MHI_STATE_RESET(voice_mhi_lcl.voice_mhi_state,
-					// VOICE_MHI_ADSP_UP);
-		// }
-		// break;
-	// case AUDIO_NOTIFIER_SERVICE_UP:
-		// if (!VOICE_MHI_STATE_CHECK(voice_mhi_lcl.voice_mhi_state,
-				// VOICE_MHI_ADSP_UP)) {
-			// VOICE_MHI_STATE_SET(voice_mhi_lcl.voice_mhi_state,
-					// VOICE_MHI_ADSP_UP);
-			// schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
-		// }
-		// break;
-	// default:
-		// break;
-	// }
+	pr_err("%s: Service opcode 0x%lx\n", __func__, opcode);
 
-	// return NOTIFY_OK;
+	switch (opcode) {
+	case AUDIO_NOTIFIER_SERVICE_DOWN:
+		mutex_lock(&voice_mhi_lcl.mutex);
+		if (voice_mhi_lcl.gdev) {
+			VOICE_MHI_STATE_RESET(voice_mhi_lcl.voice_mhi_state,
+							VOICE_MHI_ADSP_UP);
+			voice_mhi_lcl.pdr_down = true;
+		}
+		mutex_unlock(&voice_mhi_lcl.mutex);
+		break;
+	case AUDIO_NOTIFIER_SERVICE_UP:
+		mutex_lock(&voice_mhi_lcl.mutex);
+		if (voice_mhi_lcl.gdev && voice_mhi_lcl.pdr_down) {
+			VOICE_MHI_STATE_SET(voice_mhi_lcl.voice_mhi_state,
+				VOICE_MHI_ADSP_UP);
+			voice_mhi_lcl.pdr_down = false;
+			mutex_unlock(&voice_mhi_lcl.mutex);
+			schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
+		} else
+			mutex_unlock(&voice_mhi_lcl.mutex);
 
-// }
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static struct notifier_block service_nb = {
+	.notifier_call  = voice_mhi_notifier_service_cb,
+	.priority = -INT_MAX,
+};
+
 
 static int32_t voice_mhi_gpr_callback(struct gpr_device *adev, void *data)
 {
 	struct gpr_hdr *hdr = (struct gpr_hdr *)data;
 	uint32_t *payload =  GPR_PKT_GET_PAYLOAD(uint32_t, data);
-	//bool resp_recieved = false;
 
 	if (data == NULL) {
 		pr_err("%s: data is NULL\n", __func__);
@@ -273,7 +277,6 @@ static int voice_mhi_set_mailbox_memory_config(void)
 	vcpm_cmd_set_cfg_t vcpm_set_cfg;
 	uint32_t size;
 
-	//return 0;
 
 	size = GPR_HDR_SIZE + sizeof (vcpm_cmd_set_cfg_t);
 	pkt = kzalloc(size, GFP_KERNEL);
@@ -403,11 +406,7 @@ err:
 
 static void voice_mhi_gpr_send(struct work_struct *work)
 {
-	// ret = voice_mhi_apr_register();
-	// if (ret) {
-		// pr_err("%s: APR registration failed %d\n", __func__, ret);
-		// return;
-	// }
+
 	pr_err("%s: GPR is up \n", __func__);
 	mutex_lock(&voice_mhi_lcl.mutex);
 	if (VOICE_MHI_STATE_CHECK(voice_mhi_lcl.voice_mhi_state,
@@ -415,15 +414,14 @@ static void voice_mhi_gpr_send(struct work_struct *work)
 		mutex_unlock(&voice_mhi_lcl.mutex);
 		if (spf_core_is_apm_ready()) {
 			voice_mhi_set_mailbox_memory_config();
-			voice_mhi_start();
 			return;
 		} else {
 			pr_err("%s: Spf core not ready \n", __func__);
+			schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
 		}
-	} else {
+	} else
 		mutex_unlock(&voice_mhi_lcl.mutex);
-		schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
-	}
+
 }
 
 static int voice_mhi_pcie_up_callback(struct mhi_device *voice_mhi_dev,
@@ -481,19 +479,23 @@ static int voice_mhi_gpr_probe(struct gpr_device *gdev)
 	VOICE_MHI_STATE_SET(voice_mhi_lcl.voice_mhi_state,
 			VOICE_MHI_ADSP_UP);
 	mutex_unlock(&voice_mhi_lcl.mutex);
-	//schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
+	schedule_work(&voice_mhi_lcl.voice_mhi_work_adsp);
 	pr_err("%s Exit ", __func__);
 	return ret;
 }
 
 static int voice_mhi_gpr_exit(struct gpr_device *gdev)
 {
-	voice_mhi_end();
+
+	pr_err("%s Enter ", __func__);
 	mutex_lock(&voice_mhi_lcl.mutex);
 	voice_mhi_lcl.gdev = NULL;
 	VOICE_MHI_STATE_RESET(voice_mhi_lcl.voice_mhi_state,
 					VOICE_MHI_ADSP_UP);
+	if (voice_mhi_lcl.pdr_down)
+		voice_mhi_lcl.pdr_down = false;
 	mutex_unlock(&voice_mhi_lcl.mutex);
+	pr_err("%s Exit ", __func__);
 
 	return 0;
 }
@@ -515,25 +517,6 @@ static struct gpr_driver voice_mhi_gpr_driver = {
 };
 
 
-// static int voice_mhi_apr_register(void)
-// {
-	// int ret = 0;
-
-	// mutex_lock(&voice_mhi_lcl.mutex);
-	// voice_mhi_lcl.apr_mvm_handle = apr_register("ADSP", "MVM",
-						// (apr_fn)voice_mhi_apr_callback,
-						// CONVERT_PORT_APR(PORT_NUM,
-							// PORT_MASK),
-						// &voice_mhi_lcl);
-	// if (voice_mhi_lcl.apr_mvm_handle == NULL) {
-		// pr_err("%s: error in APR register\n", __func__);
-		// ret = -ENODEV;
-	// }
-	// mutex_unlock(&voice_mhi_lcl.mutex);
-
-	// return ret;
-// }
-
 static int voice_mhi_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -553,6 +536,7 @@ static int voice_mhi_probe(struct platform_device *pdev)
 	voice_mhi_lcl.voice_mhi_state = VOICE_MHI_INIT;
 	voice_mhi_lcl.vote_count = 0;
 	voice_mhi_lcl.gdev = NULL;
+	voice_mhi_lcl.pdr_down = false;
 
 	INIT_WORK(&voice_mhi_lcl.voice_mhi_work_pcie,
 				voice_mhi_map_pcie_and_send);
@@ -617,6 +601,13 @@ static int voice_mhi_probe(struct platform_device *pdev)
 			pr_err("%s: mhi register failed %d\n", __func__, ret);
 			goto err_free;
 		}
+		ret = audio_notifier_register("voice_mhi", AUDIO_NOTIFIER_ADSP_DOMAIN,
+				      &service_nb);
+		if (ret < 0) {
+			pr_err("%s: Audio notifier register failed ret = %d\n",
+				__func__, ret);
+			goto err_free;
+		}
 		mutex_lock(&voice_mhi_lcl.mutex);
 		voice_mhi_lcl.pcie_enabled = true;
 		VOICE_MHI_STATE_SET(voice_mhi_lcl.voice_mhi_state,
@@ -639,6 +630,7 @@ err_free:
 
 static int voice_mhi_remove(struct platform_device *pdev)
 {
+    voice_mhi_end();
 	if (voice_mhi_lcl.gdev)
 		voice_mhi_lcl.gdev = NULL;
 	mhi_driver_unregister(&voice_mhi_driver);
