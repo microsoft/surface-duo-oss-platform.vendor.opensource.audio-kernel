@@ -3231,7 +3231,7 @@ int afe_send_spdif_ch_status_cfg(struct afe_param_id_spdif_ch_status_cfg
 	memset(&param_hdr, 0, sizeof(param_hdr));
 	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
 	param_hdr.instance_id = INSTANCE_ID_0;
-	param_hdr.param_id = AFE_PARAM_ID_SPDIF_CLK_CONFIG;
+	param_hdr.param_id = AFE_PARAM_ID_CH_STATUS_CONFIG;
 	param_hdr.param_size = sizeof(struct afe_param_id_spdif_ch_status_cfg);
 
 	ret = q6afe_pack_and_set_param_in_band(port_id,
@@ -3369,7 +3369,7 @@ int afe_spdif_port_start(u16 port_id, struct afe_spdif_port_config *spdif_port,
 	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
 	param_hdr.instance_id = INSTANCE_ID_0;
 	param_hdr.param_id = AFE_PARAM_ID_SPDIF_CONFIG;
-	param_hdr.param_size = sizeof(struct afe_spdif_port_config);
+	param_hdr.param_size = sizeof(struct afe_param_id_spdif_cfg_v2);
 
 	ret = q6afe_pack_and_set_param_in_band(port_id,
 					       q6audio_get_port_index(port_id),
@@ -3390,10 +3390,19 @@ int afe_spdif_port_start(u16 port_id, struct afe_spdif_port_config *spdif_port,
 	}
 
 	if (afe_get_port_type(port_id) == MSM_AFE_PORT_TYPE_RX) {
-		ret = afe_send_spdif_ch_status_cfg(&spdif_port->ch_status,
+		ret = afe_send_spdif_ch_status_cfg(&spdif_port->ch_status_a,
 						   port_id);
 		if (ret < 0) {
-			pr_err("%s: afe send failed %d\n", __func__, ret);
+			pr_err("%s: afe ch stat A send failed %d\n",
+				__func__, ret);
+			goto fail_cmd;
+		}
+
+		ret = afe_send_spdif_ch_status_cfg(&spdif_port->ch_status_b,
+						   port_id);
+		if (ret < 0) {
+			pr_err("%s: afe ch stat b send failed %d\n",
+				__func__, ret);
 			goto fail_cmd;
 		}
 	}

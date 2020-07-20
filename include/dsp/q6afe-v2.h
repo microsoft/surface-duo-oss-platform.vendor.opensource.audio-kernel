@@ -59,6 +59,8 @@
 /* for external mclk dynamic switch */
 #define AFE_API_VERSION_V8		8
 #define AFE_API_VERSION_V9		9
+/* for spdif playback and channel status update event */
+#define AFE_API_VERSION_V11		11
 
 typedef int (*routing_cb)(int port);
 

@@ -2905,7 +2905,8 @@ struct afe_event_fmt_update {
 
 struct afe_spdif_port_config {
 	struct afe_param_id_spdif_cfg_v2         cfg;
-	struct afe_param_id_spdif_ch_status_cfg  ch_status;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_a;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_b;
 } __packed;
 
 #define AFE_PARAM_ID_PCM_CONFIG        0x0001020E
