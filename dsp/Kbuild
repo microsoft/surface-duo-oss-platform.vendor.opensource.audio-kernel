@@ -82,6 +82,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_SDM429W), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
 endif
 
 

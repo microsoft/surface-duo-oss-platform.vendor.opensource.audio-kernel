@@ -4,7 +4,7 @@
 
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,msm8953 sdm670 qcs605),true)
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937 sdm670 qcs605),true)
 
 LOCAL_PATH := $(call my-dir)
 
@@ -15,7 +15,11 @@ ifneq ($(findstring opensource,$(LOCAL_PATH)),)
 	AUDIO_BLD_DIR := $(shell pwd)/vendor/qcom/opensource/audio-kernel
 endif # opensource
 
+ifeq ($(TARGET_SUPPORTS_WEARABLES),true)
+DLKM_DIR := $(BOARD_COMMON_DIR)/dlkm
+else
 DLKM_DIR := $(TOP)/device/qcom/common/dlkm
+endif
 
 # Build audio.ko as $(AUDIO_CHIPSET)_audio.ko
 ###########################################################

@@ -27,6 +27,7 @@
 #include <sound/jack.h>
 #include <sound/pcm_params.h>
 #include <sound/info.h>
+#include <soc/snd_event.h>
 #include <device_event.h>
 #include <dsp/audio_notifier.h>
 #include <dsp/q6afe-v2.h>
@@ -36,6 +37,7 @@
 #include "codecs/wcd934x/wcd934x.h"
 #include "codecs/wcd934x/wcd934x-mbhc.h"
 #include "codecs/wsa881x.h"
+#include "soc/qcom/boot_stats.h"
 
 /* Machine driver Name */
 #define DRV_NAME "sdx-asoc-snd"
@@ -190,8 +192,6 @@ struct sdx_wsa881x_dev_info {
 };
 
 static void *def_tavil_mbhc_cal(void);
-static void *adsp_state_notifier;
-static bool dummy_device_registered;
 
 static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.read_fw_bin = false,
@@ -3465,6 +3465,78 @@ static int sdx_init_wsa_dev(struct platform_device *pdev,
 	return 0;
 }
 
+static int sdx_ssr_enable(struct device *dev, void *data)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+	int ret = 0;
+
+	if (!card) {
+		dev_err(dev, "%s: card is NULL\n", __func__);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	dev_info(dev, "%s: setting snd_card to ONLINE\n", __func__);
+	snd_soc_card_change_online_state(card, 1);
+
+err:
+	return ret;
+}
+
+static void sdx_ssr_disable(struct device *dev, void *data)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+
+	if (!card) {
+		dev_err(dev, "%s: card is NULL\n", __func__);
+		return;
+	}
+
+	dev_info(dev, "%s: setting snd_card to OFFLINE\n", __func__);
+	snd_soc_card_change_online_state(card, 0);
+	afe_clear_config(AFE_CDC_REGISTERS_CONFIG);
+}
+
+static const struct snd_event_ops sdx_ssr_ops = {
+	.enable = sdx_ssr_enable,
+	.disable = sdx_ssr_disable,
+};
+
+static int msm_audio_ssr_compare(struct device *dev, void *data)
+{
+	struct device_node *node = data;
+
+	dev_dbg(dev, "%s: dev->of_node = 0x%p, node = 0x%p\n",
+		__func__, dev->of_node, node);
+	return (dev->of_node && dev->of_node == node);
+}
+
+static int msm_audio_ssr_register(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	struct snd_event_clients *ssr_clients = NULL;
+	struct device_node *node;
+	int ret;
+	int i;
+
+	for (i = 0; ; i++) {
+		node = of_parse_phandle(np, "qcom,msm_audio_ssr_devs", i);
+		if (!node)
+			break;
+		snd_event_mstr_add_client(&ssr_clients,
+					msm_audio_ssr_compare, node);
+	}
+
+	ret = snd_event_master_register(dev, &sdx_ssr_ops,
+					ssr_clients, NULL);
+	if (!ret)
+		snd_event_notify(dev, SND_EVENT_UP);
+
+	return ret;
+}
+
 static int sdx_asoc_machine_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -3600,6 +3672,12 @@ static int sdx_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EINVAL;
 		goto err3;
 	}
+	ret = msm_audio_ssr_register(&pdev->dev);
+	if (ret)
+		pr_err("%s: Registration with SND event FWK failed ret = %d\n",
+			__func__, ret);
+
+	place_marker("M - DRIVER Audio Ready");
 
 	return 0;
 err3:
@@ -3641,50 +3719,8 @@ static struct platform_driver sdx_asoc_machine_driver = {
 	.remove = sdx_asoc_machine_remove,
 };
 
-static int dummy_machine_probe(struct platform_device *pdev)
-{
-	return 0;
-}
-
-static int dummy_machine_remove(struct platform_device *pdev)
-{
-	return 0;
-}
-
-static struct platform_device dummy_machine_device = {
-	.name = "dummymachinedriver",
-};
-
-static struct platform_driver sdx_asoc_machine_dummy_driver = {
-	.driver = {
-		.name = "dummymachinedriver",
-		.owner = THIS_MODULE,
-	},
-	.probe = dummy_machine_probe,
-	.remove = dummy_machine_remove,
-};
-
-static int  sdx_adsp_state_callback(struct notifier_block *nb,
-					unsigned long value, void *priv)
-{
-	if (!dummy_device_registered && SUBSYS_AFTER_POWERUP == value) {
-		platform_driver_register(&sdx_asoc_machine_dummy_driver);
-		platform_device_register(&dummy_machine_device);
-		dummy_device_registered = true;
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block adsp_state_notifier_block = {
-	.notifier_call = sdx_adsp_state_callback,
-	.priority = -INT_MAX,
-};
-
 static int __init sdx_soc_platform_init(void)
 {
-	adsp_state_notifier = subsys_notif_register_notifier("modem",
-						&adsp_state_notifier_block);
 	platform_driver_register(&sdx_asoc_machine_driver);
 	return 0;
 }

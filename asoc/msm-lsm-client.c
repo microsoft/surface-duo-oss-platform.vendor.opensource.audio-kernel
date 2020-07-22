@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1046,7 +1046,7 @@ static int msm_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 			 unsigned int cmd, void *arg)
 {
 	struct snd_soc_pcm_runtime *rtd;
-	unsigned long flags;
+	unsigned long flags = 0;
 	int ret;
 	struct snd_lsm_sound_model_v2 snd_model_v2;
 	struct snd_lsm_session_data session_data;
