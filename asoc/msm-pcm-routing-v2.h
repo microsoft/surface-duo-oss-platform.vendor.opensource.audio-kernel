@@ -624,7 +624,7 @@ int msm_pcm_routing_set_channel_mixer_cfg(
 	struct msm_pcm_channel_mixer *params);
 
 int msm_pcm_routing_set_channel_mixer_runtime(
-	int be_id, int session_id,
+	int fe_id, int be_id, int session_id,
 	int session_type,
 	struct msm_pcm_channel_mixer *params);
 bool msm_pcm_routing_get_portid_copp_idx(int fe_id,
