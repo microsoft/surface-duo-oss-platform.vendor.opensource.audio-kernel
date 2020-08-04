@@ -87,7 +87,11 @@ COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 
 # for sa8155 sound card driver
 ifdef CONFIG_SND_SOC_SA8155_GECKO
+  ifeq ($(CONFIG_QTI_GVM), y)
+    MACHINE_OBJS += sa8155_gecko_dummy.o
+  else
 	MACHINE_OBJS += sa8155_gecko.o
+  endif
   MACHINE_OBJS += machine_815x_gecko_init.o
 endif
 ifdef CONFIG_SND_SOC_CPE
