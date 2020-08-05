@@ -2780,7 +2780,14 @@ struct afe_param_id_meta_i2s_cfg {
 #define AFE_PORT_STATUS_AUDIO_ACTIVE        1
 #define AFE_PORT_STATUS_AUDIO_EOS           2
 
+#define AFE_PORT_SPDIF_CHSTATUS_UPDATE_EVENT  0x00010110
+#define SPDIF_CHSTATUS_SIZE                 24
+
+#define AFE_PARAM_ID_CH_STATUS_MASK_CONFIG  0x000102EB
+#define AFE_API_VERSION_CH_STATUS_MASK_CONFIG 0x1
+
 struct afe_param_id_spdif_cfg_v2 {
+
 /* Minor version used for tracking the version of the SPDIF
  * configuration interface.
  * Supported values: #AFE_API_VERSION_SPDIF_CONFIG,
@@ -2903,9 +2910,32 @@ struct afe_event_fmt_update {
 	u8 channel_status[6];
 } __packed;
 
+struct afe_event_chstatus_update {
+	/* Tracks the configuration of this event. */
+	u32 minor_version;
+
+	/* channel status bytes */
+	u8 chstatus_a[SPDIF_CHSTATUS_SIZE];
+	u8 chstatus_b[SPDIF_CHSTATUS_SIZE];
+} __packed;
+
+struct afe_spdif_chstatus_mask_config {
+	/* for tracking the version of channel status configuration */
+	u32 minor_version;
+
+	/*
+	 * channel status mask.
+	 * channel status update event will only be raised for bits which
+	 * are 1.
+	 */
+	u8 chstatus_mask_a[SPDIF_CHSTATUS_SIZE];
+	u8 chstatus_mask_b[SPDIF_CHSTATUS_SIZE];
+} __packed;
+
 struct afe_spdif_port_config {
 	struct afe_param_id_spdif_cfg_v2         cfg;
-	struct afe_param_id_spdif_ch_status_cfg  ch_status;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_a;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_b;
 } __packed;
 
 #define AFE_PARAM_ID_PCM_CONFIG        0x0001020E
