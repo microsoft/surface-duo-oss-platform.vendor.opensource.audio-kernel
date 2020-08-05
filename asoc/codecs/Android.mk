@@ -33,7 +33,7 @@ endif
 
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 sdmshrike msmnile atoll $(MSMSTEPPE) $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937 sdm845 sdm670 qcs605 sdmshrike msmnile atoll $(MSMSTEPPE) $(TRINKET)),true)
 
 LOCAL_PATH := $(call my-dir)
 
@@ -44,7 +44,11 @@ ifneq ($(findstring opensource,$(LOCAL_PATH)),)
 	AUDIO_BLD_DIR := $(shell pwd)/vendor/qcom/opensource/audio-kernel
 endif # opensource
 
+ifeq ($(TARGET_SUPPORTS_WEARABLES),true)
+DLKM_DIR := $(BOARD_COMMON_DIR)/dlkm
+else
 DLKM_DIR := $(TOP)/device/qcom/common/dlkm
+endif
 
 # Build audio.ko as $(AUDIO_CHIPSET)_audio.ko
 ###########################################################
@@ -77,7 +81,7 @@ LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
-ifeq ($(call is-board-platform-in-list,sdm670 qcs605 $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8937 sdm670 qcs605 $(TRINKET)),true)
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_wcd_cpe.ko
 LOCAL_MODULE_KBUILD_NAME  := wcd_cpe_dlkm.ko
@@ -87,6 +91,7 @@ LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 endif
 ###########################################################
+ifneq ($(call is-board-platform-in-list, msm8937),true)
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_wcd_spi.ko
 LOCAL_MODULE_KBUILD_NAME  := wcd_spi_dlkm.ko
@@ -94,8 +99,9 @@ LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
 ###########################################################
-ifeq ($(call is-board-platform-in-list,msm8953 sdm670 qcs605 $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937 sdm670 qcs605 $(TRINKET)),true)
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_wcd9335.ko
 LOCAL_MODULE_KBUILD_NAME  := wcd9335_dlkm.ko
@@ -105,6 +111,7 @@ LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 endif
 ###########################################################
+ifeq ($(call is-board-platform-in-list, msm8937 sdm710 qcs605),true)
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_wsa881x.ko
 LOCAL_MODULE_KBUILD_NAME  := wsa881x_dlkm.ko
@@ -112,6 +119,17 @@ LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
+###########################################################
+ifeq ($(call is-board-platform-in-list,msm8937),true)
+include $(CLEAR_VARS)
+LOCAL_MODULE              := $(AUDIO_CHIPSET)_wsa881x_analog.ko
+LOCAL_MODULE_KBUILD_NAME  := wsa881x_analog_dlkm.ko
+LOCAL_MODULE_TAGS         := optional
+LOCAL_MODULE_DEBUG_ENABLE := true
+LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
 ###########################################################
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_mbhc.ko

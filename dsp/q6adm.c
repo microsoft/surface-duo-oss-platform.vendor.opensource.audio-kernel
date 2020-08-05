@@ -5421,7 +5421,7 @@ EXPORT_SYMBOL(adm_get_sound_focus);
 int adm_map_shm_fd(void **handle, int fd, struct param_hdr_v3 *hdr,
 				   int port_id, int copp_idx)
 {
-	dma_addr_t paddr;
+	dma_addr_t paddr = 0;
 	size_t pa_len = 0;
 	int ret = 0, sec_key = 0;
 	struct adm_event_shm params;
