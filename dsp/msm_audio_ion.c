@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -129,29 +129,6 @@ static void msm_audio_ion_add_allocation(
 	list_add_tail(&(alloc_data->list),
 		      &(msm_audio_ion_data->alloc_list));
 	mutex_unlock(&(msm_audio_ion_data->list_mutex));
-}
-
-static int msm_audio_dma_buf_map(void *handle, void *vaddr,
-					  dma_addr_t *paddr,
-					  size_t *len)
-{
-	struct msm_audio_alloc_data *alloc_data;
-
-	/* Data required per buffer mapping */
-	alloc_data = kzalloc(sizeof(*alloc_data), GFP_KERNEL);
-	if (!alloc_data)
-		return -ENOMEM;
-
-	alloc_data->handle = handle;
-	alloc_data->len = *len;
-	alloc_data->vaddr = vaddr;
-	alloc_data->paddr = paddr;
-	alloc_data->type = MSM_AUDIO_MEM_TYPE_DMA;
-
-	msm_audio_ion_add_allocation(&msm_audio_ion_data,
-				     alloc_data);
-
-	return 0;
 }
 
 static int msm_audio_ion_dma_buf_map(struct dma_buf *dma_buf,
@@ -494,15 +471,9 @@ int msm_audio_ion_alloc(void **handle, size_t bufsz,
 		*handle = ion_alloc(bufsz, ION_HEAP(ION_SYSTEM_HEAP_ID), 0);
 	} else {
 		pr_debug("%s: audio heap is used\n", __func__);
-		*vaddr = *handle = dma_alloc_coherent(
-						      msm_audio_ion_data.cb_dev,
-						      bufsz, paddr, GFP_KERNEL);
-		if(*vaddr != NULL) {
-			pr_err("%s: vaddr = %pK, size=%zd\n", __func__, *vaddr,
-			       bufsz);
-			rc = 0;
-		}
+		*handle = ion_alloc(bufsz, ION_HEAP(ION_AUDIO_HEAP_ID), 0);
 	}
+
 	if (IS_ERR_OR_NULL((void *)(*handle))) {
 		if (IS_ERR((void *)(*handle)))
 			err_ion_ptr = PTR_ERR((int *)(*handle));
@@ -511,23 +482,11 @@ int msm_audio_ion_alloc(void **handle, size_t bufsz,
 		rc = -ENOMEM;
 		goto err;
 	}
-	if (msm_audio_ion_data.smmu_enabled) {
-		rc = msm_audio_ion_map_buf(*handle, paddr, plen, vaddr);
-		if (rc) {
-			pr_err("%s: failed to map ION buf, rc = %d\n", __func__,
-			       rc);
-			goto err;
-		}
-	} else {
-		rc = msm_audio_dma_buf_map(*handle, *vaddr, paddr,
-						    &bufsz);
-		if (rc) {
-			pr_err("%s: failed to map ION buf, rc = %d\n", __func__,
-				rc);
-			dma_free_coherent(msm_audio_ion_data.cb_dev,
-					  bufsz, vaddr, *paddr);
-			goto err;
-		}
+	rc = msm_audio_ion_map_buf(*handle, paddr, plen, vaddr);
+	if (rc) {
+		pr_err("%s: failed to map ION buf, rc = %d\n", __func__,
+		       rc);
+		goto err;
 	}
 	pr_debug("%s: mapped address = %pK, size=%zd\n", __func__,
 		*vaddr, bufsz);
