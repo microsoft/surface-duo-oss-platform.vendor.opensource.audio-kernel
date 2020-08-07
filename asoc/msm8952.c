@@ -2813,6 +2813,9 @@ static struct snd_soc_dai_link msm_int_dig_be_dai[] = {
 		.ops = &msm8952_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
+};
+
+static struct snd_soc_dai_link msm_tfa98xx_dig_be_dai_link[] = {
 	{
 		.name = LPASS_BE_QUAT_MI2S_RX,
 		.stream_name = "Quaternary MI2S Playback",
@@ -2835,7 +2838,8 @@ static struct snd_soc_dai_link msm8952_dai_links[
 ARRAY_SIZE(msm8952_dai) +
 ARRAY_SIZE(msm_int_be_dai) +
 ARRAY_SIZE(msm8952_hdmi_dba_dai_link) +
-ARRAY_SIZE(msm8952_split_a2dp_dai_link)];
+ARRAY_SIZE(msm8952_split_a2dp_dai_link) +
+ARRAY_SIZE(msm_tfa98xx_dig_be_dai_link)];
 
 static int msm8952_wsa881x_init(struct snd_soc_component *component)
 {
