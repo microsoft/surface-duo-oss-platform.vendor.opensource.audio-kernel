@@ -4188,7 +4188,8 @@ static int q6afe_send_dec_config(u16 port_id,
 			union afe_port_config afe_config,
 			struct afe_dec_config *cfg,
 			u32 format,
-			u16 afe_in_channels, u16 afe_in_bit_width)
+			u16 afe_in_channels, u16 afe_in_bit_width,
+			uint16_t ttp_gen_enable)
 {
 	struct afe_dec_media_fmt_t dec_media_fmt;
 	struct avs_dec_depacketizer_id_param_t dec_depkt_id_param;
@@ -4233,7 +4234,13 @@ static int q6afe_send_dec_config(u16 port_id,
 	case ASM_MEDIA_FMT_MP3:
 		if (port_id == SLIMBUS_9_TX) {
 			dec_buffer_id_param.max_nr_buffers  = 200;
-			dec_buffer_id_param.pre_buffer_size = 200;
+			/*
+			 * TTP generator do not require pre buffer.
+			 */
+			if (ttp_gen_enable)
+				dec_buffer_id_param.pre_buffer_size = 0;
+			else
+				dec_buffer_id_param.pre_buffer_size = 200;
 		} else {
 			dec_buffer_id_param.max_nr_buffers  = 0;
 			dec_buffer_id_param.pre_buffer_size = 0;
@@ -4256,6 +4263,8 @@ static int q6afe_send_dec_config(u16 port_id,
 		}
 		break;
 	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
+	case ASM_MEDIA_FMT_APTX_HD:
+	case ASM_MEDIA_FMT_APTX:
 		if (!cfg->abr_dec_cfg.is_abr_enabled) {
 			pr_debug("%s: sending aptx adaptive congestion buffer size to dsp\n",
 				__func__);
@@ -4265,7 +4274,13 @@ static int q6afe_send_dec_config(u16 port_id,
 			   sizeof(struct avs_dec_congestion_buffer_param_t);
 			dec_buffer_id_param.version = 0;
 			dec_buffer_id_param.max_nr_buffers  = 226;
-			dec_buffer_id_param.pre_buffer_size = 226;
+			/*
+			 * TTP generator do not require pre buffer.
+			 */
+			if (ttp_gen_enable)
+				dec_buffer_id_param.pre_buffer_size = 0;
+			else
+				dec_buffer_id_param.pre_buffer_size = 226;
 			ret = q6afe_pack_and_set_param_in_band(port_id,
 						q6audio_get_port_index(port_id),
 						param_hdr,
@@ -4738,6 +4753,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	int index = 0;
 	enum afe_mad_type mad_type;
 	uint16_t port_index;
+	uint16_t ttp_gen_enable = 0;
 
 	memset(&param_hdr, 0, sizeof(param_hdr));
 	memset(&port_cfg, 0, sizeof(port_cfg));
@@ -5018,6 +5034,9 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		goto fail_cmd;
 	}
 
+	if (ttp_cfg != NULL)
+		ttp_gen_enable = ttp_cfg->ttp_gen_enable.enable;
+
 	if ((codec_format != ASM_MEDIA_FMT_NONE) &&
 	    (cfg_type == AFE_PARAM_ID_SLIMBUS_CONFIG)) {
 		if (enc_cfg != NULL) {
@@ -5040,7 +5059,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 			ret = q6afe_send_dec_config(port_id, *afe_config,
 						    dec_cfg, codec_format,
 						    afe_in_channels,
-						    afe_in_bit_width);
+						    afe_in_bit_width, ttp_gen_enable);
 			if (ret) {
 				pr_err("%s: AFE decoder config for port 0x%x failed %d\n",
 					 __func__, port_id, ret);
