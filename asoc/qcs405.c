@@ -228,6 +228,8 @@ struct msm_asoc_mach_data {
 	struct device_node *lineout_booster_gpio_p; /* used by pinctrl API */
 	struct device_node *mi2s_gpio_p[MI2S_MAX]; /* used by pinctrl API */
 	struct device_node *ext_mclk_gpio_p; /* used by pinctrl API */
+	struct device_node *pri_spdiftx_gpio_p;
+	struct device_node *sec_spdiftx_gpio_p;
 	u32 ext_mclk_en_count;
 	int dmic_01_gpio_cnt;
 	int dmic_23_gpio_cnt;
@@ -586,7 +588,7 @@ static const char *spdif_rate_text[] = {"KHZ_32", "KHZ_44P1", "KHZ_48",
 					"KHZ_88P2", "KHZ_96", "KHZ_176P4",
 					"KHZ_192"};
 static const char *spdif_ch_text[] = {"One", "Two"};
-static const char *spdif_bit_format_text[] = {"S16_LE", "S24_LE"};
+static const char *spdif_bit_format_text[] = {"S16_LE", "S24_LE", "S24_3LE"};
 
 static SOC_ENUM_SINGLE_EXT_DECL(slim_0_rx_chs, slim_rx_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(slim_2_rx_chs, slim_rx_ch_text);
@@ -3862,6 +3864,9 @@ static int spdif_get_format(int value)
 	case 1:
 		format = SNDRV_PCM_FORMAT_S24_LE;
 		break;
+	case 2:
+		format = SNDRV_PCM_FORMAT_S24_3LE;
+		break;
 	default:
 		format = SNDRV_PCM_FORMAT_S16_LE;
 		break;
@@ -3879,6 +3884,9 @@ static int spdif_get_format_value(int format)
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
 		value = 1;
+		break;
+	case SNDRV_PCM_FORMAT_S24_3LE:
+		value = 2;
 		break;
 	default:
 		value = 0;
@@ -6943,6 +6951,31 @@ static int msm_spdif_set_clk(struct snd_pcm_substream *substream, bool enable)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int port_id = cpu_dai->id;
 	struct afe_clk_set clk_cfg;
+	uint32_t build_major_version = 0;
+	uint32_t build_minor_version = 0;
+	uint32_t build_branch_version = 0;
+	int afe_api_version = 0;
+
+	ret = q6core_get_avcs_avs_build_version_info(&build_major_version,
+				&build_minor_version, &build_branch_version);
+	if (ret < 0)
+		return ret;
+
+	ret = q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_AFE_V);
+	if (ret < 0)
+		return ret;
+
+	afe_api_version = ret;
+
+	if ((afe_get_port_type(port_id) == MSM_AFE_PORT_TYPE_RX) &&
+	    ((build_major_version != AVS_BUILD_MAJOR_VERSION_V2) ||
+	    (build_minor_version != AVS_BUILD_MINOR_VERSION_V9) ||
+	    (build_branch_version != AVS_BUILD_BRANCH_VERSION_V3) ||
+	    (afe_api_version < AFE_API_VERSION_V11))) {
+		pr_err("%s: spdif playback not supported by AVS\n", __func__);
+		return -EINVAL;
+	}
 
 	clk_cfg.clk_set_minor_version = Q6AFE_LPASS_CLK_CONFIG_API_VERSION;
 	clk_cfg.clk_attri = Q6AFE_LPASS_CLK_ATTRIBUTE_COUPLE_NO;
@@ -7020,6 +7053,8 @@ static int msm_spdif_snd_startup(struct snd_pcm_substream *substream)
 	int ret = 0;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_card *card = rtd->card;
+	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int port_id = cpu_dai->id;
 
 	dev_dbg(rtd->card->dev,
@@ -7036,6 +7071,20 @@ static int msm_spdif_snd_startup(struct snd_pcm_substream *substream)
 		goto err;
 	}
 
+	if (port_id == AFE_PORT_ID_PRIMARY_SPDIF_RX) {
+		ret = msm_cdc_pinctrl_select_active_state(
+					pdata->pri_spdiftx_gpio_p);
+		if (ret < 0)
+			goto err;
+	}
+
+	if (port_id == AFE_PORT_ID_SECONDARY_SPDIF_RX) {
+		ret = msm_cdc_pinctrl_select_active_state(
+					pdata->sec_spdiftx_gpio_p);
+		if (ret < 0)
+			goto err;
+	}
+
 	ret = msm_spdif_set_clk(substream, true);
 	if (ret < 0) {
 		dev_err(rtd->card->dev,
@@ -7050,6 +7099,8 @@ static void msm_spdif_snd_shutdown(struct snd_pcm_substream *substream)
 {
 	int ret;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *card = rtd->card;
+	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int port_id = rtd->cpu_dai->id;
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
@@ -7064,6 +7115,24 @@ static void msm_spdif_snd_shutdown(struct snd_pcm_substream *substream)
 	if (ret < 0)
 		pr_err("%s:clock disable failed for SPDIF (%d); ret=%d\n",
 			__func__, port_id, ret);
+
+	if (port_id == AFE_PORT_ID_PRIMARY_SPDIF_RX &&
+	    pdata->pri_spdiftx_gpio_p) {
+		ret = msm_cdc_pinctrl_select_sleep_state(
+					pdata->pri_spdiftx_gpio_p);
+		if (ret < 0)
+			pr_err("%s:SPDIF coax pinctrl disable fail, ret = %d\n",
+				__func__, ret);
+	}
+
+	if (port_id == AFE_PORT_ID_SECONDARY_SPDIF_RX &&
+	    pdata->sec_spdiftx_gpio_p) {
+		ret = msm_cdc_pinctrl_select_sleep_state(
+					pdata->sec_spdiftx_gpio_p);
+		if (ret < 0)
+			pr_err("%s:SPDIF opt pinctrl disable fail, ret = %d\n",
+				__func__, ret);
+	}
 }
 
 static struct snd_soc_ops msm_mi2s_be_ops = {
@@ -10296,6 +10365,10 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 					"qcom,quat-mi2s-gpios", 0);
 	pdata->mi2s_gpio_p[QUIN_MI2S] = of_parse_phandle(pdev->dev.of_node,
 					"qcom,quin-mi2s-gpios", 0);
+	pdata->pri_spdiftx_gpio_p = of_parse_phandle(pdev->dev.of_node,
+					"qcom,pri-spdiftx-gpios", 0);
+	pdata->sec_spdiftx_gpio_p = of_parse_phandle(pdev->dev.of_node,
+					"qcom,sec-spdiftx-gpios", 0);
 
 	if (of_parse_phandle(pdev->dev.of_node, micb_supply_str, 0)) {
 		pdata->tdm_micb_supply = devm_regulator_get(&pdev->dev,
