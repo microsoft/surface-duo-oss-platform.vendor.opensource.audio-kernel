@@ -223,6 +223,10 @@ struct msm_asoc_mach_data {
 	struct device_node *hph_en0_gpio_p; /* used by pinctrl API */
 	bool is_afe_config_done;
 	struct device_node *fsa_handle;
+	int gpio_linein_det;
+	int gpio_lineout_det;
+	int linein_det_swh;
+	int lineout_det_swh;
 };
 
 struct msm_asoc_wcd93xx_codec {
@@ -442,6 +446,37 @@ static struct dev_config aux_pcm_tx_cfg[] = {
 	[QUAT_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUIN_AUX_PCM] = {SAMPLING_RATE_8KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 };
+
+static struct snd_soc_jack linein_jack;
+
+static struct snd_soc_jack_pin linein_jack_pins[] = {
+	{
+		.pin = "Linein",
+		.mask = SND_JACK_LINEIN,
+	},
+};
+
+static struct snd_soc_jack_gpio linein_jack_gpio = {
+	.name = "Linein detection",
+	.report = SND_JACK_LINEIN,
+	.debounce_time = 800,
+};
+
+static struct snd_soc_jack lineout_jack;
+
+static struct snd_soc_jack_pin lineout_jack_pins[] = {
+	{
+		.pin = "Lineout",
+		.mask = SND_JACK_LINEOUT,
+	},
+};
+
+static struct snd_soc_jack_gpio lineout_jack_gpio = {
+	.name = "Lineout detection",
+	.report = SND_JACK_LINEOUT,
+	.debounce_time = 800,
+};
+
 static int msm_vi_feed_tx_ch = 2;
 static const char *const slim_rx_ch_text[] = {"One", "Two"};
 static const char *const slim_tx_ch_text[] = {"One", "Two", "Three", "Four",
@@ -4092,6 +4127,8 @@ static const struct snd_soc_dapm_widget msm_int_dapm_widgets[] = {
 	SND_SOC_DAPM_MIC("Digital Mic1", msm_dmic_event),
 	SND_SOC_DAPM_MIC("Digital Mic2", msm_dmic_event),
 	SND_SOC_DAPM_MIC("Digital Mic3", msm_dmic_event),
+	SND_SOC_DAPM_HP("Lineout", NULL),
+	SND_SOC_DAPM_MIC("Linein", NULL),
 };
 
 static inline int param_is_mask(int p)
@@ -5155,6 +5192,26 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 		bolero_register_wake_irq(codec, true);
 	else
 		bolero_register_wake_irq(codec, false);
+
+	if (gpio_is_valid(pdata->gpio_linein_det)) {
+		snd_soc_card_jack_new(rtd->card, "Linein", SND_JACK_LINEIN,
+				      &linein_jack, linein_jack_pins,
+				      ARRAY_SIZE(linein_jack_pins));
+
+		linein_jack_gpio.invert = pdata->linein_det_swh;
+		linein_jack_gpio.gpio = pdata->gpio_linein_det;
+		snd_soc_jack_add_gpios(&linein_jack, 1, &linein_jack_gpio);
+	}
+
+	if (gpio_is_valid(pdata->gpio_lineout_det)) {
+		snd_soc_card_jack_new(rtd->card, "Lineout", SND_JACK_LINEOUT,
+				      &lineout_jack, lineout_jack_pins,
+				      ARRAY_SIZE(lineout_jack_pins));
+
+		lineout_jack_gpio.invert = pdata->lineout_det_swh;
+		lineout_jack_gpio.gpio = pdata->gpio_lineout_det;
+		snd_soc_jack_add_gpios(&lineout_jack, 1, &lineout_jack_gpio);
+	}
 
 	codec_reg_done = true;
 	return 0;
@@ -9101,6 +9158,34 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	if (ret) {
 		ret = -EPROBE_DEFER;
 		goto err;
+	}
+
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,linein-det-swh",
+				   &pdata->linein_det_swh);
+	if (ret) {
+		dev_dbg(&pdev->dev, "%s: missing %s in dt node\n",
+			__func__, "qcom,linein-det-swh");
+	}
+
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,lineout-det-swh",
+				   &pdata->lineout_det_swh);
+	if (ret) {
+		dev_dbg(&pdev->dev, "%s: missing %s in dt node\n",
+			 __func__, "qcom,lineout-det-swh");
+	}
+
+	pdata->gpio_linein_det = of_get_named_gpio(pdev->dev.of_node,
+						   "qcom,linein-det-gpio", 0);
+	if (pdata->gpio_linein_det < 0) {
+		dev_dbg(&pdev->dev, "property %s not detected in node %s\n",
+			"qcom,linein-det-gpio", pdev->dev.of_node->full_name);
+	}
+
+	pdata->gpio_lineout_det = of_get_named_gpio(pdev->dev.of_node,
+						    "qcom,lineout-det-gpio", 0);
+	if (pdata->gpio_lineout_det < 0) {
+		dev_dbg(&pdev->dev, "property %s not detected in node %s\n",
+		"qcom,lineout-det-gpio", pdev->dev.of_node->full_name);
 	}
 
 	ret = msm_init_aux_dev(pdev, card);
