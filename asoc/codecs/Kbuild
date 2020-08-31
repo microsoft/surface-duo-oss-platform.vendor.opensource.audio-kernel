@@ -76,6 +76,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_SDM429W), y)
+		include $(AUDIO_ROOT)/config/sdm450auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm450autoconf.h
+	endif
 endif
 
 # As per target team, build is done as follows:
@@ -139,6 +144,12 @@ ifdef CONFIG_SND_SOC_WSA881X
 	WSA881X_OBJS += wsa881x-tables.o
 	WSA881X_OBJS += wsa881x-regmap.o
 	WSA881X_OBJS += wsa881x-temp-sensor.o
+endif
+
+ifdef CONFIG_SND_SOC_WSA881X_ANALOG
+	WSA881X_ANALOG_OBJS += wsa881x-analog.o
+	WSA881X_ANALOG_OBJS += wsa881x-tables-analog.o
+	WSA881X_ANALOG_OBJS += wsa881x-regmap-analog.o
 endif
 
 ifdef CONFIG_SND_SOC_MSM_STUB
@@ -211,6 +222,7 @@ endif
 ifeq ($(KERNEL_BUILD), 0)
 KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
 KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
+KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
 endif
 
 ifeq ($(KERNEL_BUILD), 1)
@@ -237,6 +249,9 @@ wcd9335_dlkm-y := $(WCD9335_OBJS)
 
 obj-$(CONFIG_SND_SOC_WSA881X) += wsa881x_dlkm.o
 wsa881x_dlkm-y := $(WSA881X_OBJS)
+
+obj-$(CONFIG_SND_SOC_WSA881X_ANALOG) += wsa881x_analog_dlkm.o
+wsa881x_analog_dlkm-y := $(WSA881X_ANALOG_OBJS)
 
 obj-$(CONFIG_SND_SOC_MSM_STUB) += stub_dlkm.o
 stub_dlkm-y := $(STUB_OBJS)

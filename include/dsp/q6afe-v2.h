@@ -58,7 +58,13 @@
 #define AFE_API_VERSION_V6		6
 /* for external mclk dynamic switch */
 #define AFE_API_VERSION_V8		8
+#define AFE_API_VERSION_V9		9
+/* for pullable pll clock source name*/
+#define AFE_API_VERSION_V10		10
+/* for spdif playback and channel status update event */
+#define AFE_API_VERSION_V11		11
 
+#define AFE_SAMPLING_RATE_8KHZ 8000
 
 typedef int (*routing_cb)(int port);
 
@@ -466,6 +472,14 @@ int afe_spdif_reg_event_cfg(u16 port_id, u16 reg_flag,
 		uint32_t token, uint32_t *payload, void *priv),
 		void *private_data);
 
+int afe_send_spdif_chstatus_mask_cfg(struct afe_spdif_chstatus_mask_config
+		*chstatus_mask_cfg, u16 port_id);
+
+int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
+		void (*cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv),
+		void *private_data);
+
 int afe_turn_onoff_hw_mad(u16 mad_type, u16 mad_enable);
 int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type);
 enum afe_mad_type afe_port_get_mad_type(u16 port_id);
@@ -492,6 +506,8 @@ int afe_send_custom_tdm_header_cfg(
 int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		       u32 rate, u16 num_groups);
 void afe_set_routing_callback(routing_cb cb);
+int afe_port_send_logging_cfg(u16 port_id,
+	struct afe_param_id_port_data_log_disable_t *log_disable);
 int afe_get_av_dev_drift(struct afe_param_id_dev_timing_stats *timing_stats,
 		u16 port);
 int afe_get_sp_rx_tmax_xmax_logging_data(
@@ -508,7 +524,8 @@ int afe_get_doa_tracking_mon(u16 port_id,
 int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 			  uint32_t clk_reset);
 int afe_set_clk_id(u16 port_id, uint32_t clk_id);
-
+int afe_set_source_clk(u16 port_id, const char *clk_src);
+void afe_set_clk_src_array(const char *clk_src[CLK_SRC_MAX]);
 int afe_set_mclk_src_cfg(u16 port_id, uint32_t mclk_src_id, uint32_t mclk_freq);
 
 typedef int (*afe_enable_mclk_and_get_info_cb_func) (void *private_data,
