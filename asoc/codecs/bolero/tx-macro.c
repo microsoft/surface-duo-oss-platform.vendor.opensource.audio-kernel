@@ -668,10 +668,16 @@ static int tx_macro_tx_mixer_put(struct snd_kcontrol *kcontrol,
 		set_bit(dec_id, &tx_priv->active_ch_mask[dai_id]);
 		tx_priv->active_ch_cnt[dai_id]++;
 	} else {
-		tx_priv->active_ch_cnt[dai_id]--;
-		clear_bit(dec_id, &tx_priv->active_ch_mask[dai_id]);
+		if (tx_priv->active_ch_cnt[dai_id]) {
+			tx_priv->active_ch_cnt[dai_id]--;
+			clear_bit(dec_id, &tx_priv->active_ch_mask[dai_id]);
+		}
 	}
 	snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, enable, update);
+	dev_dbg(tx_dev,
+		"%s: dai_id %d, active_ch_mask %d, active_ch_cnt: %d\n",
+		__func__, dai_id, tx_priv->active_ch_mask[dai_id],
+		tx_priv->active_ch_cnt[dai_id]);
 
 	return 0;
 }
@@ -1160,6 +1166,9 @@ static int tx_macro_get_channel_map(struct snd_soc_dai *dai,
 	case TX_MACRO_AIF3_CAP:
 		*tx_slot = tx_priv->active_ch_mask[dai->id];
 		*tx_num = tx_priv->active_ch_cnt[dai->id];
+		dev_dbg(tx_dev, "%s: dai_id %d, active_ch_mask %d, active_ch_cnt: %d\n",
+			__func__, dai->id, tx_priv->active_ch_mask[dai->id],
+			tx_priv->active_ch_cnt[dai->id]);
 		break;
 	default:
 		dev_err(tx_dev, "%s: Invalid AIF\n", __func__);

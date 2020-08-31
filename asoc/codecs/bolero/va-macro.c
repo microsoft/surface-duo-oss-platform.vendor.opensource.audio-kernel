@@ -1055,8 +1055,10 @@ static int va_macro_tx_mixer_put(struct snd_kcontrol *kcontrol,
 		set_bit(dec_id, &va_priv->active_ch_mask[dai_id]);
 		va_priv->active_ch_cnt[dai_id]++;
 	} else {
-		clear_bit(dec_id, &va_priv->active_ch_mask[dai_id]);
-		va_priv->active_ch_cnt[dai_id]--;
+		if (va_priv->active_ch_cnt[dai_id]) {
+			clear_bit(dec_id, &va_priv->active_ch_mask[dai_id]);
+			va_priv->active_ch_cnt[dai_id]--;
+		}
 	}
 
 	snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, enable, update);
