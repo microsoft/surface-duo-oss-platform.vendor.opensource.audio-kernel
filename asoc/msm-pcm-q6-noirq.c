@@ -775,7 +775,7 @@ static int msm_pcm_volume_ctl_put(struct snd_kcontrol *kcontrol,
 		return -ENODEV;
 	}
 
-	substream = vol->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
+	substream = vol->pcm->streams[vol->stream].substream;
 	pr_debug("%s: volume : 0x%x\n", __func__, volume);
 	if (!substream) {
 		pr_err("%s substream not found\n", __func__);
