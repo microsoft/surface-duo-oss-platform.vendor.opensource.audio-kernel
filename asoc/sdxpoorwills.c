@@ -810,8 +810,7 @@ static int sdx_mi2s_tx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rt,
 						      SNDRV_PCM_HW_PARAM_RATE);
 	struct snd_interval *channels = hw_param_interval(params,
 						SNDRV_PCM_HW_PARAM_CHANNELS);
-	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-		       SNDRV_PCM_FORMAT_S16_LE);
+	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT, sdx_mi2s_bitwidth);
 	rate->min = rate->max = sdx_mi2s_rate;
 	channels->min = channels->max = sdx_mi2s_tx_ch;
 	return 0;
