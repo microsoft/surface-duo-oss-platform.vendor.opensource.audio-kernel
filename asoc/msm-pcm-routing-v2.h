@@ -262,6 +262,10 @@ enum {
 	MSM_FRONTEND_DAI_MULTIMEDIA28,
 	MSM_FRONTEND_DAI_MULTIMEDIA29,
 	MSM_FRONTEND_DAI_MULTIMEDIA30,
+	MSM_FRONTEND_DAI_MULTIMEDIA31,
+	MSM_FRONTEND_DAI_MULTIMEDIA32,
+	MSM_FRONTEND_DAI_MULTIMEDIA33,
+	MSM_FRONTEND_DAI_MULTIMEDIA34,
 	MSM_FRONTEND_DAI_VOIP,
 	MSM_FRONTEND_DAI_AFE_RX,
 	MSM_FRONTEND_DAI_AFE_TX,
@@ -577,6 +581,7 @@ struct msm_pcm_stream_app_type_cfg {
 	int app_type;
 	int acdb_dev_id;
 	int sample_rate;
+	uint32_t copp_token;
 };
 
 /* dai_id: front-end ID,
@@ -623,7 +628,7 @@ int msm_pcm_routing_set_channel_mixer_cfg(
 	struct msm_pcm_channel_mixer *params);
 
 int msm_pcm_routing_set_channel_mixer_runtime(
-	int be_id, int session_id,
+	int fe_id, int be_id, int session_id,
 	int session_type,
 	struct msm_pcm_channel_mixer *params);
 bool msm_pcm_routing_get_portid_copp_idx(int fe_id,

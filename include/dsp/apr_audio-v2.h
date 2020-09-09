@@ -2780,7 +2780,14 @@ struct afe_param_id_meta_i2s_cfg {
 #define AFE_PORT_STATUS_AUDIO_ACTIVE        1
 #define AFE_PORT_STATUS_AUDIO_EOS           2
 
+#define AFE_PORT_SPDIF_CHSTATUS_UPDATE_EVENT  0x00010110
+#define SPDIF_CHSTATUS_SIZE                 24
+
+#define AFE_PARAM_ID_CH_STATUS_MASK_CONFIG  0x000102EB
+#define AFE_API_VERSION_CH_STATUS_MASK_CONFIG 0x1
+
 struct afe_param_id_spdif_cfg_v2 {
+
 /* Minor version used for tracking the version of the SPDIF
  * configuration interface.
  * Supported values: #AFE_API_VERSION_SPDIF_CONFIG,
@@ -2903,9 +2910,32 @@ struct afe_event_fmt_update {
 	u8 channel_status[6];
 } __packed;
 
+struct afe_event_chstatus_update {
+	/* Tracks the configuration of this event. */
+	u32 minor_version;
+
+	/* channel status bytes */
+	u8 chstatus_a[SPDIF_CHSTATUS_SIZE];
+	u8 chstatus_b[SPDIF_CHSTATUS_SIZE];
+} __packed;
+
+struct afe_spdif_chstatus_mask_config {
+	/* for tracking the version of channel status configuration */
+	u32 minor_version;
+
+	/*
+	 * channel status mask.
+	 * channel status update event will only be raised for bits which
+	 * are 1.
+	 */
+	u8 chstatus_mask_a[SPDIF_CHSTATUS_SIZE];
+	u8 chstatus_mask_b[SPDIF_CHSTATUS_SIZE];
+} __packed;
+
 struct afe_spdif_port_config {
 	struct afe_param_id_spdif_cfg_v2         cfg;
-	struct afe_param_id_spdif_ch_status_cfg  ch_status;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_a;
+	struct afe_param_id_spdif_ch_status_cfg  ch_status_b;
 } __packed;
 
 #define AFE_PARAM_ID_PCM_CONFIG        0x0001020E
@@ -7559,6 +7589,7 @@ struct asm_data_cmd_iec_60958_frame_rate {
 #define ASM_SESSION_CMD_RUN_STARTIME_RUN_AT_RELATIVEIME 2
 #define ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_DELAY     3
 #define ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP       4
+#define ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP_PASS_THROUGH 5
 
 #define ASM_BIT_MASK_RUN_STARTIME                 (0x00000003UL)
 
@@ -7583,6 +7614,7 @@ struct asm_session_cmd_run_v2 {
  *- #ASM_SESSION_CMD_RUN_STARTIME_RUN_AT_RELATIVEIME
  *- #ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_DELAY
  *- #ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP
+ *- #ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP_PASS_THROUGH
  *
  *All other bits are reserved; clients must set them to zero.
  */
@@ -11817,16 +11849,15 @@ struct afe_clk_cfg {
 #define AFE_MODULE_CLOCK_SET		0x0001028F
 #define AFE_PARAM_ID_CLOCK_SET		0x00010290
 
-struct afe_set_clk_drift {
-	/*
-	 * Clock ID
-	 *	@values
-	 *	- 0x100 to 0x10E
-	 *	- 0x200 to 0x20C
-	 *	- 0x500 to 0x505
-	 */
-	uint32_t clk_id;
+#define CLK_SRC_NAME_MAX 32
 
+enum {
+	CLK_SRC_INTEGRAL,
+	CLK_SRC_FRACT,
+	CLK_SRC_MAX
+};
+
+struct afe_set_clk_drift {
 	/*
 	 * Clock drift  (in PPB) to be set.
 	 *	@values
@@ -11835,12 +11866,20 @@ struct afe_set_clk_drift {
 	int32_t clk_drift;
 
 	/*
-	 * Clock rest.
+	 * Clock reset.
 	 *	@values
 	 *	- 1 -- Reset PLL with the original frequency
 	 *	- 0 -- Adjust the clock with the clk drift value
 	 */
 	uint32_t clk_reset;
+	/*
+	 * Clock src name.
+	 *  @values
+	 *  - values to be set from machine driver
+	 *  - LPAPLL0 -- integral clk src
+	 *  - LPAPLL2 -- fractional clk src
+	 */
+	char clk_src_name[CLK_SRC_NAME_MAX];
 } __packed;
 
 /* This param id is used to adjust audio interface PLL*/
@@ -12897,5 +12936,45 @@ struct afe_param_id_tdm_lane_cfg {
 	 * set in the mask.
 	 */
 };
+
+/** ID of the parameter used to set the AFE port data logging to enable or disable state.
+ * For non-group device use cases, #AFE_MODULE_AUDIO_DEV_INTERFACE uses this
+ * parameter to configure the flag used for data logging in afe_data_logging_t
+ * of the respective port to enabled or disabled state.
+ * The HLOS client can use this parameter to configure the data logging
+ * disable flag for it's respective port.
+ * The reason for this parameter addition is if a number of ports are
+ * configured and running, Upon enabling logging through 0x1586 tap point,
+ * we will get input/output logs for all the enabled ports.
+ * In order to disabled logging for a specific port for which data logging
+ * is not needed, the HLOS client can make use of AFE_PORT_DATA_LOGGING_DISABLE flag.
+ * This flag will set to AFE_PORT_DATA_LOGGING_ENABLE during port initialization and also
+ * during port stop. If port is restarted, the set param should be called again
+ * by the HLOS client if needed to disable data logging.
+ * @par
+ * If HLOS client doesn't set this paramter, by default the disable flag = AFE_PORT_DATA_LOGGING_ENABLE.
+ * If HLOS client sets the flag = AFE_PORT_DATA_LOGGING_DISABLE, the respective port will be disabled for data logging.
+ */
+#define AFE_PARAM_ID_PORT_DATA_LOGGING_DISABLE            0x000102E9
+
+ /** Enable flag for port data logging. */
+#define AFE_PORT_DATA_LOGGING_ENABLE    0
+
+/** Disable flag for port data logging. */
+#define AFE_PORT_DATA_LOGGING_DISABLE   1
+
+/*
+ * Payload of the AFE_PARAM_ID_PORT_DATA_LOGGING_DISABLE parameter used by
+ * AFE_MODULE_AUDIO_DEV_INTERFACE
+ */
+struct afe_param_id_port_data_log_disable_t
+{
+	uint32_t           disable_logging_flag;
+	/** Flag for enabling or disabling data logging.
+	 * @values
+	 * - AFE_PORT_DATA_LOGGING_ENABLE  - enable data logging.
+	 * - AFE_PORT_DATA_LOGGING_DISABLE - disable data logging.
+	 */
+} __packed;
 
 #endif /*_APR_AUDIO_V2_H_ */

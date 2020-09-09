@@ -255,6 +255,11 @@ static int msm_compr_set_render_mode(struct msm_compr_audio *prtd,
 		if (prtd->audio_client->perf_mode == LOW_LATENCY_PCM_MODE)
 			prtd->enable_pre_buffering = true;
 		break;
+	case SNDRV_COMPRESS_RENDER_MODE_TTP_PASS_THROUGH:
+		render_mode = ASM_SESSION_MTMX_STRTR_PARAM_RENDER_LOCAL_STC;
+		prtd->run_mode =
+			ASM_SESSION_CMD_RUN_STARTIME_RUN_WITH_TTP_PASS_THROUGH;
+		break;
 	default:
 		pr_err("%s, Invalid render mode %u\n", __func__,
 			render_mode);
@@ -5093,7 +5098,7 @@ static int msm_compr_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 		if (prtd && prtd->audio_client) {
 			stream_id = prtd->audio_client->session;
 			be_id = chmixer_pspd->port_idx;
-			msm_pcm_routing_set_channel_mixer_runtime(be_id,
+			msm_pcm_routing_set_channel_mixer_runtime(fe_id, be_id,
 					stream_id, session_type, chmixer_pspd);
 		}
 	}
