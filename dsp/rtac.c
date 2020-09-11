@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -76,7 +76,8 @@ static struct rtac_adm		rtac_adm_data;
 static u32			*rtac_adm_buffer;
 
 
-/* ASM APR */
+/* ASM info & APR */
+static struct rtac_asm		rtac_asm_data;
 static u32			*rtac_asm_buffer;
 
 static u32			*rtac_afe_buffer;
@@ -118,6 +119,7 @@ static u32			voice_session_id[RTAC_MAX_ACTIVE_VOICE_COMBOS];
 
 
 struct mutex			rtac_adm_mutex;
+struct mutex			rtac_asm_mutex;
 struct mutex			rtac_adm_apr_mutex;
 struct mutex			rtac_asm_apr_mutex;
 struct mutex			rtac_voice_mutex;
@@ -485,6 +487,35 @@ done:
 	mutex_unlock(&rtac_adm_mutex);
 }
 
+void rtac_add_asm_non_tunnel_session(u32 popp_id)
+{
+	pr_debug("%s: rtac popp %d popp_id = %d\n",
+		__func__, rtac_asm_data.num_of_popp, popp_id);
+
+	mutex_lock(&rtac_asm_mutex);
+	if (rtac_asm_data.num_of_popp == RTAC_MAX_ACTIVE_POPP) {
+		pr_err("%s, Can't add anymore RTAC POPP!\n", __func__);
+		goto done;
+	}
+
+	rtac_asm_data.popp[rtac_asm_data.num_of_popp].popp = popp_id;
+	rtac_asm_data.popp[rtac_asm_data.num_of_popp].popp_topology =
+		q6asm_get_asm_topology(popp_id);
+	rtac_asm_data.popp[rtac_asm_data.num_of_popp].app_type =
+		q6asm_get_asm_app_type(popp_id);
+
+	/* Add POPP */
+	rtac_asm_data.num_of_popp++;
+
+	pr_debug("%s: popp_id = %d, popp topology = 0x%x, popp app type = 0x%x\n",
+		__func__,
+		rtac_asm_data.popp[rtac_asm_data.num_of_popp - 1].popp,
+		rtac_asm_data.popp[rtac_asm_data.num_of_popp - 1].popp_topology,
+		rtac_asm_data.popp[rtac_asm_data.num_of_popp - 1].app_type);
+done:
+	mutex_unlock(&rtac_asm_mutex);
+}
+
 static void shift_adm_devices(u32 dev_idx)
 {
 	for (; dev_idx < rtac_adm_data.num_of_dev; dev_idx++) {
@@ -512,6 +543,22 @@ static void shift_popp(u32 copp_idx, u32 popp_idx)
 			popp, 0, sizeof(uint32_t));
 		memset(&rtac_adm_data.device[copp_idx].popp[popp_idx + 1].
 			popp_topology, 0, sizeof(uint32_t));
+	}
+}
+
+static void shift_non_tunnel_popp(u32 popp_idx)
+{
+	for (; popp_idx < rtac_asm_data.num_of_popp; popp_idx++) {
+		memcpy(&rtac_asm_data.popp[popp_idx].popp,
+			&rtac_asm_data.popp[popp_idx + 1].popp,
+			sizeof(uint32_t));
+		memcpy(&rtac_asm_data.popp[popp_idx].popp_topology,
+			&rtac_asm_data.popp[popp_idx + 1].popp_topology,
+			sizeof(uint32_t));
+		memset(&rtac_asm_data.popp[popp_idx + 1].popp,
+			0, sizeof(uint32_t));
+		memset(&rtac_asm_data.popp[popp_idx + 1].popp_topology,
+			0, sizeof(uint32_t));
 	}
 }
 
@@ -563,6 +610,23 @@ void rtac_remove_popp_from_adm_devices(u32 popp_id)
 	mutex_unlock(&rtac_adm_mutex);
 }
 
+void rtac_remove_nt_popp(u32 popp_id)
+{
+	s32 i;
+
+	pr_debug("%s: popp_id = %d\n", __func__, popp_id);
+
+	mutex_lock(&rtac_asm_mutex);
+	for (i = 0; i < rtac_asm_data.num_of_popp; i++) {
+		if (rtac_asm_data.popp[i].popp == popp_id) {
+			rtac_asm_data.popp[i].popp = 0;
+			rtac_asm_data.popp[i].popp_topology = 0;
+			rtac_asm_data.num_of_popp--;
+			shift_non_tunnel_popp(i);
+		}
+	}
+	mutex_unlock(&rtac_asm_mutex);
+}
 
 /* Voice Info */
 static void set_rtac_voice_data(int idx, u32 cvs_handle, u32 cvp_handle,
@@ -1795,6 +1859,19 @@ static long rtac_ioctl_shared(struct file *f,
 		mutex_unlock(&rtac_adm_mutex);
 		break;
 	}
+	case AUDIO_GET_RTAC_ASM_INFO: {
+		mutex_lock(&rtac_asm_mutex);
+		if (copy_to_user((void *)arg, &rtac_asm_data,
+						sizeof(rtac_asm_data))) {
+			pr_err("%s: copy_to_user failed for AUDIO_GET_RTAC_ASM_INFO\n",
+					__func__);
+			mutex_unlock(&rtac_asm_mutex);
+			return -EFAULT;
+		}
+		result = sizeof(rtac_asm_data);
+		mutex_unlock(&rtac_asm_mutex);
+		break;
+	}
 	case AUDIO_GET_RTAC_VOICE_INFO: {
 		mutex_lock(&rtac_voice_mutex);
 		if (copy_to_user((void *)arg, &rtac_voice_data,
@@ -1908,6 +1985,7 @@ static long rtac_ioctl(struct file *f,
 #define AUDIO_SET_RTAC_CVP_CAL_32 _IOWR(CAL_IOCTL_MAGIC, 216, compat_uptr_t)
 #define AUDIO_GET_RTAC_AFE_CAL_32 _IOWR(CAL_IOCTL_MAGIC, 217, compat_uptr_t)
 #define AUDIO_SET_RTAC_AFE_CAL_32 _IOWR(CAL_IOCTL_MAGIC, 218, compat_uptr_t)
+#define AUDIO_GET_RTAC_ASM_INFO_32   _IOR(CAL_IOCTL_MAGIC, 219, compat_uptr_t)
 
 static long rtac_compat_ioctl(struct file *f,
 		unsigned int cmd, unsigned long arg)
@@ -1924,6 +2002,9 @@ static long rtac_compat_ioctl(struct file *f,
 	switch (cmd) {
 	case AUDIO_GET_RTAC_ADM_INFO_32:
 		cmd = AUDIO_GET_RTAC_ADM_INFO;
+		goto process;
+	case AUDIO_GET_RTAC_ASM_INFO_32:
+		cmd = AUDIO_GET_RTAC_ASM_INFO;
 		goto process;
 	case AUDIO_GET_RTAC_VOICE_INFO_32:
 		cmd = AUDIO_GET_RTAC_VOICE_INFO;
@@ -2004,6 +2085,7 @@ int __init rtac_init(void)
 	init_waitqueue_head(&rtac_adm_apr_data.cmd_wait);
 	mutex_init(&rtac_adm_mutex);
 	mutex_init(&rtac_adm_apr_mutex);
+	mutex_init(&rtac_asm_mutex);
 
 	rtac_adm_buffer = kzalloc(
 		rtac_cal[ADM_RTAC_CAL].map_data.map_size, GFP_KERNEL);
