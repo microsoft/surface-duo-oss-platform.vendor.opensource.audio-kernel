@@ -39,7 +39,7 @@
 #define EXT_SMART_PA "ext-smart-pa"
 
 #define WCN_CDC_SLIM_RX_CH_MAX 2
-#define WCN_CDC_SLIM_TX_CH_MAX 2
+#define WCN_CDC_SLIM_TX_CH_MAX 3
 
 
 enum btsco_rates {
@@ -705,7 +705,7 @@ int msm_slim_7_tx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 static int msm_wcn_init(struct snd_soc_pcm_runtime *rtd)
 {
     unsigned int rx_ch[WCN_CDC_SLIM_RX_CH_MAX] = {157,158};
-    unsigned int tx_ch[WCN_CDC_SLIM_TX_CH_MAX]  = {159,160};
+    unsigned int tx_ch[WCN_CDC_SLIM_TX_CH_MAX]  = {159,160,161};
     struct snd_soc_dai *codec_dai = rtd->codec_dai;
 
     return snd_soc_dai_set_channel_map(codec_dai, ARRAY_SIZE(tx_ch),
