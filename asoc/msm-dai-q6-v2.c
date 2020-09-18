@@ -225,6 +225,7 @@ struct msm_dai_q6_dai_data {
 	struct afe_ttp_config ttp_config;
 	union afe_port_config port_config;
 	u16 vi_feed_mono;
+	bool is_slim_dev_id_updated;
 };
 
 struct msm_dai_q6_spdif_dai_data {
@@ -374,6 +375,12 @@ static const struct soc_enum tdm_config_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(tdm_data_format), tdm_data_format),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(tdm_header_type), tdm_header_type),
 };
+
+static u16 afe_port_logging_port_id;
+
+static bool afe_port_logging_item[IDX_TDM_MAX];
+
+static int afe_port_loggging_control_added;
 
 static DEFINE_MUTEX(tdm_mutex);
 
@@ -2533,20 +2540,22 @@ static int msm_dai_q6_slim_bus_hw_params(struct snd_pcm_hw_params *params,
 	dai_data->port_config.slim_sch.sample_rate = dai_data->rate;
 	dai_data->port_config.slim_sch.num_channels = dai_data->channels;
 
-	switch (dai->id) {
-	case SLIMBUS_7_RX:
-	case SLIMBUS_7_TX:
-	case SLIMBUS_8_RX:
-	case SLIMBUS_8_TX:
-	case SLIMBUS_9_RX:
-	case SLIMBUS_9_TX:
-		dai_data->port_config.slim_sch.slimbus_dev_id =
-			AFE_SLIMBUS_DEVICE_2;
-		break;
-	default:
-		dai_data->port_config.slim_sch.slimbus_dev_id =
-			AFE_SLIMBUS_DEVICE_1;
-		break;
+	if (!dai_data->is_slim_dev_id_updated) {
+		switch (dai->id) {
+		case SLIMBUS_7_RX:
+		case SLIMBUS_7_TX:
+		case SLIMBUS_8_RX:
+		case SLIMBUS_8_TX:
+		case SLIMBUS_9_RX:
+		case SLIMBUS_9_TX:
+			dai_data->port_config.slim_sch.slimbus_dev_id =
+				AFE_SLIMBUS_DEVICE_2;
+			break;
+		default:
+			dai_data->port_config.slim_sch.slimbus_dev_id =
+				AFE_SLIMBUS_DEVICE_1;
+			break;
+		}
 	}
 
 	dev_dbg(dai->dev, "%s:slimbus_dev_id[%hu] bit_wd[%hu] format[%hu]\n"
@@ -3958,6 +3967,33 @@ static const struct snd_kcontrol_new avd_drift_config_controls[] = {
 		.get	= msm_dai_q6_slim_rx_drift_get,
 	},
 };
+
+static inline void msm_dai_q6_set_slim_dev_id(struct snd_soc_dai *dai)
+{
+	int rc = 0;
+	int slim_dev_id = 0;
+	const char *q6_slim_dev_id = "qcom,msm-q6-slim-dev-id";
+	struct msm_dai_q6_dai_data *dai_data = dev_get_drvdata(dai->dev);
+
+	dai_data->port_config.slim_sch.slimbus_dev_id = AFE_SLIMBUS_DEVICE_1;
+
+	rc = of_property_read_u32(dai->dev->of_node, q6_slim_dev_id,
+				  &slim_dev_id);
+	if (rc) {
+		dev_dbg(dai->dev,
+			"%s: missing %s in dt node\n", __func__, q6_slim_dev_id);
+		return;
+	}
+
+	dev_dbg(dai->dev, "%s: slim_dev_id = %d\n", __func__, slim_dev_id);
+
+	if (slim_dev_id >= AFE_SLIMBUS_DEVICE_1 &&
+	    slim_dev_id <= AFE_SLIMBUS_DEVICE_2) {
+		dai_data->is_slim_dev_id_updated = true;
+		dai_data->port_config.slim_sch.slimbus_dev_id = slim_dev_id;
+	}
+}
+
 static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
 {
 	struct msm_dai_q6_dai_data *dai_data;
@@ -3980,6 +4016,10 @@ static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
 		dev_set_drvdata(dai->dev, dai_data);
 
 	msm_dai_q6_set_dai_id(dai);
+	dai_data->is_slim_dev_id_updated = false;
+
+	if ((dai->id >= SLIMBUS_0_RX) && (dai->id <= SLIMBUS_9_TX))
+		msm_dai_q6_set_slim_dev_id(dai);
 
 	switch (dai->id) {
 	case SLIMBUS_4_TX:
@@ -8811,6 +8851,87 @@ static int msm_dai_q6_tdm_set_clk(
 	return rc;
 }
 
+static int msm_pcm_afe_port_logging_info(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_info* ucontrol)
+{
+	ucontrol->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	/* two int values: port_id and enable/disable */
+	ucontrol->count = 2;
+	/* Valid range is all positive values to support above controls */
+	ucontrol->value.integer.min = 0;
+	ucontrol->value.integer.max = INT_MAX;
+	return 0;
+}
+
+static int msm_pcm_afe_port_logging_ctl_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int port_idx = afe_port_logging_port_id - AFE_PORT_ID_TDM_PORT_RANGE_START;
+
+	ucontrol->value.integer.value[0] = afe_port_logging_port_id;
+	ucontrol->value.integer.value[1] = afe_port_logging_item[port_idx];
+
+	return 0;
+}
+
+static int msm_pcm_afe_port_logging_ctl_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	u16 port_id;
+	struct afe_param_id_port_data_log_disable_t log_disable;
+	struct param_hdr_v3 param_hdr;
+	int ret = -EINVAL, port_idx;
+
+	pr_debug("%s: enter\n", __func__);
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	port_id = ucontrol->value.integer.value[0];
+	log_disable.disable_logging_flag = ucontrol->value.integer.value[1];
+
+	ret = afe_port_send_logging_cfg(port_id, &log_disable);
+	if (ret)
+		pr_err("%s: AFE port logging setting for port 0x%x failed %d\n",
+			__func__, port_id, ret);
+
+	afe_port_logging_port_id = port_id;
+	port_idx = port_id - AFE_PORT_ID_TDM_PORT_RANGE_START;
+	afe_port_logging_item[port_idx] = ucontrol->value.integer.value[1];
+
+	return ret;
+}
+
+static int msm_pcm_add_afe_port_logging_control(struct snd_soc_dai *dai)
+{
+	const char* afe_port_logging_ctl_name = "AFE_port_logging_disable";
+	int rc = 0;
+	struct snd_kcontrol_new *knew = NULL;
+	struct snd_kcontrol* kctl = NULL;
+
+	/* Add AFE port logging controls */
+	knew = kzalloc(sizeof(struct snd_kcontrol_new), GFP_KERNEL);
+	if (!knew) {
+		return -ENOMEM;
+	}
+	knew->iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+	knew->info = msm_pcm_afe_port_logging_info;
+	knew->get = msm_pcm_afe_port_logging_ctl_get;
+	knew->put = msm_pcm_afe_port_logging_ctl_put;
+	knew->name = afe_port_logging_ctl_name;
+	knew->private_value = dai->id;
+	kctl = snd_ctl_new1(knew, knew);
+	if (!kctl) {
+		kfree(knew);
+		return -ENOMEM;
+	}
+
+	rc = snd_ctl_add(dai->component->card->snd_card, kctl);
+	if (rc < 0)
+		pr_err("%s: err add AFE port logging disable control, DAI = %s\n",
+			__func__, dai->name);
+
+	return rc;
+}
+
 static int msm_dai_q6_dai_tdm_probe(struct snd_soc_dai *dai)
 {
 	int rc = 0;
@@ -8885,6 +9006,18 @@ static int msm_dai_q6_dai_tdm_probe(struct snd_soc_dai *dai)
 				__func__, dai->name);
 			goto rtn;
 		}
+	}
+
+	/* add AFE port logging controls */
+	if (!afe_port_loggging_control_added) {
+		rc = msm_pcm_add_afe_port_logging_control(dai);
+		if (rc < 0) {
+			dev_err(dai->dev, "%s: add AFE port logging control failed DAI: %s\n",
+				__func__, dai->name);
+			goto rtn;
+		}
+
+		afe_port_loggging_control_added = 1;
 	}
 
 	if (tdm_dai_data->is_island_dai)

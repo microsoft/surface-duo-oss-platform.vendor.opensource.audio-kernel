@@ -14716,6 +14716,10 @@ static const struct snd_kcontrol_new mmul19_mixer_controls[] = {
 	MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA19, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("SLIM_9_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_SLIMBUS_9_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA19, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 };
 
 static const struct snd_kcontrol_new mmul20_mixer_controls[] = {
@@ -15522,6 +15526,10 @@ static const struct snd_kcontrol_new mmul28_mixer_controls[] = {
 	MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA28, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("SLIM_9_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_SLIMBUS_9_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA28, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 };
 
 static const struct snd_kcontrol_new mmul29_mixer_controls[] = {
@@ -15633,6 +15641,10 @@ static const struct snd_kcontrol_new mmul29_mixer_controls[] = {
 	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("AFE_LOOPBACK_TX", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_AFE_LOOPBACK_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA29, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("SLIM_9_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_SLIMBUS_9_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA29, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 };
@@ -24508,10 +24520,13 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"MultiMedia18 Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
 	{"MultiMedia19 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"MultiMedia19 Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
+	{"MultiMedia19 Mixer", "SLIM_9_TX", "SLIMBUS_9_TX"},
 	{"MultiMedia28 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"MultiMedia28 Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
+	{"MultiMedia28 Mixer", "SLIM_9_TX", "SLIMBUS_9_TX"},
 	{"MultiMedia29 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"MultiMedia29 Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
+	{"MultiMedia29 Mixer", "SLIM_9_TX", "SLIMBUS_9_TX"},
 	{"MultiMedia30 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
 	{"MultiMedia30 Mixer", "SLIM_1_TX", "SLIMBUS_1_TX"},
 	{"MultiMedia8 Mixer", "SLIM_0_TX", "SLIMBUS_0_TX"},
@@ -27825,6 +27840,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_FM_TX", "INT_FM_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_8_TX", "SLIMBUS_8_TX"},
+	{"QUAT_MI2S_RX Port Mixer", "SLIM_7_TX", "SLIMBUS_7_TX"},
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
 
 	{"QUIN_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
