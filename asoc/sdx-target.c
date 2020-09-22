@@ -811,8 +811,7 @@ static int sdx_mi2s_tx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rt,
 						      SNDRV_PCM_HW_PARAM_RATE);
 	struct snd_interval *channels = hw_param_interval(params,
 						SNDRV_PCM_HW_PARAM_CHANNELS);
-	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-		       SNDRV_PCM_FORMAT_S16_LE);
+	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT, sdx_mi2s_bitwidth);
 	rate->min = rate->max = sdx_mi2s_rate;
 	channels->min = channels->max = sdx_mi2s_tx_ch;
 	return 0;
@@ -2078,6 +2077,7 @@ static char const *tdm_bit_format_text[] = {"S16_LE", "S24_LE", "S32_LE"};
 static char const *tdm_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
 					     "KHZ_48", "KHZ_176P4",
 					     "KHZ_352P8"};
+static char const *mi2s_bit_format_text[] = {"S16_LE", "S24_LE", "S32_LE"};
 
 static const struct soc_enum sdx_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, spk_function),
@@ -2087,6 +2087,7 @@ static const struct soc_enum sdx_enum[] = {
 	SOC_ENUM_SINGLE_EXT(3, mi2s_rate_text),
 	SOC_ENUM_SINGLE_EXT(2, hifi_function),
 	SOC_ENUM_SINGLE_EXT(2, mode_text),
+	SOC_ENUM_SINGLE_EXT(3, mi2s_bit_format_text),
 };
 
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_tx_chs, tdm_ch_text);
@@ -2112,7 +2113,7 @@ static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("MI2S SampleRate", sdx_enum[4],
 				 sdx_mi2s_rate_get,
 				 sdx_mi2s_rate_put),
-	SOC_ENUM_EXT("MI2S BitWidth", sdx_enum[4],
+	SOC_ENUM_EXT("MI2S BitWidth", sdx_enum[7],
 				 sdx_mi2s_bitwidth_get,
 				 sdx_mi2s_bitwidth_put),
 	SOC_ENUM_EXT("SEC_MI2S_RX Channels", sdx_enum[1],
