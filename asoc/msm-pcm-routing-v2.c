@@ -15721,6 +15721,10 @@ static const struct snd_kcontrol_new mmul21_mixer_controls[] = {
 	MSM_BACKEND_DAI_SEC_AUXPCM_TX,
 	MSM_FRONTEND_DAI_MULTIMEDIA21, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("QUIN_AUXPCM_UL_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_QUIN_AUXPCM_TX,
+	MSM_FRONTEND_DAI_MULTIMEDIA21, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 	SOC_DOUBLE_EXT("PRI_TDM_TX_0", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_PRI_TDM_TX_0,
 	MSM_FRONTEND_DAI_MULTIMEDIA21, 1, 0, msm_routing_get_audio_mixer,
@@ -27057,6 +27061,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 
 	{"MultiMedia21 Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"MultiMedia21 Mixer", "SEC_AUX_PCM_UL_TX", "SEC_AUX_PCM_TX"},
+	{"MultiMedia21 Mixer", "QUIN_AUXPCM_UL_TX", "QUIN_AUX_PCM_TX"},
 	{"MultiMedia21 Mixer", "PRI_TDM_TX_0", "PRI_TDM_TX_0"},
 	{"MultiMedia21 Mixer", "PRI_TDM_TX_1", "PRI_TDM_TX_1"},
 	{"MultiMedia21 Mixer", "PRI_TDM_TX_2", "PRI_TDM_TX_2"},
