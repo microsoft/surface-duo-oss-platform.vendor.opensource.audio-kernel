@@ -11491,10 +11491,6 @@ int q6asm_send_cal(struct audio_client *ac)
 		pr_err("%s: Audio client is NULL\n", __func__);
 		return -EINVAL;
 	}
-	if (ac->io_mode & NT_MODE) {
-		pr_debug("%s: called for NT MODE, exiting\n", __func__);
-		goto done;
-	}
 
 	if (cal_data[ASM_AUDSTRM_CAL] == NULL)
 		goto done;
