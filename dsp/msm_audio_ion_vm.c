@@ -318,6 +318,8 @@ static int msm_audio_ion_smmu_map(void *handle,
 	bool exported = false;
 	struct msm_audio_smmu_vm_map_cmd smmu_map_cmd;
 	struct msm_audio_smmu_vm_map_cmd_rsp cmd_rsp;
+	struct msm_audio_smmu_vm_unmap_cmd smmu_unmap_cmd;
+	struct msm_audio_smmu_vm_unmap_cmd_rsp cmd_rsp_unmap;
 	struct msm_audio_alloc_data *alloc_data = NULL;
 	unsigned long delay = jiffies + (HZ / 2);
 
@@ -343,8 +345,8 @@ static int msm_audio_ion_smmu_map(void *handle,
 			smmu_map_cmd.export_id = export_id;
 			smmu_map_cmd.buf_size = *len;
 			smmu_map_cmd.token = token_id;
-			pr_debug("%s: smmu_map_cmd.token %u, export_id %u, pid is %d\n",
-				__func__, smmu_map_cmd.token, smmu_map_cmd.export_id, current->pid);
+			pr_debug("%s: smmu_map_cmd.token %u, export_id %u\n",
+				__func__, smmu_map_cmd.token, smmu_map_cmd.export_id);
 			token_id++;
 
 			rc = habmm_socket_send(msm_audio_ion_hab_handle,
@@ -367,6 +369,27 @@ static int msm_audio_ion_smmu_map(void *handle,
 			if (rc) {
 				pr_err("%s: habmm_socket_recv failed %d\n",
 					__func__, rc);
+				if (rc == -EINTR) {
+					smmu_unmap_cmd.cmd_id = MSM_AUDIO_SMMU_VM_CMD_UNMAP;
+					smmu_unmap_cmd.export_id = export_id;
+					smmu_unmap_cmd.token = token_id;
+					pr_debug("%s: smmu_unmap_cmd.token %u, export_id %u\n",
+						__func__, smmu_unmap_cmd.token, smmu_unmap_cmd.export_id);
+					token_id++;
+					rc = habmm_socket_send(msm_audio_ion_hab_handle,
+								(void *)&smmu_unmap_cmd,
+								sizeof(smmu_unmap_cmd), 0);
+					pr_debug("%s: habmm_socket_send when smmu_map fails with -4 rc=%d\n",__func__,rc);
+
+					do {
+						cmd_rsp_size = sizeof(cmd_rsp_unmap);
+						rc = habmm_socket_recv(msm_audio_ion_hab_handle,
+							(void *)&cmd_rsp_unmap,
+							&cmd_rsp_size,
+							0xFFFFFFFF,
+							0);
+					} while (time_before(jiffies, delay) && (rc == -EINTR) && (cmd_rsp_size == 0));
+				}
 				goto err;
 			} else {
 				do {
@@ -449,8 +472,8 @@ static int msm_audio_ion_smmu_unmap(void *handle)
 			smmu_unmap_cmd.cmd_id = MSM_AUDIO_SMMU_VM_CMD_UNMAP;
 			smmu_unmap_cmd.export_id = alloc_data->export_id;
 			smmu_unmap_cmd.token = token_id;
-			pr_debug("%s: smmu_unmap_cmd.token %u, export_id %u, pid is %d\n",
-				__func__, smmu_unmap_cmd.token, smmu_unmap_cmd.export_id, current->pid);
+			pr_debug("%s: smmu_unmap_cmd.token %u, export_id %u\n",
+				__func__, smmu_unmap_cmd.token, smmu_unmap_cmd.export_id);
 			token_id++;
 			rc = habmm_socket_send(msm_audio_ion_hab_handle,
 				(void *)&smmu_unmap_cmd,
