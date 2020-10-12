@@ -3452,6 +3452,32 @@ int q6asm_open_read_with_retry(struct audio_client *ac, uint32_t format,
 }
 EXPORT_SYMBOL(q6asm_open_read_with_retry);
 
+int q6asm_open_compressed_with_retry(struct audio_client *ac, uint32_t format, uint32_t passthrough_flag)
+{
+	int i, rc;
+
+	mutex_lock(&session_lock);
+	for (i = 0; i < ASM_ACTIVE_STREAMS_ALLOWED; i++) {
+		pr_debug("%s: session %d\n",
+				__func__, ac->session);
+		rc = q6asm_open_write_compressed(ac, format, passthrough_flag);
+		if (rc != -EALREADY)
+			break;
+
+		pr_debug("%s: session %d is occupied, try next\n",
+				__func__, ac->session);
+		q6asm_session_set_ignore(ac->session);
+		rc = q6asm_session_try_next(ac);
+		if (rc < 0)
+			break;
+	}
+	q6asm_session_clean_ignore();
+	mutex_unlock(&session_lock);
+
+	return rc;
+}
+EXPORT_SYMBOL(q6asm_open_compressed_with_retry);
+
 /**
  * q6asm_open_write_compressed -
  *       command to open ASM in compressed write mode
@@ -3878,7 +3904,6 @@ int q6asm_open_write_v5(struct audio_client *ac, uint32_t format,
 }
 EXPORT_SYMBOL(q6asm_open_write_v5);
 
-
 /*
  * q6asm_stream_open_write_v4 - Creates audio stream for playback
  *
@@ -3917,6 +3942,44 @@ int q6asm_stream_open_write_v5(struct audio_client *ac, uint32_t format,
 }
 EXPORT_SYMBOL(q6asm_stream_open_write_v5);
 
+static int q6asm_stream_open_write_version_adaptor(struct audio_client *ac, uint32_t format,
+						uint16_t bits_per_sample, int32_t stream_id,
+						bool is_gapless_mode)
+{
+	if (q6core_get_avcs_api_version_per_service(APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >= ADSP_ASM_API_VERSION_V2)
+		return q6asm_stream_open_write_v5(ac, format, bits_per_sample, stream_id, is_gapless_mode);
+	else
+		return q6asm_stream_open_write_v4(ac, format, bits_per_sample, stream_id, is_gapless_mode);
+}
+
+int q6asm_stream_open_write_with_retry(struct audio_client *ac, uint32_t format,
+				uint16_t bits_per_sample, int32_t stream_id,
+				bool is_gapless_mode)
+{
+	int i, rc;
+
+	mutex_lock(&session_lock);
+	for (i = 0; i < ASM_ACTIVE_STREAMS_ALLOWED; i++) {
+		pr_debug("%s: session %d \n",
+				__func__, ac->session);
+		rc = q6asm_stream_open_write_version_adaptor(ac, format,
+						bits_per_sample, stream_id, is_gapless_mode);
+		if (rc != -EALREADY)
+			break;
+
+		pr_debug("%s: session %d is occupied, try next\n",
+				__func__, ac->session);
+		q6asm_session_set_ignore(ac->session);
+		rc = q6asm_session_try_next(ac);
+		if (rc < 0)
+			break;
+	}
+	q6asm_session_clean_ignore();
+	mutex_unlock(&session_lock);
+
+	return rc;
+}
+EXPORT_SYMBOL(q6asm_stream_open_write_with_retry);
 
 static int __q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 				   uint32_t wr_format, bool is_meta_data_mode,
