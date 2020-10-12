@@ -3844,11 +3844,13 @@ int afe_send_custom_tdm_header_cfg(
  * @tdm_port: TDM port configutation
  * @rate: sampling rate of port
  * @num_groups: number of TDM groups
+ * @lane_cfg: TDM lane configuration
  *
  * Returns 0 on success or error value on port start failure.
  */
 int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
-		       u32 rate, u16 num_groups)
+		       u32 rate, u16 num_groups,
+		       struct afe_param_id_tdm_lane_cfg *lane_cfg)
 {
 	struct param_hdr_v3 param_hdr;
 	int index = 0;
@@ -3933,6 +3935,17 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		pr_err("%s: AFE enable for port 0x%x failed ret = %d\n",
 				__func__, port_id, ret);
 		goto fail_cmd;
+	}
+
+	if (num_groups == 1 && lane_cfg != NULL) {
+		if (lane_cfg->lane_mask != AFE_LANE_MASK_INVALID) {
+			ret = afe_port_tdm_lane_config_v2(port_id, lane_cfg);
+			if (ret < 0) {
+				pr_err("%s: afe send lane config failed %d\n",
+					__func__, ret);
+				goto fail_cmd;
+			}
+		}
 	}
 
 	port_index = afe_get_port_index(port_id);
@@ -6155,6 +6168,55 @@ static int afe_port_tdm_lane_config(u16 group_id,
 
 	return ret;
 }
+
+/**
+ * afe_port_tdm_lane_config_v2 -
+ * to configure group TDM lane mask with specified configuration
+ *
+ * @port_id: AFE port id number
+ * @lane_cfg: TDM lane mask configuration
+ *
+ * Returns 0 on success or error value on failure.
+ */
+int afe_port_tdm_lane_config_v2(u16 port_id,
+	struct afe_param_id_tdm_lane_cfg *lane_cfg)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+
+	if (lane_cfg == NULL ||
+		lane_cfg->lane_mask == AFE_LANE_MASK_INVALID) {
+		pr_debug("%s: lane cfg not supported for group id: 0x%x\n",
+			__func__, port_id);
+		return ret;
+	}
+
+	pr_debug("%s: port id: 0x%x group id: 0x%x lane mask 0x%x\n", __func__,
+		port_id, lane_cfg->port_id, lane_cfg->lane_mask);
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	ret = afe_q6_interface_prepare();
+	if (ret != 0) {
+		pr_err("%s: Q6 interface prepare failed %d\n", __func__, ret);
+		return ret;
+	}
+
+	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_TDM_LANE_CONFIG;
+	param_hdr.param_size = sizeof(struct afe_param_id_tdm_lane_cfg);
+
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+			q6audio_get_port_index(port_id),
+			param_hdr, (u8 *)lane_cfg);
+	if (ret)
+		pr_err("%s: AFE_PARAM_ID_TDM_LANE_CONFIG failed %d\n",
+			__func__, ret);
+
+	return ret;
+}
+EXPORT_SYMBOL(afe_port_tdm_lane_config_v2);
 
 /**
  * afe_port_group_enable -

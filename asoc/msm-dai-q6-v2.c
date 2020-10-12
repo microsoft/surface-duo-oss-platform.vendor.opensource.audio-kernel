@@ -10017,7 +10017,8 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 		}
 
 		rc = afe_tdm_port_start(dai->id, &dai_data->port_cfg,
-			dai_data->rate, dai_data->num_group_ports);
+			dai_data->rate, dai_data->num_group_ports,
+			&dai_data->lane_cfg);
 		if (rc < 0) {
 			if (atomic_read(group_ref) == 0) {
 				afe_port_group_enable(group_id,
