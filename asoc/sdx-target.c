@@ -2011,7 +2011,7 @@ static int sdx_sec_tdm_startup(struct snd_pcm_substream *substream)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
 	} else {
-		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_master_p);
+		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_slave_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
