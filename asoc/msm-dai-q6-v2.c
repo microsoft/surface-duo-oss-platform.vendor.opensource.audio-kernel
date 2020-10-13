@@ -38,6 +38,8 @@
 #define MSM_DAI_TWS_CHANNEL_MODE_ONE 1
 #define MSM_DAI_TWS_CHANNEL_MODE_TWO 2
 
+#define Q6AFE_LPASS_CLK_ID_INVALID 0
+
 #define spdif_clock_value(rate) (2*rate*32*2)
 #define CHANNEL_STATUS_SIZE 24
 #define CHANNEL_STATUS_MASK_INIT 0x0
@@ -108,6 +110,12 @@ enum {
 	RATE_8KHZ,
 	RATE_16KHZ,
 	RATE_MAX_NUM_OF_AUX_PCM_RATES,
+};
+
+enum {
+	EXT_CLK = 0,
+	INT_CLK,
+	NO_CLK,
 };
 
 enum {
@@ -7479,43 +7487,64 @@ static struct platform_driver msm_dai_q6_spdif_driver = {
 };
 
 static int msm_dai_q6_tdm_set_clk_param(u32 group_id,
-					struct afe_clk_set *clk_set, u32 mode)
+					struct afe_clk_set *clk_set, u32 clk_mode)
 {
+
 	switch (group_id) {
 	case AFE_GROUP_DEVICE_ID_PRIMARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_PRIMARY_TDM_TX:
-		if (mode)
+		if (clk_mode == INT_CLK) {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_PRI_TDM_IBIT;
-		else
+		} else if (clk_mode == NO_CLK) {
+			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_INVALID;
+			pr_debug( "%s: Set No clk \n", __func__);
+		} else {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_PRI_TDM_EBIT;
+		}
 		break;
 	case AFE_GROUP_DEVICE_ID_SECONDARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_SECONDARY_TDM_TX:
-		if (mode)
+		if (clk_mode == INT_CLK) {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_SEC_TDM_IBIT;
-		else
+		} else if (clk_mode == NO_CLK) {
+			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_INVALID;
+			pr_debug( "%s: Set No clk \n", __func__);
+		} else {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_SEC_TDM_EBIT;
+		}
 		break;
 	case AFE_GROUP_DEVICE_ID_TERTIARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_TERTIARY_TDM_TX:
-		if (mode)
+		if (clk_mode == INT_CLK) {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_TER_TDM_IBIT;
-		else
+		} else if (clk_mode == NO_CLK) {
+			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_INVALID;
+			pr_debug( "%s: Set No clk \n", __func__);
+		} else {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_TER_TDM_EBIT;
+		}
 		break;
 	case AFE_GROUP_DEVICE_ID_QUATERNARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_QUATERNARY_TDM_TX:
-		if (mode)
+		if (clk_mode == INT_CLK) {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_QUAD_TDM_IBIT;
-		else
+		} else if (clk_mode == NO_CLK) {
+			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_INVALID;
+			pr_debug( "%s: Set No clk \n", __func__);
+		} else {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_QUAD_TDM_EBIT;
+		}
 		break;
 	case AFE_GROUP_DEVICE_ID_QUINARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_QUINARY_TDM_TX:
-		if (mode)
+		if (clk_mode == INT_CLK) {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_QUIN_TDM_IBIT;
-		else
+		} else if (clk_mode == NO_CLK) {
+			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_INVALID;
+			pr_debug( "%s: Set No clk \n", __func__);
+		} else {
 			clk_set->clk_id = Q6AFE_LPASS_CLK_ID_QUIN_TDM_EBIT;
+		}
 		break;
 	default:
 		return -EINVAL;
@@ -7641,22 +7670,20 @@ static int msm_dai_tdm_q6_probe(struct platform_device *pdev)
 	rc = of_property_read_u32(pdev->dev.of_node,
 		"qcom,msm-cpudai-tdm-clk-internal",
 		&clk_mode);
+	dev_dbg(&pdev->dev, "%s: Clk id from DT file %d\n",
+		__func__, clk_mode);
 	if (rc) {
 		dev_err(&pdev->dev, "%s: Clk id from DT file %s\n",
 			__func__, "qcom,msm-cpudai-tdm-clk-internal");
-		goto rtn;
+	} else {
+		rc = msm_dai_q6_tdm_set_clk_param(tdm_group_cfg.group_id,
+			&tdm_clk_set, clk_mode);
+		if (rc) {
+			dev_err(&pdev->dev, "%s: group id not supported 0x%x\n",
+				__func__, tdm_group_cfg.group_id);
+			goto rtn;
+		}
 	}
-	dev_dbg(&pdev->dev, "%s: Clk id from DT file %d\n",
-		__func__, clk_mode);
-
-	rc = msm_dai_q6_tdm_set_clk_param(tdm_group_cfg.group_id,
-					  &tdm_clk_set, clk_mode);
-	if (rc) {
-		dev_err(&pdev->dev, "%s: group id not supported 0x%x\n",
-			__func__, tdm_group_cfg.group_id);
-		goto rtn;
-	}
-
 	/* other initializations within device group */
 	group_idx = msm_dai_q6_get_group_idx(tdm_group_cfg.group_id);
 	if (group_idx < 0) {
@@ -8615,10 +8642,26 @@ static int msm_dai_q6_tdm_set_clk(
 
 	dai_data->clk_set.enable = enable;
 
-	rc = afe_set_lpass_clock_v2(port_id,
-		&dai_data->clk_set);
+	if (dai_data->clk_set.clk_id != Q6AFE_LPASS_CLK_ID_INVALID)
+		rc = afe_set_lpass_clock_v2(port_id,
+			&dai_data->clk_set);
 	if (rc < 0)
 		pr_err("%s: afe lpass clock failed, err:%d\n",
+			__func__, rc);
+
+	return rc;
+}
+
+static int msm_dai_q6_tdm_set_clkmode(struct snd_soc_dai *dai, int clk_mode)
+{
+	int rc = 0;
+	struct  msm_dai_q6_tdm_dai_data *tdm_dai_data =
+		dev_get_drvdata(dai->dev);
+
+	rc = msm_dai_q6_tdm_set_clk_param(tdm_dai_data->group_cfg.tdm_cfg.group_id,
+					  &tdm_dai_data->clk_set, clk_mode);
+	if (rc < 0)
+		pr_err("%s: set clk_mode failed, err:%d\n",
 			__func__, rc);
 
 	return rc;
@@ -9515,6 +9558,7 @@ static struct snd_soc_dai_ops msm_dai_q6_tdm_ops = {
 	.set_tdm_slot     = msm_dai_q6_tdm_set_tdm_slot,
 	.set_channel_map  = msm_dai_q6_tdm_set_channel_map,
 	.set_sysclk       = msm_dai_q6_tdm_set_sysclk,
+	.set_clkmode      = msm_dai_q6_tdm_set_clkmode,
 	.shutdown         = msm_dai_q6_tdm_shutdown,
 };
 

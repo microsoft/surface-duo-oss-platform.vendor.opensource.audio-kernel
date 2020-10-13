@@ -89,6 +89,12 @@ enum mi2s_types {
 };
 
 enum {
+	EXTERNAL_CLK = 0,
+	INTERNAL_CLK,
+	NO_CLK,
+};
+
+enum {
 	TDM_0 = 0,
 	TDM_1,
 	TDM_2,
@@ -1021,6 +1027,35 @@ static int sdx_sec_auxpcm_mode_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int sdx_sec_tdm_mode_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s sdx_sec_tdm_mode %d\n", __func__, sdx_sec_tdm_mode);
+	ucontrol->value.integer.value[0] = sdx_sec_tdm_mode;
+	return 0;
+}
+
+static int sdx_sec_tdm_mode_put(struct snd_kcontrol *kcontrol,
+				 struct snd_ctl_elem_value *ucontrol)
+{
+	switch (ucontrol->value.integer.value[0]) {
+	case 0:
+		sdx_sec_tdm_mode = I2S_PCM_MASTER_MODE;
+		break;
+	case 1:
+		sdx_sec_tdm_mode = I2S_PCM_SLAVE_MODE;
+		break;
+	default:
+		sdx_sec_tdm_mode = I2S_PCM_MASTER_MODE;
+		break;
+	}
+	pr_debug("%s: sdx_sec_tdm_mode = %d ucontrol->value = %d\n",
+		 __func__, sdx_sec_tdm_mode,
+		 (int)ucontrol->value.integer.value[0]);
+
+	return 0;
+}
+
 static int sdx_mi2s_get_spk(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_value *ucontrol)
 {
@@ -1780,6 +1815,7 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
+	int clkmode = 0;
 	int slot_width = 16;
 	int channels, slots;
 	unsigned int slot_mask, rate, clk_freq;
@@ -1869,6 +1905,16 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, clk_freq, SND_SOC_CLOCK_OUT);
 	if (ret < 0)
 		pr_err("%s: failed to set tdm clk, err:%d\n",
+			__func__, ret);
+
+	if (sdx_sec_tdm_mode == I2S_PCM_SLAVE_MODE)
+		clkmode = NO_CLK;
+	else if (sdx_sec_tdm_mode == I2S_PCM_MASTER_MODE)
+		clkmode = INTERNAL_CLK;
+
+	ret = snd_soc_dai_set_tdm_clkmode(cpu_dai, clkmode);
+	if (ret < 0)
+		pr_err("%s: failed to set tdm clkmode, err:%d\n",
 			__func__, ret);
 
 end:
@@ -2140,6 +2186,8 @@ static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("SEC_AUXPCM Mode", sdx_enum[6],
 				 sdx_sec_auxpcm_mode_get,
 				 sdx_sec_auxpcm_mode_put),
+	SOC_ENUM_EXT("SEC_TDM Mode", sdx_enum[6],
+				 sdx_sec_tdm_mode_get, sdx_sec_tdm_mode_put),
 	SOC_ENUM_EXT("PRI_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
 			sdx_tdm_rx_sample_rate_get,
 			sdx_tdm_rx_sample_rate_put),
@@ -2176,7 +2224,6 @@ static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("SEC_TDM_TX_0 Channels", tdm_tx_chs,
 			sdx_tdm_tx_ch_get,
 			sdx_tdm_tx_ch_put),
-
 };
 
 static int sdx_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
