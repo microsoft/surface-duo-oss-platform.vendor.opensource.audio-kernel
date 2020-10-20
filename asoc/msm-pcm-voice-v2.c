@@ -512,6 +512,90 @@ done:
 	return ret;
 }
 
+static int msm_voicemmode1_gain_put(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	int volume = ucontrol->value.integer.value[0];
+	int ramp_duration = ucontrol->value.integer.value[1];
+
+	if ((volume < 0) || (ramp_duration < 0)
+		|| (ramp_duration > MAX_RAMP_DURATION)) {
+		pr_err(" %s Invalid arguments", __func__);
+
+		ret = -EINVAL;
+		goto done;
+	}
+
+	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
+		volume, VOICEMMODE1_VSID, ramp_duration);
+
+	voc_set_rx_vol_step(VOICEMMODE1_VSID, RX_PATH, volume, ramp_duration);
+
+done:
+	return ret;
+}
+
+static int msm_voicemmode2_gain_put(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	int volume = ucontrol->value.integer.value[0];
+	int ramp_duration = ucontrol->value.integer.value[1];
+
+	if ((volume < 0) || (ramp_duration < 0)
+		|| (ramp_duration > MAX_RAMP_DURATION)) {
+		pr_err(" %s Invalid arguments", __func__);
+
+		ret = -EINVAL;
+		goto done;
+	}
+
+	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
+		volume, VOICEMMODE2_VSID, ramp_duration);
+
+	voc_set_rx_vol_step(VOICEMMODE2_VSID, RX_PATH, volume, ramp_duration);
+
+done:
+	return ret;
+}
+
+static int msm_voicemmode1_gain_get(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	int volume = 0;
+	int ramp_duration = 0;
+
+	voc_get_rx_vol_step(VOICEMMODE1_VSID, RX_PATH, &volume, &ramp_duration);
+
+	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
+		volume, VOICEMMODE1_VSID, ramp_duration);
+
+	ucontrol->value.integer.value[0] = volume;
+	ucontrol->value.integer.value[1] = ramp_duration;
+
+	return ret;
+}
+
+static int msm_voicemmode2_gain_get(struct snd_kcontrol *kcontrol,
+			      struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+	int volume = 0;
+	int ramp_duration = 0;
+
+	voc_get_rx_vol_step(VOICEMMODE2_VSID, RX_PATH, &volume, &ramp_duration);
+
+	pr_debug("%s: volume: %d session_id: %#x ramp_duration: %d\n", __func__,
+		volume, VOICEMMODE2_VSID, ramp_duration);
+
+	ucontrol->value.integer.value[0] = volume;
+	ucontrol->value.integer.value[1] = ramp_duration;
+
+	return ret;
+}
+
 static int msm_voice_mute_put(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
 {
@@ -819,6 +903,10 @@ static struct snd_kcontrol_new msm_voice_controls[] = {
 				0, 3, NULL, msm_voice_mute_put),
 	SOC_SINGLE_MULTI_EXT("Voice Rx Gain", SND_SOC_NOPM, 0, VSID_MAX, 0, 3,
 				NULL, msm_voice_gain_put),
+	SOC_SINGLE_MULTI_EXT("Voicemmode1 Rx Gain", SND_SOC_NOPM, 0, VSID_MAX, 0, 2,
+				msm_voicemmode1_gain_get, msm_voicemmode1_gain_put),
+	SOC_SINGLE_MULTI_EXT("Voicemmode2 Rx Gain", SND_SOC_NOPM, 0, VSID_MAX, 0, 2,
+				msm_voicemmode2_gain_get, msm_voicemmode2_gain_put),
 	SOC_ENUM_EXT("TTY Mode", msm_tty_mode_enum[0], msm_voice_tty_mode_get,
 				msm_voice_tty_mode_put),
 	SOC_SINGLE_MULTI_EXT("Slowtalk Enable", SND_SOC_NOPM, 0, VSID_MAX, 0, 2,

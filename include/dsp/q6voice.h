@@ -2093,6 +2093,8 @@ int voc_resume_voice_call(uint32_t session_id);
 int voc_set_lch(uint32_t session_id, enum voice_lch_mode lch_mode);
 int voc_set_rx_vol_step(uint32_t session_id, uint32_t dir, uint32_t vol_step,
 			uint32_t ramp_duration);
+int voc_get_rx_vol_step(uint32_t session_id, uint32_t dir, uint32_t *vol_step,
+			uint32_t *ramp_duration);
 int voc_set_tx_mute(uint32_t session_id, uint32_t dir, uint32_t mute,
 		    uint32_t ramp_duration);
 int voc_set_device_mute(uint32_t session_id, uint32_t dir, uint32_t mute,
