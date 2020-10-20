@@ -7844,6 +7844,7 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		goto err;
 	}
 	dev_info(&pdev->dev, "Sound card %s registered\n", card->name);
+	place_marker("M - USER Virutal Audio FE ready");
 
 	/* Parse pinctrl info from devicetree */
 	ret = msm_get_pinctrl(pdev);
