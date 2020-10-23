@@ -870,53 +870,6 @@ static int msm_btsco_rate_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int mi2s_rx_bit_format_get(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-
-	switch (mi2s_rx_bit_format) {
-	case SNDRV_PCM_FORMAT_S24_3LE:
-		ucontrol->value.integer.value[0] = 2;
-		break;
-
-	case SNDRV_PCM_FORMAT_S24_LE:
-		ucontrol->value.integer.value[0] = 1;
-		break;
-
-	case SNDRV_PCM_FORMAT_S16_LE:
-	default:
-		ucontrol->value.integer.value[0] = 0;
-		break;
-	}
-
-	pr_debug("%s: mi2s_rx_bit_format = %d, ucontrol value = %ld\n",
-			__func__, mi2s_rx_bit_format,
-			ucontrol->value.integer.value[0]);
-
-	return 0;
-}
-
-static int mi2s_rx_bit_format_put(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	switch (ucontrol->value.integer.value[0]) {
-	case 2:
-		mi2s_rx_bit_format = SNDRV_PCM_FORMAT_S24_3LE;
-		mi2s_rx_bits_per_sample = 32;
-		break;
-	case 1:
-		mi2s_rx_bit_format = SNDRV_PCM_FORMAT_S24_LE;
-		mi2s_rx_bits_per_sample = 32;
-		break;
-	case 0:
-	default:
-		mi2s_rx_bit_format = SNDRV_PCM_FORMAT_S16_LE;
-		mi2s_rx_bits_per_sample = 16;
-		break;
-	}
-	return 0;
-}
-
 static int loopback_mclk_get(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -1126,8 +1079,6 @@ static const struct soc_enum msm_snd_enum[] = {
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
-	SOC_ENUM_EXT("MI2S_RX Format", msm_snd_enum[0],
-			mi2s_rx_bit_format_get, mi2s_rx_bit_format_put),
 	SOC_ENUM_EXT("MI2S_TX Channels", msm_snd_enum[1],
 			msm_ter_mi2s_tx_ch_get, msm_ter_mi2s_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX Channels", msm_snd_enum[1],
