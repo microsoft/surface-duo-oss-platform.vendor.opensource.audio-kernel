@@ -204,8 +204,11 @@ static struct snd_kcontrol_new msm_loopback_controls[] = {
 
 static int msm_pcm_loopback_probe(struct snd_soc_platform *platform)
 {
-	snd_soc_add_platform_controls(platform, msm_loopback_controls,
-				      ARRAY_SIZE(msm_loopback_controls));
+	if (of_property_read_bool(platform->dev->of_node,
+				  "qcom,msm-pcm-loopback")) {
+		snd_soc_add_platform_controls(platform, msm_loopback_controls,
+					      ARRAY_SIZE(msm_loopback_controls));
+	}
 
 	return 0;
 }
