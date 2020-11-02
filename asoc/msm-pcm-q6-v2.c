@@ -361,6 +361,9 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->audio_client->perf_mode = pdata->perf_mode;
 	pr_debug("%s: perf: %x\n", __func__, pdata->perf_mode);
 
+	prtd->audio_client->stream_type = SNDRV_PCM_STREAM_PLAYBACK;
+	prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
+
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S32_LE:
 		bits_per_sample = 32;
@@ -514,6 +517,9 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 		pr_debug("%s Opening %d-ch PCM read stream, perf_mode %d\n",
 				__func__, params_channels(params),
 				prtd->audio_client->perf_mode);
+
+		prtd->audio_client->stream_type = SNDRV_PCM_STREAM_CAPTURE;
+		prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
 
 		ret = q6asm_open_read_with_retry(prtd->audio_client,
 					FORMAT_LINEAR_PCM,
