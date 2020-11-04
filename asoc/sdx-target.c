@@ -83,6 +83,9 @@
 #define SDX_MCLK_CLK_12P288MHZ 12288000
 #define TLV_CLKIN_MCLK 0
 
+#define TDM_SLOT_MAX 8
+#define TDM_SLOT_OFFSET_MAX 32
+
 enum mi2s_types {
 	PRI_MI2S,
 	SEC_MI2S,
@@ -121,6 +124,68 @@ struct dev_config {
 	u32 sample_rate;
 	u32 bit_format;
 	u32 channels;
+};
+
+
+/* TDM default slot config */
+struct tdm_slot_cfg {
+	u32 width;
+	u32 num;
+};
+
+static struct tdm_slot_cfg tdm_slot[TDM_INTERFACE_MAX] = {
+	/* PRI TDM */
+	{32, 8},
+	/* SEC TDM */
+	{32, 8},
+};
+
+static unsigned int tdm_rx_slot_offset
+	[TDM_INTERFACE_MAX][TDM_PORT_MAX][TDM_SLOT_MAX] = {
+	{/* PRI TDM */
+		{0, 4, 8, 12, 16, 20, 24, 28},
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+	},
+	{/* SEC TDM */
+		{0, 4, 8, 12},
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+	},
+};
+
+static unsigned int tdm_tx_slot_offset
+	[TDM_INTERFACE_MAX][TDM_PORT_MAX][TDM_SLOT_MAX] = {
+	{/* PRI TDM */
+		{0, 4, 8, 12, 16, 20, 24, 28},
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+	},
+	{/* SEC TDM */
+		{0, 4, 8, 12, 16, 20, 24, 28},
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+		{0xFFFF}, /* not used */
+	},
 };
 
 struct sdx_machine_data {
@@ -1746,6 +1811,323 @@ static int sdx_tdm_tx_ch_put(struct snd_kcontrol *kcontrol,
 	return ret;
 }
 
+static int tdm_get_mode(struct snd_kcontrol *kcontrol)
+{
+	int mode;
+
+	if (strnstr(kcontrol->id.name, "PRI",
+	    sizeof(kcontrol->id.name))) {
+		mode = TDM_PRI;
+	} else if (strnstr(kcontrol->id.name, "SEC",
+	    sizeof(kcontrol->id.name))) {
+		mode = TDM_SEC;
+	} else {
+		pr_err("%s: unsupported mode in: %s\n",
+			__func__, kcontrol->id.name);
+		mode = -EINVAL;
+	}
+
+	return mode;
+}
+
+static int tdm_get_slot_num(int value)
+{
+	int slot_num;
+
+	switch (value) {
+	case 0:
+		slot_num = 1;
+		break;
+	case 1:
+		slot_num = 2;
+		break;
+	case 2:
+		slot_num = 4;
+		break;
+	case 3:
+		slot_num = 8;
+		break;
+	default:
+		slot_num = 8;
+		break;
+	}
+	return slot_num;
+}
+
+static int tdm_get_slot_width(int value)
+{
+	int slot_width;
+
+	switch (value) {
+	case 0:
+		slot_width = 16;
+		break;
+	case 1:
+		slot_width = 24;
+		break;
+	case 2:
+		slot_width = 32;
+		break;
+	default:
+		slot_width = 32;
+		break;
+	}
+	return slot_width;
+}
+
+static int tdm_get_slot_width_val(int slot_width)
+{
+	int slot_width_val;
+
+	switch (slot_width) {
+	case 16:
+		slot_width_val = 0;
+		break;
+	case 24:
+		slot_width_val = 1;
+		break;
+	case 32:
+		slot_width_val = 2;
+		break;
+	default:
+		slot_width_val = 2;
+		break;
+	}
+	return slot_width_val;
+}
+
+static int tdm_get_slot_num_val(int slot_num)
+{
+	int slot_num_val;
+
+	switch (slot_num) {
+	case 1:
+		slot_num_val = 0;
+		break;
+	case 2:
+		slot_num_val = 1;
+		break;
+	case 4:
+		slot_num_val = 2;
+		break;
+	case 8:
+		slot_num_val = 3;
+		break;
+	default:
+		slot_num_val = 3;
+		break;
+	}
+	return slot_num_val;
+}
+
+static int sdx_tdm_slot_num_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	int mode = tdm_get_mode(kcontrol);
+
+	if (mode < 0) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+		return mode;
+	}
+
+	tdm_slot[mode].num =
+		tdm_get_slot_num(ucontrol->value.enumerated.item[0]);
+
+	pr_debug("%s: mode = %d, tdm_slot_num = %d, item = %d\n", __func__,
+		mode, tdm_slot[mode].num,
+		ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
+
+static int sdx_tdm_slot_num_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	int mode = tdm_get_mode(kcontrol);
+
+	if (mode < 0) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+		return mode;
+	}
+
+	ucontrol->value.enumerated.item[0] =
+		tdm_get_slot_num_val(tdm_slot[mode].num);
+
+	pr_debug("%s: mode = %d, tdm_slot_num = %d, item = %d\n", __func__,
+		mode, tdm_slot[mode].num,
+		ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
+
+static int sdx_tdm_slot_width_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	int mode = tdm_get_mode(kcontrol);
+
+	if (mode < 0) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+		return mode;
+	}
+
+	tdm_slot[mode].width =
+		tdm_get_slot_width(ucontrol->value.enumerated.item[0]);
+
+	pr_debug("%s: mode = %d, tdm_slot_width = %d, item = %d\n", __func__,
+		mode, tdm_slot[mode].width,
+		ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
+
+static int sdx_tdm_slot_width_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	int mode = tdm_get_mode(kcontrol);
+
+	if (mode < 0) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+		return mode;
+	}
+
+	ucontrol->value.enumerated.item[0] =
+		tdm_get_slot_width_val(tdm_slot[mode].width);
+
+	pr_debug("%s: mode = %d, tdm_slot_width = %d, item = %d\n", __func__,
+		mode, tdm_slot[mode].width,
+		ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
+
+static int sdx_tdm_rx_slot_mapping_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned int *slot_offset;
+	int i;
+	struct tdm_port port;
+	int ret = tdm_get_port_idx(kcontrol, &port);
+
+	if (ret) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+	} else {
+		if (port.mode < TDM_INTERFACE_MAX &&
+			port.channel < TDM_PORT_MAX) {
+			slot_offset =
+				tdm_rx_slot_offset[port.mode][port.channel];
+			pr_debug("%s: mode = %d, channel = %d\n",
+					__func__, port.mode, port.channel);
+			for (i = 0; i < TDM_SLOT_MAX; i++) {
+				ucontrol->value.integer.value[i] =
+					slot_offset[i];
+				pr_debug("%s: offset %d, value %d\n",
+						__func__, i, slot_offset[i]);
+			}
+		} else {
+			pr_err("%s: unsupported mode/channel\n", __func__);
+		}
+	}
+	return ret;
+}
+
+static int sdx_tdm_rx_slot_mapping_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned int *slot_offset;
+	int i;
+	struct tdm_port port;
+	int ret = tdm_get_port_idx(kcontrol, &port);
+
+	if (ret) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+	} else {
+		if (port.mode < TDM_INTERFACE_MAX &&
+			port.channel < TDM_PORT_MAX) {
+			slot_offset =
+				tdm_rx_slot_offset[port.mode][port.channel];
+			pr_debug("%s: mode = %d, channel = %d\n",
+					__func__, port.mode, port.channel);
+			for (i = 0; i < TDM_SLOT_MAX; i++) {
+				slot_offset[i] =
+					ucontrol->value.integer.value[i];
+				pr_debug("%s: offset %d, value %d\n",
+						__func__, i, slot_offset[i]);
+			}
+		} else {
+			pr_err("%s: unsupported mode/channel\n", __func__);
+		}
+	}
+	return ret;
+}
+
+static int sdx_tdm_tx_slot_mapping_get(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned int *slot_offset;
+	int i;
+	struct tdm_port port;
+	int ret = tdm_get_port_idx(kcontrol, &port);
+
+	if (ret) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+	} else {
+		if (port.mode < TDM_INTERFACE_MAX &&
+			port.channel < TDM_PORT_MAX) {
+			slot_offset =
+				tdm_tx_slot_offset[port.mode][port.channel];
+			pr_debug("%s: mode = %d, channel = %d\n",
+					__func__, port.mode, port.channel);
+			for (i = 0; i < TDM_SLOT_MAX; i++) {
+				ucontrol->value.integer.value[i] =
+					slot_offset[i];
+				pr_debug("%s: offset %d, value %d\n",
+						__func__, i, slot_offset[i]);
+			}
+		} else {
+			pr_err("%s: unsupported mode/channel\n", __func__);
+		}
+	}
+	return ret;
+}
+
+static int sdx_tdm_tx_slot_mapping_put(struct snd_kcontrol *kcontrol,
+				    struct snd_ctl_elem_value *ucontrol)
+{
+	unsigned int *slot_offset;
+	int i;
+	struct tdm_port port;
+	int ret = tdm_get_port_idx(kcontrol, &port);
+
+	if (ret) {
+		pr_err("%s: unsupported control: %s\n",
+			__func__, kcontrol->id.name);
+	} else {
+		if (port.mode < TDM_INTERFACE_MAX &&
+			port.channel < TDM_PORT_MAX) {
+			slot_offset =
+				tdm_tx_slot_offset[port.mode][port.channel];
+			pr_debug("%s: mode = %d, channel = %d\n",
+					__func__, port.mode, port.channel);
+			for (i = 0; i < TDM_SLOT_MAX; i++) {
+				slot_offset[i] =
+					ucontrol->value.integer.value[i];
+				pr_debug("%s: offset %d, value %d\n",
+						__func__, i, slot_offset[i]);
+			}
+		} else {
+			pr_err("%s: unsupported mode/channel\n", __func__);
+		}
+	}
+	return ret;
+}
+
 static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				      struct snd_pcm_hw_params *params)
 {
@@ -1809,6 +2191,22 @@ static int sdx_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
+static unsigned int tdm_param_set_slot_mask(int slots)
+{
+	unsigned int slot_mask = 0;
+	int i = 0;
+
+	if ((slots <= 0) || (slots > 32)) {
+		pr_err("%s: invalid slot number %d\n", __func__, slots);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < slots ; i++)
+		slot_mask |= 1 << i;
+
+	return slot_mask;
+}
+
 static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 				     struct snd_pcm_hw_params *params)
 {
@@ -1816,30 +2214,76 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
 	int clkmode = 0;
-	int slot_width = 16;
-	int channels, slots;
-	unsigned int slot_mask, rate, clk_freq;
-	unsigned int slot_offset[8] = {0, 4, 8, 12, 16, 20, 24, 28};
+	int channels, slot_width, slots, rate, format;
+	unsigned int *slot_offset;
+	unsigned int slot_mask;
+	int offset_channels = 0;
+	int i;
+	int clk_freq;
 
 	pr_debug("%s: dai id = 0x%x\n", __func__, cpu_dai->id);
 
-	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
+	channels = params_channels(params);
+	if (channels < 1 || channels > 32) {
+			pr_err("%s: invalid param channels %d\n",
+					__func__, channels);
+			return -EINVAL;
+	}
+
+	format = params_format(params);
+	if (format != SNDRV_PCM_FORMAT_S32_LE &&
+		format != SNDRV_PCM_FORMAT_S24_LE &&
+		format != SNDRV_PCM_FORMAT_S16_LE) {
+		/*
+		 * Up to 8 channel HW configuration should
+		 * use 32 bit slot width for max support of
+		 * stream bit width. (slot_width >= bit_width)
+		 */
+		pr_err("%s: invalid param format 0x%x\n",
+			__func__, format);
+		return -EINVAL;
+	}
+
 	switch (cpu_dai->id) {
 	case AFE_PORT_ID_PRIMARY_TDM_RX:
+		slots = tdm_slot[TDM_PRI].num;
+		slot_width = tdm_slot[TDM_PRI].width;
+		slot_offset = tdm_rx_slot_offset[TDM_PRI][TDM_0];
+		break;
 	case AFE_PORT_ID_PRIMARY_TDM_RX_1:
-		slots = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
+		slots = tdm_slot[TDM_PRI].num;
+		slot_width = tdm_slot[TDM_PRI].width;
+		slot_offset = tdm_rx_slot_offset[TDM_PRI][TDM_1];
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_RX:
+		slots = tdm_slot[TDM_SEC].num;
+		slot_width = tdm_slot[TDM_SEC].width;
+		slot_offset = tdm_rx_slot_offset[TDM_SEC][TDM_0];
+		break;
 	case AFE_PORT_ID_SECONDARY_TDM_RX_1:
-		slots = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
+		slots = tdm_slot[TDM_SEC].num;
+		slot_width = tdm_slot[TDM_SEC].width;
+		slot_offset = tdm_rx_slot_offset[TDM_SEC][TDM_1];
 		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
+		slots = tdm_slot[TDM_PRI].num;
+		slot_width = tdm_slot[TDM_PRI].width;
+		slot_offset = tdm_tx_slot_offset[TDM_PRI][TDM_0];
+		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX_1:
-		slots = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
+		slots = tdm_slot[TDM_PRI].num;
+		slot_width = tdm_slot[TDM_PRI].width;
+		slot_offset = tdm_tx_slot_offset[TDM_PRI][TDM_1];
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
+		slots = tdm_slot[TDM_SEC].num;
+		slot_width = tdm_slot[TDM_SEC].width;
+		slot_offset = tdm_rx_slot_offset[TDM_SEC][TDM_0];
+		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX_1:
-		slots = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
+		slots = tdm_slot[TDM_SEC].num;
+		slot_width = tdm_slot[TDM_SEC].width;
+		slot_offset = tdm_rx_slot_offset[TDM_SEC][TDM_1];
 		break;
 	default:
 		pr_err("%s: dai id 0x%x not supported\n",
@@ -1847,11 +2291,33 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
+	for (i = 0; i < TDM_SLOT_MAX; i++) {
+		if (slot_offset[i] != AFE_SLOT_MAPPING_OFFSET_INVALID)
+			offset_channels++;
+		else
+			break;
+	}
 
+	if (offset_channels == 0) {
+		pr_err("%s: invalid offset_channels %d\n",
+			__func__, offset_channels);
+		return -EINVAL;
+	}
+
+	if (channels > offset_channels) {
+		pr_err("%s: channels %d exceed offset_channels %d\n",
+			__func__, channels, offset_channels);
+		return -EINVAL;
+	}
+
+	slot_mask = tdm_param_set_slot_mask(slots);
+	if (!slot_mask) {
+		pr_err("%s: invalid slot_mask 0x%x\n",
+			__func__, slot_mask);
+		return -EINVAL;
+	}
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		pr_debug("%s: tdm rx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
 
@@ -1871,10 +2337,6 @@ static int sdX_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 			goto end;
 		}
 	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
-		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
-
 		pr_debug("%s: tdm tx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
 
@@ -2124,6 +2586,9 @@ static char const *tdm_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
 					     "KHZ_48", "KHZ_176P4",
 					     "KHZ_352P8"};
 static char const *mi2s_bit_format_text[] = {"S16_LE", "S24_LE", "S32_LE"};
+static const char *const tdm_slot_num_text[] = {"One", "Two", "Four",
+					"Eight", "Sixteen", "ThirtyTwo"};
+static const char *const tdm_slot_width_text[] = {"16", "24", "32"};
 
 static const struct soc_enum sdx_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, spk_function),
@@ -2142,6 +2607,8 @@ static SOC_ENUM_SINGLE_EXT_DECL(tdm_tx_sample_rate, tdm_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_chs, tdm_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_format, tdm_bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_sample_rate, tdm_sample_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(tdm_slot_num, tdm_slot_num_text);
+static SOC_ENUM_SINGLE_EXT_DECL(tdm_slot_width, tdm_slot_width_text);
 
 static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("Speaker Function",   sdx_enum[0],
@@ -2224,6 +2691,28 @@ static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("SEC_TDM_TX_0 Channels", tdm_tx_chs,
 			sdx_tdm_tx_ch_get,
 			sdx_tdm_tx_ch_put),
+	SOC_ENUM_EXT("SEC_TDM_RX_1 Channels", tdm_rx_chs,
+			sdx_tdm_rx_ch_get,
+			sdx_tdm_rx_ch_put),
+	SOC_ENUM_EXT("SEC_TDM_TX_1 Channels", tdm_tx_chs,
+			sdx_tdm_tx_ch_get,
+			sdx_tdm_tx_ch_put),
+	SOC_ENUM_EXT("SEC_TDM SlotNumber", tdm_slot_num,
+			sdx_tdm_slot_num_get, sdx_tdm_slot_num_put),
+	SOC_ENUM_EXT("SEC_TDM SlotWidth", tdm_slot_width,
+			sdx_tdm_slot_width_get, sdx_tdm_slot_width_put),
+	SOC_SINGLE_MULTI_EXT("SEC_TDM_RX_0 SlotMapping",
+			SND_SOC_NOPM, 0, 0xFFFF, 0, TDM_SLOT_OFFSET_MAX,
+			sdx_tdm_rx_slot_mapping_get, sdx_tdm_rx_slot_mapping_put),
+	SOC_SINGLE_MULTI_EXT("SEC_TDM_RX_1 SlotMapping",
+			SND_SOC_NOPM, 0, 0xFFFF, 0, TDM_SLOT_OFFSET_MAX,
+			sdx_tdm_rx_slot_mapping_get, sdx_tdm_rx_slot_mapping_put),
+	SOC_SINGLE_MULTI_EXT("SEC_TDM_TX_0 SlotMapping",
+			SND_SOC_NOPM, 0, 0xFFFF, 0, TDM_SLOT_OFFSET_MAX,
+			sdx_tdm_tx_slot_mapping_get, sdx_tdm_tx_slot_mapping_put),
+	SOC_SINGLE_MULTI_EXT("SEC_TDM_TX_1 SlotMapping",
+			SND_SOC_NOPM, 0, 0xFFFF, 0, TDM_SLOT_OFFSET_MAX,
+			sdx_tdm_tx_slot_mapping_get, sdx_tdm_tx_slot_mapping_put),
 };
 
 static int sdx_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
