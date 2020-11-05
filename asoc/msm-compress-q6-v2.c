@@ -3926,6 +3926,16 @@ static int msm_compr_probe(struct snd_soc_platform *platform)
 	return 0;
 }
 
+static int msm_compr_chmix_cfg_ctl_info(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->count = 128;
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 0xFFFFFFFF;
+	return 0;
+}
+
 static int msm_compr_remove(struct snd_soc_platform *platform)
 {
 
