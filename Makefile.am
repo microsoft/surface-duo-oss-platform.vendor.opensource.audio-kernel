@@ -17,6 +17,12 @@ endif
 ifeq ($(TARGET_SUPPORT), sdmsteppe)
 KBUILD_OPTIONS += CONFIG_ARCH_SM6150=y
 endif
+ifeq ($(TARGET_SUPPORT), mdm9650)
+KBUILD_OPTIONS += CONFIG_ARCH_SDXNIGHTJAR=y
+endif
+ifeq ($(TARGET_SUPPORT), sdxnightjar)
+KBUILD_OPTIONS += CONFIG_ARCH_SDXNIGHTJAR=y
+endif
 
 subdir-ccflags-y += -I$(AUDIO_ROOT)/include/uapi/
 
@@ -27,6 +33,12 @@ obj-m += soc/
 obj-m += asoc/
 obj-m += asoc/codecs/
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sdmsteppe))
+obj-m += asoc/codecs/wcd934x/
+endif
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), mdm9650))
+obj-m += asoc/codecs/wcd934x/
+endif
+ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), sdxnightjar))
 obj-m += asoc/codecs/wcd934x/
 endif
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), qcs40x))

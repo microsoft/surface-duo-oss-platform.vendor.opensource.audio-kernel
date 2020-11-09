@@ -93,6 +93,11 @@ else
 			export
 			INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 		endif
+		ifeq ($(CONFIG_ARCH_SDXNIGHTJAR), y)
+			include $(AUDIO_ROOT)/config/sdxtargetauto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sdxtargetautoconf.h
+		endif
 	endif
 endif
 
@@ -155,6 +160,10 @@ ifdef CONFIG_SND_SOC_LAHAINA
 endif
 
 ifdef CONFIG_SND_SOC_MDM9650
+	MACHINE_OBJS += sdx-target.o
+endif
+
+ifdef CONFIG_ARCH_SDXNIGHTJAR
 	MACHINE_OBJS += sdx-target.o
 endif
 
@@ -282,6 +291,9 @@ obj-$(CONFIG_SND_SOC_LAHAINA) += machine_dlkm.o
 machine_dlkm-y := $(MACHINE_OBJS)
 
 obj-$(CONFIG_SND_SOC_MDM9650) += machine_dlkm.o
+machine_dlkm-y := $(MACHINE_OBJS)
+
+obj-$(CONFIG_SND_SOC_SDXNIGHJAR) += machine_dlkm.o
 machine_dlkm-y := $(MACHINE_OBJS)
 
 obj-$(CONFIG_SND_SOC_HOLI) += machine_dlkm.o

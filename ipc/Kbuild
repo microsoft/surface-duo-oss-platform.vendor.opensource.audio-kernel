@@ -94,6 +94,11 @@ else
 			export
 			INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 		endif
+		ifeq ($(CONFIG_ARCH_SDXNIGHTJAR), y)
+			include $(AUDIO_ROOT)/config/sdxtargetauto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sdxtargetautoconf.h
+		endif
 	endif
 endif
 

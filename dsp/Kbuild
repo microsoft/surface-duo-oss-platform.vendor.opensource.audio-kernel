@@ -93,6 +93,11 @@ else
 			export
 			INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
 		endif
+		ifeq ($(CONFIG_ARCH_SDXNIGHTJAR), y)
+			include $(AUDIO_ROOT)/config/sdxtargetauto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sdxtargetautoconf.h
+		endif
 	endif
 endif
 
@@ -211,7 +216,7 @@ LINUX_INC +=	-Iinclude/linux
 INCS +=		$(COMMON_INC) \
 		$(UAPI_INC)
 
-EXTRA_CFLAGS += $(INCS)
+EXTRA_CFLAGS += $(INCS) -Wno-error=frame-larger-than=1024
 
 
 CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
