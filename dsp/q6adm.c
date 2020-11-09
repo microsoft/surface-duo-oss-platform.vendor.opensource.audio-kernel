@@ -1641,6 +1641,7 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 				 * if soft volume is called and already
 				 * interrupted break out of the sequence here
 				 */
+				fallthrough;
 			case ADM_CMD_DEVICE_OPEN_V5:
 			case ADM_CMD_DEVICE_CLOSE_V5:
 			case ADM_CMD_DEVICE_OPEN_V6:
@@ -2344,7 +2345,7 @@ static void send_adm_cal_type(int cal_index, int path, int port_id,
 				      source_vm, 1, dest_vm, dest_perms, 2);
 		if (ret < 0) {
 			pr_err("%s: hyp_assign_phys failed result = %d addr = 0x%pK size = %d\n",
-				__func__, ret, cal_block->cal_data.paddr,
+				__func__, ret, (void *) cal_block->cal_data.paddr,
 				cal_block->map_data.map_size);
 			ret = -EINVAL;
 			goto unlock;
@@ -3586,6 +3587,7 @@ static void route_set_opcode_matrix_id(
 			break;
 		}
 		/* fall through to set matrix id for non-listen case */
+		fallthrough;
 	case ADM_PATH_NONLIVE_REC:
 		route->hdr.opcode = ADM_CMD_MATRIX_MAP_ROUTINGS_V5;
 		route->matrix_id = ADM_MATRIX_ID_AUDIO_TX;
@@ -4027,7 +4029,7 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 						if (ret < 0) {
 							pr_err("%s: hyp_assign_phys failed result = %d addr = 0x%pK size = %d\n",
 								__func__, ret,
-								cal_block->cal_data.paddr,
+								(void *)cal_block->cal_data.paddr,
 								cal_block->map_data.map_size);
 							goto fail;
 						} else {
@@ -4107,7 +4109,7 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 						dest_perms, 1);
 				if (ret < 0) {
 					pr_err("%s: hyp_assign_phys failed result = %d addr = 0x%pK size = %d\n",
-						__func__, ret, cal_block->cal_data.paddr,
+						__func__, ret, (void *) cal_block->cal_data.paddr,
 						cal_block->map_data.map_size);
 					ret = -EINVAL;
 					goto fail;

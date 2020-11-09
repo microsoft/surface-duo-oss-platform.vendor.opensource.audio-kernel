@@ -1079,6 +1079,7 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				if (rtac_make_afe_callback(payload,
 							   data->payload_size))
 					return 0;
+				fallthrough;
 			case AFE_PORT_CMD_DEVICE_STOP:
 			case AFE_PORT_CMD_DEVICE_START:
 			case AFE_PSEUDOPORT_CMD_START:
@@ -2699,6 +2700,8 @@ static void afe_send_cal_spv4_tx(int port_id)
 static void afe_send_cal_spkr_prot_tx(int port_id)
 {
 	union afe_spkr_prot_config afe_spk_config;
+
+	memset(&afe_spk_config, 0, sizeof(union afe_spkr_prot_config));
 
 	if (q6core_get_avcs_api_version_per_service(
 		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V9) {
@@ -5010,6 +5013,7 @@ static int q6afe_send_dec_config(u16 port_id,
 			break;
 		}
 		/* fall through for abr enabled case */
+		fallthrough;
 	default:
 		pr_debug("%s:sending AFE_ENCDEC_PARAM_ID_DEC_TO_ENC_COMMUNICATION to DSP payload\n",
 			  __func__);
@@ -5053,6 +5057,7 @@ static int q6afe_send_dec_config(u16 port_id,
 			break;
 		}
 		/* fall through for abr enabled case */
+		fallthrough;
 	case ASM_MEDIA_FMT_APTX_AD_SPEECH:
 		media_type.sample_rate = AFE_PORT_SAMPLE_RATE_32K;
 		break;
@@ -10956,6 +10961,7 @@ static int afe_get_cal_fb_spkr_prot(int32_t cal_type, size_t data_size,
 
 	pr_debug("%s:\n", __func__);
 
+	memset(&spv4_calib_resp, 0, sizeof(struct afe_sp_v4_th_vi_calib_resp));
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_CAL] == NULL)
 		goto done;
 	if (cal_data == NULL)
