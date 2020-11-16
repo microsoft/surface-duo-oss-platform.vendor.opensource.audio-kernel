@@ -1256,7 +1256,7 @@ static struct cal_block_data *msm_routing_find_topology_by_path(int path,
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 
-		if (cal_utils_is_cal_stale(cal_block))
+		if (cal_utils_is_cal_stale(cal_block, cal_data[cal_index]))
 			continue;
 
 		if (((struct audio_cal_info_adm_top *)cal_block
@@ -1286,7 +1286,7 @@ static struct cal_block_data *msm_routing_find_topology(int path,
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 
-		if (cal_utils_is_cal_stale(cal_block))
+		if (cal_utils_is_cal_stale(cal_block, cal_data[cal_index]))
 			continue;
 
 		cal_info = (struct audio_cal_info_adm_top *)
@@ -19857,9 +19857,11 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 	int i = 0, j;
 	int num_app_types;
 
+	mutex_lock(&routing_lock);
 	if (ucontrol->value.integer.value[0] > MAX_APP_TYPES) {
 		pr_err("%s: number of app types exceed the max supported\n",
 			__func__);
+		mutex_unlock(&routing_lock);
 		return -EINVAL;
 	}
 
@@ -19879,7 +19881,7 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 			lsm_app_type_cfg[j].num_out_channels =
 				ucontrol->value.integer.value[i++];
 	}
-
+	mutex_unlock(&routing_lock);
 	return 0;
 }
 
