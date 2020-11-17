@@ -1801,7 +1801,7 @@ static void afe_send_custom_topology(void)
 		goto unlock;
 	this_afe.set_custom_topology = 0;
 	cal_block = cal_utils_get_only_cal_block(this_afe.cal_data[cal_index]);
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block, this_afe.cal_data[cal_index])) {
 		pr_err("%s cal_block not found!!\n", __func__);
 		goto unlock;
 	}
@@ -2270,7 +2270,7 @@ static struct cal_block_data *afe_find_cal_topo_id_by_port(
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 		/* Skip cal_block if it is already marked stale */
-		if (cal_utils_is_cal_stale(cal_block))
+		if (cal_utils_is_cal_stale(cal_block, cal_type))
 			continue;
 		path = ((afe_get_port_type(port_id) ==
 			MSM_AFE_PORT_TYPE_TX)?(TX_DEVICE):(RX_DEVICE));
@@ -2752,7 +2752,7 @@ static int send_afe_cal_type(int cal_index, int port_id)
 		cal_block = cal_utils_get_only_cal_block(
 				this_afe.cal_data[cal_index]);
 
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block, this_afe.cal_data[cal_index])) {
 		pr_err("%s cal_block not found!!\n", __func__);
 		ret = -EINVAL;
 		goto unlock;
@@ -3844,11 +3844,13 @@ int afe_send_custom_tdm_header_cfg(
  * @tdm_port: TDM port configutation
  * @rate: sampling rate of port
  * @num_groups: number of TDM groups
+ * @lane_cfg: TDM lane configuration
  *
  * Returns 0 on success or error value on port start failure.
  */
 int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
-		       u32 rate, u16 num_groups)
+		       u32 rate, u16 num_groups,
+		       struct afe_param_id_tdm_lane_cfg *lane_cfg)
 {
 	struct param_hdr_v3 param_hdr;
 	int index = 0;
@@ -3933,6 +3935,17 @@ int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
 		pr_err("%s: AFE enable for port 0x%x failed ret = %d\n",
 				__func__, port_id, ret);
 		goto fail_cmd;
+	}
+
+	if (num_groups == 1 && lane_cfg != NULL) {
+		if (lane_cfg->lane_mask != AFE_LANE_MASK_INVALID) {
+			ret = afe_port_tdm_lane_config_v2(port_id, lane_cfg);
+			if (ret < 0) {
+				pr_err("%s: afe send lane config failed %d\n",
+					__func__, ret);
+				goto fail_cmd;
+			}
+		}
 	}
 
 	port_index = afe_get_port_index(port_id);
@@ -6157,6 +6170,55 @@ static int afe_port_tdm_lane_config(u16 group_id,
 }
 
 /**
+ * afe_port_tdm_lane_config_v2 -
+ * to configure group TDM lane mask with specified configuration
+ *
+ * @port_id: AFE port id number
+ * @lane_cfg: TDM lane mask configuration
+ *
+ * Returns 0 on success or error value on failure.
+ */
+int afe_port_tdm_lane_config_v2(u16 port_id,
+	struct afe_param_id_tdm_lane_cfg *lane_cfg)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+
+	if (lane_cfg == NULL ||
+		lane_cfg->lane_mask == AFE_LANE_MASK_INVALID) {
+		pr_debug("%s: lane cfg not supported for group id: 0x%x\n",
+			__func__, port_id);
+		return ret;
+	}
+
+	pr_debug("%s: port id: 0x%x group id: 0x%x lane mask 0x%x\n", __func__,
+		port_id, lane_cfg->port_id, lane_cfg->lane_mask);
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	ret = afe_q6_interface_prepare();
+	if (ret != 0) {
+		pr_err("%s: Q6 interface prepare failed %d\n", __func__, ret);
+		return ret;
+	}
+
+	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_TDM_LANE_CONFIG;
+	param_hdr.param_size = sizeof(struct afe_param_id_tdm_lane_cfg);
+
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+			q6audio_get_port_index(port_id),
+			param_hdr, (u8 *)lane_cfg);
+	if (ret)
+		pr_err("%s: AFE_PARAM_ID_TDM_LANE_CONFIG failed %d\n",
+			__func__, ret);
+
+	return ret;
+}
+EXPORT_SYMBOL(afe_port_tdm_lane_config_v2);
+
+/**
  * afe_port_group_enable -
  *         command to enable AFE port group
  *
@@ -7320,7 +7382,7 @@ static int afe_sidetone_iir(u16 tx_port_id)
 	}
 	mutex_lock(&this_afe.cal_data[cal_index]->lock);
 	cal_block = cal_utils_get_only_cal_block(this_afe.cal_data[cal_index]);
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block, this_afe.cal_data[cal_index])) {
 		pr_err("%s: cal_block not found\n ", __func__);
 		mutex_unlock(&this_afe.cal_data[cal_index]->lock);
 		ret = -EINVAL;
@@ -7447,7 +7509,7 @@ static int afe_sidetone(u16 tx_port_id, u16 rx_port_id, bool enable)
 
 	mutex_lock(&this_afe.cal_data[cal_index]->lock);
 	cal_block = cal_utils_get_only_cal_block(this_afe.cal_data[cal_index]);
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
+	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block, this_afe.cal_data[cal_index])) {
 		pr_err("%s: cal_block not found\n", __func__);
 		mutex_unlock(&this_afe.cal_data[cal_index]->lock);
 		ret = -EINVAL;
@@ -9245,7 +9307,7 @@ static struct cal_block_data *afe_find_hw_delay_by_path(
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 
-		if (cal_utils_is_cal_stale(cal_block))
+		if (cal_utils_is_cal_stale(cal_block, cal_type))
 			continue;
 
 		if (((struct audio_cal_info_hw_delay *)cal_block->cal_info)
