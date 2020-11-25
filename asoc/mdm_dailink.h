@@ -949,7 +949,8 @@ SND_SOC_DAILINK_DEFS(sec_auxpcm_tx_hostless,
 
 SND_SOC_DAILINK_DEFS(tasha_i2s_rx1,
 	DAILINK_COMP_ARRAY(COMP_CPU("snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("tasha_codec", "tasha_i2s_rx1")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("tasha_codec", "tasha_i2s_rx1"),
+			   COMP_CODEC("wsa-codec1", "wsa_rx1")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("snd-soc-dummy")));
 
 SND_SOC_DAILINK_DEFS(tasha_i2s_tx1,

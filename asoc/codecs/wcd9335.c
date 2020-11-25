@@ -14495,7 +14495,7 @@ static void tasha_add_child_devices(struct work_struct *work)
 	tasha->child_count = 0;
 
 	for_each_child_of_node(wcd9xxx->dev->of_node, node) {
-		if (!strcmp(node->name, "swr_master"))
+		if (strnstr(node->name, "swr_master", strlen("swr_master")) != NULL)
 			strlcpy(plat_dev_name, "tasha_swr_ctrl",
 				(WCD9335_STRING_LEN - 1));
 		else if (strnstr(node->name, "msm_cdc_pinctrl",
@@ -14515,7 +14515,7 @@ static void tasha_add_child_devices(struct work_struct *work)
 		pdev->dev.parent = tasha->dev;
 		pdev->dev.of_node = node;
 
-		if (!strcmp(node->name, "swr_master")) {
+		if (strnstr(node->name, "swr_master", strlen("swr_master")) != NULL) {
 			ret = platform_device_add_data(pdev, platdata,
 						       sizeof(*platdata));
 			if (ret) {
@@ -14535,7 +14535,7 @@ static void tasha_add_child_devices(struct work_struct *work)
 			goto fail_pdev_add;
 		}
 
-		if (!strcmp(node->name, "swr_master")) {
+		if (strnstr(node->name, "swr_master", strlen("swr_master")) != NULL) {
 			temp = krealloc(swr_ctrl_data,
 					(ctrl_num + 1) * sizeof(
 					struct tasha_swr_ctrl_data),
