@@ -198,8 +198,7 @@ struct sdx_machine_data {
 	struct device_node *prim_master_p;
 	struct device_node *prim_slave_p;
 	u16 sec_auxpcm_mode;
-	struct device_node *sec_master_p;
-	struct device_node *sec_slave_p;
+	struct device_node *sec_master_slave_p;
 	u32 prim_clk_usrs;
 	int hph_en1_gpio;
 	int hph_en0_gpio;
@@ -301,7 +300,7 @@ static int sdx_sec_mi2s_mode = I2S_PCM_MASTER_MODE;
 static int sdx_auxpcm_mode = I2S_PCM_MASTER_MODE;
 static int sdx_sec_auxpcm_mode = I2S_PCM_MASTER_MODE;
 static int sdx_prim_tdm_mode = I2S_PCM_MASTER_MODE;
-static int sdx_sec_tdm_mode = I2S_PCM_MASTER_MODE;
+static int sdx_sec_tdm_mode = I2S_PCM_SLAVE_MODE;
 
 static int sdx_spk_control = 1;
 static int sdx_hifi_control;
@@ -603,12 +602,8 @@ static void sdx_sec_mi2s_shutdown(struct snd_pcm_substream *substream)
 		if (ret < 0)
 			pr_err("%s Clock disable failed\n", __func__);
 
-		if (pdata->sec_mi2s_mode == 1)
-			ret = msm_cdc_pinctrl_select_sleep_state
-					(pdata->sec_master_p);
-		else
-			ret = msm_cdc_pinctrl_select_sleep_state
-					(pdata->sec_slave_p);
+		ret = msm_cdc_pinctrl_select_sleep_state
+				(pdata->sec_master_slave_p);
 		if (ret)
 			pr_err("%s: failed to set sec gpios to sleep: %d\n",
 			       __func__, ret);
@@ -662,7 +657,7 @@ static int sdx_sec_mi2s_startup(struct snd_pcm_substream *substream)
 		 */
 		if (pdata->sec_mi2s_mode == 1) {
 			ret = msm_cdc_pinctrl_select_active_state
-					(pdata->sec_master_p);
+					(pdata->sec_master_slave_p);
 			if (ret < 0) {
 				pr_err("%s pinctrl set failed\n", __func__);
 				goto err;
@@ -689,8 +684,8 @@ static int sdx_sec_mi2s_startup(struct snd_pcm_substream *substream)
 			 * Enable mclk here, if needed for external codecs.
 			 * Optional. Refer primary mi2s slave interface.
 			 */
-			ret = msm_cdc_pinctrl_select_active_state
-					(pdata->sec_slave_p);
+			ret = msm_cdc_pinctrl_select_alt_active_state
+					(pdata->sec_master_slave_p);
 			if (ret < 0) {
 				pr_err("%s pinctrl set failed\n", __func__);
 				goto err;
@@ -1301,10 +1296,7 @@ static void sdx_sec_auxpcm_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_card *card = rtd->card;
 	struct sdx_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
-	if (pdata->sec_auxpcm_mode == 1)
-		ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_master_p);
-	else
-		ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_slave_p);
+	ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_master_slave_p);
 	if (ret)
 		pr_err("%s: failed to set sec gpios to sleep: %d\n",
 		       __func__, ret);
@@ -1347,11 +1339,11 @@ static int sdx_sec_auxpcm_startup(struct snd_pcm_substream *substream)
 	}
 
 	if (pdata->sec_auxpcm_mode == 1) {
-		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_master_p);
+		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_master_slave_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 	} else {
-		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_slave_p);
+		ret = msm_cdc_pinctrl_select_alt_active_state(pdata->sec_master_slave_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 	}
@@ -2466,10 +2458,8 @@ static void sdx_sec_tdm_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_card *card = rtd->card;
 	struct sdx_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
-	if (pdata->sec_tdm_mode == 1)
-		ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_master_p);
-	else
-		ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_slave_p);
+	ret = msm_cdc_pinctrl_select_sleep_state(pdata->sec_master_slave_p);
+
 	if (ret)
 		pr_err("%s: failed to set sec gpios to sleep: %d\n",
 		       __func__, ret);
@@ -2514,12 +2504,12 @@ static int sdx_sec_tdm_startup(struct snd_pcm_substream *substream)
 
 	if (pdata->sec_tdm_mode == 1) {
 		ret = msm_cdc_pinctrl_select_active_state
-						(pdata->sec_master_p);
+						(pdata->sec_master_slave_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
 	} else {
-		ret = msm_cdc_pinctrl_select_active_state(pdata->sec_slave_p);
+		ret = msm_cdc_pinctrl_select_alt_active_state(pdata->sec_master_slave_p);
 		if (ret < 0)
 			pr_err("%s pinctrl set failed\n", __func__);
 			goto err;
@@ -4316,10 +4306,8 @@ static int sdx_asoc_machine_probe(struct platform_device *pdev)
 						0);
 	pdata->prim_slave_p = of_parse_phandle(pdev->dev.of_node,
 					       "qcom,prim_mi2s_aux_slave", 0);
-	pdata->sec_master_p = of_parse_phandle(pdev->dev.of_node,
+	pdata->sec_master_slave_p = of_parse_phandle(pdev->dev.of_node,
 					       "qcom,sec_mi2s_aux_master", 0);
-	pdata->sec_slave_p = of_parse_phandle(pdev->dev.of_node,
-					      "qcom,sec_mi2s_aux_slave", 0);
 	mutex_init(&cdc_mclk_mutex);
 	atomic_set(&mi2s_ref_count, 0);
 	atomic_set(&sec_mi2s_ref_count, 0);
