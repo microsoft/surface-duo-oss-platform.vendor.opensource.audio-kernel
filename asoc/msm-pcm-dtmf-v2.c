@@ -110,8 +110,35 @@ static int msm_dtmf_rx_generate_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int msm_dtmf_rx_generate_put_session(struct snd_kcontrol *kcontrol,
+					    struct snd_ctl_elem_value *ucontrol)
+{
+	uint16_t low_freq = ucontrol->value.integer.value[0];
+	uint16_t high_freq = ucontrol->value.integer.value[1];
+	int64_t duration = ucontrol->value.integer.value[2];
+	uint16_t gain = ucontrol->value.integer.value[3];
+	uint32_t session_id = ucontrol->value.integer.value[4];
+	int session_idx = voice_get_idx_for_session(session_id);
+
+	pr_debug("%s: low=%d high=%d duration=%lld gain=%d session_id=%d  session_idx=%d\n",
+		 __func__, low_freq, high_freq, duration, gain, session_id, session_idx);
+	if (duration == DTMF_MAX_DURATION)
+		duration = -1;
+	afe_dtmf_generate_rx_session(duration, high_freq, low_freq, gain,
+				     session_idx);
+	return 0;
+}
+
 static int msm_dtmf_rx_generate_get(struct  snd_kcontrol *kcontrol,
 				    struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s:\n", __func__);
+	ucontrol->value.integer.value[0] = 0;
+	return 0;
+}
+
+static int msm_dtmf_rx_generate_get_session(struct  snd_kcontrol *kcontrol,
+					    struct snd_ctl_elem_value *ucontrol)
 {
 	pr_debug("%s:\n", __func__);
 	ucontrol->value.integer.value[0] = 0;
@@ -161,6 +188,10 @@ static struct snd_kcontrol_new msm_dtmf_controls[] = {
 			     SND_SOC_NOPM, 0, 65535, 0, 4,
 			     msm_dtmf_rx_generate_get,
 			     msm_dtmf_rx_generate_put),
+	SOC_SINGLE_MULTI_EXT("DTMF_Generate Rx Low High Period Gain VSID",
+			     SND_SOC_NOPM, 0, VSID_MAX, 0, 5,
+			     msm_dtmf_rx_generate_get_session,
+			     msm_dtmf_rx_generate_put_session),
 	SOC_SINGLE_EXT("DTMF_Detect Rx Voice enable", SND_SOC_NOPM, 0, 1, 0,
 				msm_dtmf_detect_voice_rx_get,
 				msm_dtmf_detect_voice_rx_put),

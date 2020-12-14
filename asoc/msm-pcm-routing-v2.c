@@ -2515,6 +2515,7 @@ static int msm_routing_put_listen_mixer(struct snd_kcontrol *kcontrol,
 static void msm_pcm_routing_process_voice(u16 reg, u16 val, int set)
 {
 	u32 session_id = 0;
+	int session_idx = 0;
 	u16 path_type;
 	struct media_format_info voc_be_media_format;
 
@@ -2538,6 +2539,14 @@ static void msm_pcm_routing_process_voice(u16 reg, u16 val, int set)
 		pr_debug("%s(): set=%d port id=0x%x for dtmf generation\n",
 			 __func__, set, msm_bedais[reg].port_id);
 		afe_set_dtmf_gen_rx_portid(msm_bedais[reg].port_id, set);
+	}
+
+	if (session_id != 0 && afe_get_port_type(msm_bedais[reg].port_id) ==
+						MSM_AFE_PORT_TYPE_RX) {
+		pr_debug("%s(): set=%d port id=0x%x for dtmf generation\n",
+			 __func__, set, msm_bedais[reg].port_id);
+		session_idx = voice_get_idx_for_session(session_id);
+		afe_set_dtmf_gen_rx_portid_session(msm_bedais[reg].port_id, set, session_idx);
 	}
 
 	if (afe_get_port_type(msm_bedais[reg].port_id) ==
