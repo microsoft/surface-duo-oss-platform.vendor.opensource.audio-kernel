@@ -883,6 +883,29 @@ static struct cal_block_data *q6asm_find_cal_by_app_type(int cal_index,
 	return NULL;
 }
 
+static bool is_q6asm_topology_cal_send_by_v6(int path, int usecase)
+{
+	struct list_head *ptr, *next;
+	struct cal_block_data *cal_block = NULL;
+	int buffer_idx_asm;
+
+	buffer_idx_asm = path + MAX_PATH_TYPE * usecase + ASM_CAL_SEND_VERSION_OFFSET;
+	pr_debug("%s: path(%d),usecase(%d),buffer_idx_asm(%d)\n", __func__, path, usecase, buffer_idx_asm);
+
+	list_for_each_safe(ptr, next,
+			&cal_data[ASM_TOPOLOGY_CAL]->cal_blocks) {
+
+		cal_block = list_entry(ptr,
+				struct cal_block_data, list);
+
+		if(cal_block != NULL){
+			if (cal_block->buffer_number == buffer_idx_asm)
+				return true;
+		}
+	}
+	return false;
+}
+
 static struct cal_block_data *q6asm_find_cal_by_buf_number(int cal_index,
 							  int app_type, int path, int usecase)
 {
@@ -11394,6 +11417,8 @@ done:
  */
 static int q6asm_get_asm_topology_apptype(struct q6asm_cal_info *cal_info, struct audio_client *ac)
 {
+	int path = 0;
+	int cal_buf_index = 0;
 	struct cal_block_data *cal_block = NULL;
 
 	cal_info->topology_id = DEFAULT_POPP_TOPOLOGY;
@@ -11405,15 +11430,29 @@ static int q6asm_get_asm_topology_apptype(struct q6asm_cal_info *cal_info, struc
 		pr_err("%s: Audio client is NULL\n", __func__);
 		goto done;
 	}
+	if (ac->stream_type == SNDRV_PCM_STREAM_PLAYBACK)
+		path = RX_DEVICE;
+	else
+		path = TX_DEVICE;
 
 	mutex_lock(&cal_data[ASM_TOPOLOGY_CAL]->lock);
-	cal_block = q6asm_find_cal_by_buf_number(ASM_TOPOLOGY_CAL, 0, 0, ac->fedai_id);
-	if (cal_block == NULL) {
-		pr_debug("%s: Couldn't find cal_block with buf_number, re-routing search using CAL type only\n", __func__);
-		cal_block = cal_utils_get_only_cal_block(cal_data[ASM_TOPOLOGY_CAL]);
+	if (is_q6asm_topology_cal_send_by_v6(path, ac->fedai_id)) {
+		pr_debug("%s: ASM topology cal block is send by acdb_loader_send_audio_cal_v6!\n", __func__);
+		cal_buf_index = path + MAX_PATH_TYPE * ac->fedai_id + ASM_CAL_SEND_VERSION_OFFSET;
+		cal_block = q6asm_find_cal_by_buf_number(ASM_TOPOLOGY_CAL, ac->app_type, path, cal_buf_index);
+		if (cal_block == NULL) {
+			pr_err("%s: Couldn't find cal_block with buf_number!\n", __func__);
+			goto unlock;
+		}
+	} else {
+		cal_block = q6asm_find_cal_by_buf_number(ASM_TOPOLOGY_CAL, 0, 0, ac->fedai_id);
+		if (cal_block == NULL) {
+			pr_debug("%s: Couldn't find cal_block with buf_number, re-routing search using CAL type only\n", __func__);
+			cal_block = cal_utils_get_only_cal_block(cal_data[ASM_TOPOLOGY_CAL]);
+		}
+		if (cal_block == NULL || cal_utils_is_cal_stale(cal_block))
+			goto unlock;
 	}
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block))
-		goto unlock;
 	cal_info->topology_id = ((struct audio_cal_info_asm_top *)
 		cal_block->cal_info)->topology;
 	cal_info->app_type = ((struct audio_cal_info_asm_top *)
