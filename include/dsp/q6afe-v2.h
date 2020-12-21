@@ -512,6 +512,8 @@ int afe_port_group_set_param(u16 group_id,
 int afe_port_group_enable(u16 group_id,
 	union afe_port_group_config *afe_group_config, u16 enable,
 	struct afe_param_id_tdm_lane_cfg *lane_cfg);
+int afe_port_tdm_lane_config_v2(u16 port_id,
+	struct afe_param_id_tdm_lane_cfg *lane_cfg);
 int afe_unmap_rtac_block(uint32_t *mem_map_handle);
 int afe_map_rtac_block(struct rtac_cal_block_data *cal_block);
 int afe_send_slot_mapping_cfg(
@@ -521,7 +523,8 @@ int afe_send_custom_tdm_header_cfg(
 	struct afe_param_id_custom_tdm_header_cfg *custom_tdm_header_cfg,
 	u16 port_id);
 int afe_tdm_port_start(u16 port_id, struct afe_tdm_port_config *tdm_port,
-		       u32 rate, u16 num_groups);
+		       u32 rate, u16 num_groups,
+		       struct afe_param_id_tdm_lane_cfg *lane_cfg);
 void afe_set_routing_callback(routing_cb cb);
 int afe_port_send_logging_cfg(u16 port_id,
 	struct afe_param_id_port_data_log_disable_t *log_disable);
