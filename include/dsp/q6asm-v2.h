@@ -257,6 +257,8 @@ struct audio_client {
 	/* shared io */
 	struct audio_buffer shared_pos_buf;
 	struct shared_io_config config;
+	int stream_type;
+	int fedai_id;
 };
 
 struct q6asm_cal_info {

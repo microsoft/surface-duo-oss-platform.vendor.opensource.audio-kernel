@@ -351,6 +351,7 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 	config.bufsz = params_buffer_bytes(params) / params_periods(params);
 	config.bufcnt = params_periods(params);
 
+	prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
 	ret = q6asm_open_shared_io(prtd->audio_client, &config, dir,
 				   use_default_chmap, chmap);
 	if (ret) {

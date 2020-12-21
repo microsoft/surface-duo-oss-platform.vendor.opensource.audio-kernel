@@ -1509,6 +1509,9 @@ static int msm_compr_configure_dsp_for_playback
 	else if (prtd->codec_param.codec.format == SNDRV_PCM_FORMAT_S32_LE)
 		bits_per_sample = 32;
 
+	ac->fedai_id = soc_prtd->dai_link->id;
+	ac->stream_type = SNDRV_PCM_STREAM_PLAYBACK;
+
 	if (prtd->compr_passthr != LEGACY_PCM) {
 		ret = q6asm_open_write_compressed(ac, prtd->codec,
 						  prtd->compr_passthr);
@@ -1667,6 +1670,9 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 			prtd->codec_param.codec.options.generic.reserved[0];
 		break;
 	}
+
+	prtd->audio_client->stream_type = SNDRV_PCM_STREAM_CAPTURE;
+	prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
 
 	pr_debug("%s: stream_id %d bits_per_sample %d compr_passthr %d\n",
 			__func__, ac->stream_id, bits_per_sample,
@@ -2931,6 +2937,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		pr_debug("%s: open_write stream_id %d bits_per_sample %d",
 				__func__, stream_id, bits_per_sample);
 
+		prtd->audio_client->fedai_id = (int)fe_id;
 		if (q6core_get_avcs_api_version_per_service(
 					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 					ADSP_ASM_API_VERSION_V2)
