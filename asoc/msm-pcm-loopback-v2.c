@@ -335,6 +335,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 			return -ENOMEM;
 		}
 
+		pcm->audio_client->fedai_id = rtd->dai_link->id;
 		pcm->audio_client->perf_mode = pdata->perf_mode;
 		ret = q6asm_open_loopback_with_retry(pcm->audio_client,
 					bits_per_sample);
