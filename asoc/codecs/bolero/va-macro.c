@@ -61,6 +61,8 @@ static int va_tx_unmute_delay = BOLERO_CDC_VA_TX_DMIC_UNMUTE_DELAY_MS;
 module_param(va_tx_unmute_delay, int, 0664);
 MODULE_PARM_DESC(va_tx_unmute_delay, "delay to unmute the tx path");
 
+static int va_macro_core_vote(void *handle, bool enable);
+
 enum {
 	VA_MACRO_AIF_INVALID = 0,
 	VA_MACRO_AIF1_CAP,
@@ -303,6 +305,7 @@ static int va_macro_event_handler(struct snd_soc_component *component,
 		break;
 	case BOLERO_MACRO_EVT_PRE_SSR_UP:
 		/* enable&disable VA_CORE_CLK to reset GFMUX reg */
+		va_macro_core_vote(va_priv, true);
 		ret = bolero_clk_rsc_request_clock(va_priv->dev,
 						va_priv->default_clk_id,
 						VA_CORE_CLK, true);
@@ -314,6 +317,7 @@ static int va_macro_event_handler(struct snd_soc_component *component,
 			bolero_clk_rsc_request_clock(va_priv->dev,
 						va_priv->default_clk_id,
 						VA_CORE_CLK, false);
+		va_macro_core_vote(va_priv, false);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
 		trace_printk("%s, enter SSR up\n", __func__);
@@ -842,7 +846,8 @@ static bool is_amic_enabled(struct snd_soc_component *component, int decimator)
 	adc_mux_reg = BOLERO_CDC_VA_INP_MUX_ADC_MUX0_CFG1 +
 			VA_MACRO_ADC_MUX_CFG_OFFSET * decimator;
 	if (snd_soc_component_read32(component, adc_mux_reg) & SWR_MIC) {
-		if (va_priv->version == BOLERO_VERSION_2_1)
+		if (va_priv->version == BOLERO_VERSION_2_1 ||
+			va_priv->version == BOLERO_VERSION_2_0)
 			return true;
 		adc_reg = BOLERO_CDC_VA_INP_MUX_ADC_MUX0_CFG0 +
 			VA_MACRO_ADC_MUX_CFG_OFFSET * decimator;
@@ -3206,13 +3211,13 @@ static int va_macro_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "%s: register macro failed\n", __func__);
 		goto reg_macro_fail;
 	}
-	if (is_used_va_swr_gpio)
-		schedule_work(&va_priv->va_macro_add_child_devices_work);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, VA_AUTO_SUSPEND_DELAY);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);
 	pm_suspend_ignore_children(&pdev->dev, true);
 	pm_runtime_enable(&pdev->dev);
+	if (is_used_va_swr_gpio)
+		schedule_work(&va_priv->va_macro_add_child_devices_work);
 	return ret;
 
 reg_macro_fail:

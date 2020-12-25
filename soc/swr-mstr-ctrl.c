@@ -226,16 +226,11 @@ static ssize_t swrm_reg_show(struct swr_mstr_ctrl *swrm, char __user *ubuf,
 	int i, reg_val, len;
 	ssize_t total = 0;
 	char tmp_buf[SWR_MSTR_MAX_BUF_LEN];
-	int rem = 0;
 
 	if (!ubuf || !ppos)
 		return 0;
 
 	i = ((int) *ppos + SWRM_BASE);
-	rem = i%4;
-
-	if (rem)
-		i = (i - rem);
 
 	for (; i <= SWRM_MAX_REGISTER; i += 4) {
 		usleep_range(100, 150);
@@ -253,7 +248,7 @@ static ssize_t swrm_reg_show(struct swr_mstr_ctrl *swrm, char __user *ubuf,
 			total = -EFAULT;
 			goto copy_err;
 		}
-		*ppos += len;
+		*ppos += 4;
 		total += len;
 	}
 
@@ -2456,6 +2451,10 @@ static int swrm_master_init(struct swr_mstr_ctrl *swrm)
 	u32 temp = 0;
 	int len = 0;
 
+	/* Change no of retry counts to 1 for wsa to avoid underflow */
+	if (swrm->master_id == MASTER_ID_WSA)
+		retry_cmd_num = 1;
+
 	/* SW workaround to gate hw_ctl for SWR version >=1.6 */
 	if (swrm->version >= SWRM_VERSION_1_6) {
 		if (swrm->swrm_hctl_reg) {
@@ -3091,6 +3090,12 @@ static int swrm_runtime_resume(struct device *dev)
 		dev_err(dev, "%s:lpass core hw enable failed\n",
 			__func__);
 		hw_core_err = true;
+		pm_runtime_set_autosuspend_delay(&pdev->dev,
+			ERR_AUTO_SUSPEND_TIMER_VAL);
+		if (swrm->req_clk_switch)
+			swrm->req_clk_switch = false;
+		mutex_unlock(&swrm->reslock);
+		return 0;
 	}
 	if (swrm_request_hw_vote(swrm, LPASS_AUDIO_CORE, true)) {
 		dev_err(dev, "%s:lpass audio hw enable failed\n",
@@ -3192,7 +3197,7 @@ exit:
 
 	if (!hw_core_err)
 		swrm_request_hw_vote(swrm, LPASS_HW_CORE, false);
-	if (swrm_clk_req_err)
+	if (swrm_clk_req_err || aud_core_err  || hw_core_err)
 		pm_runtime_set_autosuspend_delay(&pdev->dev,
 				ERR_AUTO_SUSPEND_TIMER_VAL);
 	else
@@ -3222,6 +3227,10 @@ static int swrm_runtime_suspend(struct device *dev)
 		__func__, swrm->state);
 	dev_dbg(dev, "%s: pm_runtime: suspend state: %d\n",
 		__func__, swrm->state);
+	if (swrm->state == SWR_MSTR_SSR_RESET) {
+		swrm->state = SWR_MSTR_SSR;
+		return 0;
+	}
 	mutex_lock(&swrm->reslock);
 	mutex_lock(&swrm->force_down_lock);
 	current_state = swrm->state;
@@ -3564,6 +3573,18 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 						   msecs_to_jiffies(500)))
 			dev_err(swrm->dev, "%s: clock voting not zero\n",
 				__func__);
+
+		if (swrm->state == SWR_MSTR_UP ||
+			pm_runtime_autosuspend_expiration(swrm->dev)) {
+			swrm->state = SWR_MSTR_SSR_RESET;
+			dev_dbg(swrm->dev,
+				"%s:suspend swr if active at SSR up\n",
+				__func__);
+			pm_runtime_set_autosuspend_delay(swrm->dev,
+				ERR_AUTO_SUSPEND_TIMER_VAL);
+			usleep_range(50000, 50100);
+			swrm->state = SWR_MSTR_SSR;
+		}
 
 		mutex_lock(&swrm->devlock);
 		swrm->dev_up = true;

@@ -2685,8 +2685,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 6) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
 		} else if (channel_mode == 7) {
@@ -2694,18 +2694,18 @@ static int adm_arrange_mch_map_v8(
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
 			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
 			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
-			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
+			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_CS;
 		} else if (channel_mode == 8) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
-			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LS;
-			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RS;
-			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LB;
-			ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
+			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
+			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
+			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
+			ep_payload->dev_channel_mapping[7] = PCM_CHANNEL_RS;
 		} else if (channel_mode == 10) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
@@ -2720,8 +2720,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 12) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
@@ -2748,8 +2748,8 @@ static int adm_arrange_mch_map_v8(
 		} else if (channel_mode == 16) {
 			ep_payload->dev_channel_mapping[0] = PCM_CHANNEL_FL;
 			ep_payload->dev_channel_mapping[1] = PCM_CHANNEL_FR;
-			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_LFE;
-			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[2] = PCM_CHANNEL_FC;
+			ep_payload->dev_channel_mapping[3] = PCM_CHANNEL_LFE;
 			ep_payload->dev_channel_mapping[4] = PCM_CHANNEL_LB;
 			ep_payload->dev_channel_mapping[5] = PCM_CHANNEL_RB;
 			ep_payload->dev_channel_mapping[6] = PCM_CHANNEL_LS;
@@ -4005,6 +4005,20 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 							ret = -EINVAL;
 							goto fail;
 						}
+						/**
+						 *  call unmap CMA before hyp unassign during
+						 *  end of handset/speaker usecase.
+						 */
+						if (cal_block->map_data.q6map_handle != 0) {
+							atomic_set(&this_adm.mem_map_handles[cal_index],
+									cal_block->map_data.q6map_handle);
+							atomic_set(&this_adm.mem_map_index, cal_index);
+							ret = adm_memory_unmap_regions();
+							if (ret < 0)
+								pr_err("%s: unmap did not work! cal_type %i ret %d\n",
+										__func__, cal_index, ret);
+							cal_block->map_data.q6map_handle = 0;
+						}
 						ret = hyp_assign_phys(
 							cal_block->cal_data.paddr,
 							cal_block->map_data.map_size,
@@ -4075,6 +4089,17 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 						__func__);
 					ret = -EINVAL;
 					goto fail;
+				}
+				/* call unmap CMA before hyp unassign during end of handset/speaker usecase */
+				if (cal_block->map_data.q6map_handle != 0) {
+					atomic_set(&this_adm.mem_map_handles[cal_index],
+							cal_block->map_data.q6map_handle);
+					atomic_set(&this_adm.mem_map_index, cal_index);
+					ret = adm_memory_unmap_regions();
+					if (ret < 0)
+						pr_err("%s: unmap did not work! cal_type %i ret %d\n",
+								__func__, cal_index, ret);
+					cal_block->map_data.q6map_handle = 0;
 				}
 				ret = hyp_assign_phys(cal_block->cal_data.paddr,
 						cal_block->map_data.map_size,
