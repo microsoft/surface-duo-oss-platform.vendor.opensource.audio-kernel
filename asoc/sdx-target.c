@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1091,7 +1091,17 @@ static int sdx_sec_tdm_mode_get(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
 {
 	pr_debug("%s sdx_sec_tdm_mode %d\n", __func__, sdx_sec_tdm_mode);
-	ucontrol->value.integer.value[0] = sdx_sec_tdm_mode;
+
+	switch (sdx_sec_tdm_mode) {
+        case I2S_PCM_SLAVE_MODE:
+		ucontrol->value.integer.value[0] = 1;
+		break;
+	case I2S_PCM_MASTER_MODE:
+	default:
+		ucontrol->value.integer.value[0] = 0;
+		break;
+	}
+
 	return 0;
 }
 
