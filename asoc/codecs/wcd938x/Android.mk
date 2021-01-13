@@ -11,9 +11,13 @@ ifeq ($(call is-board-platform,lito),true)
 AUDIO_SELECT  := CONFIG_SND_SOC_LITO=m
 endif
 
+ifeq ($(call is-board-platform,bengal),true)
+AUDIO_SELECT  := CONFIG_SND_SOC_BENGAL=m
+endif
+
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,kona lito),true)
+ifeq ($(call is-board-platform-in-list,kona lito bengal),true)
 
 LOCAL_PATH := $(call my-dir)
 

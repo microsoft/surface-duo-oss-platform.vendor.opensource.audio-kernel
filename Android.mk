@@ -36,7 +36,7 @@ include $(MY_LOCAL_PATH)/asoc/codecs/aqt1000/Android.mk
 endif
 endif
 
-ifeq ($(call is-board-platform-in-list,$(MSMSTEPPE) $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,$(MSMSTEPPE) $(TRINKET) bengal),true)
 ifneq ($(TARGET_BOARD_AUTO),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/bolero/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/bolero/Android.mk
@@ -45,7 +45,12 @@ include $(MY_LOCAL_PATH)/asoc/codecs/wcd937x/Android.mk
 endif
 endif
 
-ifeq ($(call is-board-platform-in-list, kona lito bengal),true)
+ifeq ($(call is-board-platform-in-list, bengal),true)
+$(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/rouleur/Module.symvers)
+include $(MY_LOCAL_PATH)/asoc/codecs/rouleur/Android.mk
+endif
+
+ifeq ($(call is-board-platform-in-list, kona lito),true)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/bolero/Module.symvers)
 include $(MY_LOCAL_PATH)/asoc/codecs/bolero/Android.mk
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/wcd938x/Module.symvers)
