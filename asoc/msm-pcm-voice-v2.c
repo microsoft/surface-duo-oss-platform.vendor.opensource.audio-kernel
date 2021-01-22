@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -774,7 +774,7 @@ static struct snd_soc_component_driver msm_soc_component = {
 	.probe		= msm_pcm_voice_probe,
 };
 
-static int msm_pcm_probe(struct platform_device *pdev)
+static int msm_voice_probe(struct platform_device *pdev)
 {
 	int rc;
 	bool destroy_cvd = false;
@@ -813,7 +813,7 @@ done:
 	return rc;
 }
 
-static int msm_pcm_remove(struct platform_device *pdev)
+static int msm_voice_remove(struct platform_device *pdev)
 {
 	snd_soc_unregister_component(&pdev->dev);
 	return 0;
@@ -832,8 +832,8 @@ static struct platform_driver msm_pcm_driver = {
 		.of_match_table = msm_voice_dt_match,
 		.suppress_bind_attrs = true,
 	},
-	.probe = msm_pcm_probe,
-	.remove = msm_pcm_remove,
+	.probe = msm_voice_probe,
+	.remove = msm_voice_remove,
 };
 
 int __init msm_pcm_voice_init(void)
