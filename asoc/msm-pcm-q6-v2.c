@@ -1855,7 +1855,7 @@ static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 		return 0;
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
@@ -1928,7 +1928,7 @@ static int msm_pcm_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 		return 0; /* no channels set */
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
@@ -2233,7 +2233,7 @@ static int msm_pcm_channel_mixer_cfg_ctl_put(struct snd_kcontrol *kcontrol,
 	}
 
 	mutex_lock(&pdata->lock);
-	if (substream->ref_count <= 0) {
+	if (substream->runtime && substream->ref_count <= 0) {
 		pr_err_ratelimited("%s: substream ref_count:%d invalid\n",
 				__func__, substream->ref_count);
 		mutex_unlock(&pdata->lock);
