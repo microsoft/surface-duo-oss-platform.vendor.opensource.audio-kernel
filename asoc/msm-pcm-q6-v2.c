@@ -273,12 +273,19 @@ static void event_handler(uint32_t opcode,
 				break;
 			}
 			if (prtd->mmap_flag) {
-				pr_debug("%s:writing %d bytes of buffer to dsp\n",
-					__func__,
-					prtd->pcm_count);
-				q6asm_write_nolock(prtd->audio_client,
-					prtd->pcm_count,
-					0, 0, NO_TIMESTAMP);
+				int cnt = prtd->pcm_size / prtd->pcm_count;
+
+				pr_debug("%s %d:buffer %d, period %d, %d writes\n",
+					__func__, __LINE__,
+					prtd->pcm_size, prtd->pcm_count, cnt);
+				while (cnt--) {
+					pr_debug("%s %d:writing %d bytes of buffer to dsp\n",
+						__func__, __LINE__,
+						prtd->pcm_count);
+					q6asm_write_nolock(prtd->audio_client,
+						prtd->pcm_count,
+						0, 0, NO_TIMESTAMP);
+				}
 			} else {
 				while (atomic_read(&prtd->out_needed)) {
 					pr_debug("%s:writing %d bytes of buffer to dsp\n",
@@ -360,6 +367,9 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 
 	prtd->audio_client->perf_mode = pdata->perf_mode;
 	pr_debug("%s: perf: %x\n", __func__, pdata->perf_mode);
+
+	prtd->audio_client->stream_type = SNDRV_PCM_STREAM_PLAYBACK;
+	prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S32_LE:
@@ -514,6 +524,9 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 		pr_debug("%s Opening %d-ch PCM read stream, perf_mode %d\n",
 				__func__, params_channels(params),
 				prtd->audio_client->perf_mode);
+
+		prtd->audio_client->stream_type = SNDRV_PCM_STREAM_CAPTURE;
+		prtd->audio_client->fedai_id = soc_prtd->dai_link->id;
 
 		ret = q6asm_open_read_with_retry(prtd->audio_client,
 					FORMAT_LINEAR_PCM,

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1366,7 +1366,47 @@ static struct cal_block_data *msm_routing_find_topology(int path,
 								cal_index);
 }
 
-static int msm_routing_find_topology_on_index(int session_type, int app_type,
+static struct cal_block_data *msm_routing_find_topology_by_buf_number(int usecase, int path,
+							int app_type,
+							int acdb_id,
+							int cal_index,
+							bool exact)
+{
+	struct list_head *ptr, *next;
+	struct cal_block_data *cal_block = NULL;
+	struct audio_cal_info_adm_top *cal_info;
+	int buffer_idx_w_path;
+
+	pr_debug("%s\n", __func__);
+
+	buffer_idx_w_path = path + MAX_SESSION_TYPES * usecase;
+
+	list_for_each_safe(ptr, next,
+		&cal_data[cal_index]->cal_blocks) {
+
+		cal_block = list_entry(ptr,
+			struct cal_block_data, list);
+
+		if (cal_utils_is_cal_stale(cal_block))
+			continue;
+
+		cal_info = (struct audio_cal_info_adm_top *)
+			cal_block->cal_info;
+		if ((cal_block->buffer_number == buffer_idx_w_path) &&
+			(cal_info->path == path)  &&
+			(cal_info->app_type == app_type) &&
+			(cal_info->acdb_id == acdb_id)) {
+			return cal_block;
+		}
+	}
+	pr_debug("%s: Can't find topology for buffer_number %d, path %d, app %d, "
+		 "acdb_id %d %s\n",  __func__, buffer_idx_w_path, path, app_type, acdb_id,
+		 exact ? "fail" : "defaulting to search by path, app_type and acdb_id");
+	return exact ? NULL : msm_routing_find_topology(path, app_type,
+							      acdb_id, cal_index, exact);
+}
+
+static int msm_routing_find_topology_on_index(int fedai_id, int session_type, int app_type,
 					      int acdb_dev_id,  int idx,
 					      bool exact)
 {
@@ -1374,8 +1414,13 @@ static int msm_routing_find_topology_on_index(int session_type, int app_type,
 	struct cal_block_data *cal_block = NULL;
 
 	mutex_lock(&cal_data[idx]->lock);
-	cal_block = msm_routing_find_topology(session_type, app_type,
-					      acdb_dev_id, idx, exact);
+	if(idx == ADM_TOPOLOGY_CAL_TYPE_IDX)
+		cal_block = msm_routing_find_topology_by_buf_number(fedai_id, session_type, app_type,
+							      acdb_dev_id, idx, exact);
+	else
+		cal_block = msm_routing_find_topology(session_type, app_type,
+							      acdb_dev_id, idx, exact);
+
 	if (cal_block != NULL) {
 		topology = ((struct audio_cal_info_adm_top *)
 			    cal_block->cal_info)->topology;
@@ -1406,14 +1451,16 @@ static int msm_routing_get_adm_topology(int fedai_id, int session_type,
 		fe_dai_app_type_cfg[fedai_id][session_type][be_id].acdb_dev_id;
 
 	pr_debug("%s: Check for exact LSM topology\n", __func__);
-	topology = msm_routing_find_topology_on_index(session_type,
+	topology = msm_routing_find_topology_on_index(fedai_id,
+					       session_type,
 					       app_type,
 					       acdb_dev_id,
 					       ADM_LSM_TOPOLOGY_CAL_TYPE_IDX,
 					       true /*exact*/);
 	if (topology < 0) {
 		pr_debug("%s: Check for compatible topology\n", __func__);
-		topology = msm_routing_find_topology_on_index(session_type,
+		topology = msm_routing_find_topology_on_index(fedai_id,
+						      session_type,
 						      app_type,
 						      acdb_dev_id,
 						      ADM_TOPOLOGY_CAL_TYPE_IDX,
@@ -1480,7 +1527,7 @@ static void msm_pcm_routing_build_matrix(int fedai_id, int sess_type,
 	if (num_copps) {
 		payload.num_copps = num_copps;
 		payload.session_id = fe_dai_map[fedai_id][sess_type].strm_id;
-		adm_matrix_map(path_type, payload, perf_mode, passthr_mode);
+		adm_matrix_map(fedai_id, path_type, payload, perf_mode, passthr_mode);
 		msm_pcm_routng_cfg_matrix_map_pp(payload, path_type, perf_mode);
 	}
 }
@@ -1742,7 +1789,7 @@ int msm_pcm_routing_reg_phy_compr_stream(int fe_id, int perf_mode,
 	if (num_copps) {
 		payload.num_copps = num_copps;
 		payload.session_id = fe_dai_map[fe_id][session_type].strm_id;
-		adm_matrix_map(path_type, payload, perf_mode, passthr_mode);
+		adm_matrix_map(fe_id, path_type, payload, perf_mode, passthr_mode);
 		msm_pcm_routng_cfg_matrix_map_pp(payload, path_type, perf_mode);
 	}
 	mutex_unlock(&routing_lock);
@@ -2146,7 +2193,7 @@ int msm_pcm_routing_reg_phy_stream(int fedai_id, int perf_mode,
 	if (num_copps) {
 		payload.num_copps = num_copps;
 		payload.session_id = fe_dai_map[fedai_id][session_type].strm_id;
-		adm_matrix_map(path_type, payload, perf_mode, passthr_mode);
+		adm_matrix_map(fedai_id, path_type, payload, perf_mode, passthr_mode);
 		msm_pcm_routng_cfg_matrix_map_pp(payload, path_type, perf_mode);
 	}
 
@@ -19716,6 +19763,10 @@ static const struct snd_kcontrol_new rx_cdc_dma_rx_0_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_RX_CDC_DMA_RX_0,
 	MSM_BACKEND_DAI_TX_CDC_DMA_TX_3, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+	SOC_DOUBLE_EXT("SLIM_7_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_RX_CDC_DMA_RX_0,
+	MSM_BACKEND_DAI_SLIMBUS_7_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
 	SOC_DOUBLE_EXT("SLIM_8_TX", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_RX_CDC_DMA_RX_0,
 	MSM_BACKEND_DAI_SLIMBUS_8_TX, 1, 0, msm_routing_get_port_mixer,
@@ -23162,9 +23213,9 @@ static int msm_routing_put_app_type_cfg_control(struct snd_kcontrol *kcontrol,
 
 	memset(app_type_cfg, 0, MAX_APP_TYPES*
 				sizeof(struct msm_pcm_routing_app_type_data));
-	if (num_app_types > MAX_APP_TYPES) {
-		pr_err("%s: number of app types exceed the max supported\n",
-			__func__);
+	if (num_app_types > MAX_APP_TYPES || num_app_types < 0) {
+		pr_err("%s: number of app types %d is invalid\n",
+			__func__, num_app_types) ;
 		return -EINVAL;
 	}
 	for (j = 0; j < num_app_types; j++) {
@@ -23350,9 +23401,10 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 	int num_app_types;
 
 	mutex_lock(&routing_lock);
-	if (ucontrol->value.integer.value[0] > MAX_APP_TYPES) {
-		pr_err("%s: number of app types exceed the max supported\n",
-			__func__);
+	if (ucontrol->value.integer.value[0] < 0 ||
+		ucontrol->value.integer.value[0] > MAX_APP_TYPES) {
+		pr_err("%s: number of app types %ld is invalid\n",
+			__func__, ucontrol->value.integer.value[0]);
 		mutex_unlock(&routing_lock);
 		return -EINVAL;
 	}
@@ -29764,6 +29816,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"WSA_CDC_DMA_RX_0", NULL, "WSA_CDC_DMA_RX_0 Port Mixer"},
 
 	{"RX_CDC_DMA_RX_0 Port Mixer", "TX_CDC_DMA_TX_3", "TX_CDC_DMA_TX_3"},
+	{"RX_CDC_DMA_RX_0 Port Mixer", "SLIM_7_TX", "SLIMBUS_7_TX"},
 	{"RX_CDC_DMA_RX_0 Port Mixer", "SLIM_8_TX", "SLIMBUS_8_TX"},
 	{"RX_CDC_DMA_RX_0", NULL, "RX_CDC_DMA_RX_0 Port Mixer"},
 

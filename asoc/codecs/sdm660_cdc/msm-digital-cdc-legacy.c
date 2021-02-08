@@ -2193,6 +2193,10 @@ static int msm_digital_cdc_init_supplies(struct msm_dig_priv *msm_cdc)
 		if (regulator_count_voltages(
 			msm_cdc->supplies[i].consumer) <= 0)
 			continue;
+
+		if (msm_cdc->regulator[i].ondemand)
+			continue;
+
 		ret = regulator_set_voltage(
 					msm_cdc->supplies[i].consumer,
 					msm_cdc->regulator[i].min_uv,
@@ -2223,7 +2227,7 @@ err:
 }
 
 static int msm_digital_cdc_dt_parse_vreg_info(struct device *dev,
-	struct dig_cdc_regulator *vreg, const char *vreg_name)
+	struct dig_cdc_regulator *vreg, const char *vreg_name, bool ondemand)
 {
 	int len, ret = 0;
 	const __be32 *prop;
@@ -2245,6 +2249,7 @@ static int msm_digital_cdc_dt_parse_vreg_info(struct device *dev,
 		prop_name, dev->of_node->full_name);
 
 	vreg->name = vreg_name;
+	vreg->ondemand = ondemand;
 
 	snprintf(prop_name, CODEC_DT_MAX_PROP_SIZE,
 		"qcom,%s-voltage", vreg_name);
@@ -2407,7 +2412,7 @@ static bool msm_digital_cdc_populate_dt_pdata(
 			name);
 		ret = msm_digital_cdc_dt_parse_vreg_info(dev,
 						&dig_priv->regulator[idx],
-						name);
+						name, true);
 		if (ret) {
 			dev_err(dev, "%s: err parsing vreg on_demand for %s idx %d\n",
 				__func__, name, idx);

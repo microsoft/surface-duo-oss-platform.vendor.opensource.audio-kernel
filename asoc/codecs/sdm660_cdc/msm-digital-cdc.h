@@ -50,6 +50,7 @@ struct dig_cdc_regulator {
 	int min_uv;
 	int max_uv;
 	int optimum_ua;
+	bool ondemand;
 	struct regulator *regulator;
 };
 
