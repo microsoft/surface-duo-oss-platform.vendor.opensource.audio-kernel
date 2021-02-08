@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -944,6 +944,7 @@ static int wcd9xxx_i2c_write_device(struct wcd9xxx *wcd9xxx, u16 reg, u8 *value,
 		}
 	}
 	pr_debug("write success register = %x val = %x\n", reg, data[1]);
+	return 0;
 fail:
 	kfree(data);
 	return ret;
@@ -1105,6 +1106,7 @@ static int wcd9xxx_i2c_probe(struct i2c_client *client,
 				 __func__);
 			wcd9xxx->type = WCD9XXX;
 		}
+
 		wcd9xxx->regmap = wcd9xxx_regmap_init(&client->dev,
 				&wcd9xxx_i2c_base_regmap_config);
 		if (IS_ERR(wcd9xxx->regmap)) {
@@ -1182,6 +1184,7 @@ static int wcd9xxx_i2c_probe(struct i2c_client *client,
 			wcd9xxx_assign_irq(&wcd9xxx->core_res,
 					pdata->irq, pdata->irq_base);
 
+		wcd9xxx_set_intf_type(WCD9XXX_INTERFACE_TYPE_I2C);
 		ret = wcd9xxx_device_init(wcd9xxx);
 		if (ret) {
 			pr_err("%s: error, initializing device failed (%d)\n",
@@ -1196,8 +1199,9 @@ static int wcd9xxx_i2c_probe(struct i2c_client *client,
 			       __func__, ret);
 		if (val != wcd9xxx->codec_type->i2c_chip_status)
 			pr_err("%s: unknown chip status 0x%x\n", __func__, val);
+		else
+			pr_err("%s: chip status 0x%x\n", __func__, val);
 
-		wcd9xxx_set_intf_type(WCD9XXX_INTERFACE_TYPE_I2C);
 
 		return ret;
 	}

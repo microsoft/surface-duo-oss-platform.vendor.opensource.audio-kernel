@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  */
 #include <linux/module.h>
 #include <linux/init.h>
@@ -14719,6 +14719,11 @@ static int tasha_probe(struct platform_device *pdev)
 	else
 		tasha->wcd_native_clk = wcd_native_clk;
 
+	/* Update codec register default values */
+	tasha_update_reg_defaults(tasha);
+	tasha_get_codec_ver(tasha);
+	schedule_work(&tasha->tasha_add_child_devices_work);
+
 	if (wcd9xxx_get_intf_type() == WCD9XXX_INTERFACE_TYPE_SLIMBUS)
 		ret = snd_soc_register_component(&pdev->dev,
 					&soc_codec_dev_tasha,
@@ -14735,10 +14740,6 @@ static int tasha_probe(struct platform_device *pdev)
 			__func__, ret);
 		goto err_cdc_reg;
 	}
-	/* Update codec register default values */
-	tasha_update_reg_defaults(tasha);
-	schedule_work(&tasha->tasha_add_child_devices_work);
-	tasha_get_codec_ver(tasha);
 	ret = snd_event_client_register(pdev->dev.parent, &tasha_ssr_ops, NULL);
 	if (!ret) {
 		snd_event_notify(pdev->dev.parent, SND_EVENT_UP);
