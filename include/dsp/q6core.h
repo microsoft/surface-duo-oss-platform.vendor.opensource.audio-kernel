@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,6 +14,7 @@
 #define __Q6CORE_H__
 #include <ipc/apr.h>
 #include <dsp/apr_audio-v2.h>
+#include <linux/device.h>
 
 #define DOLBY_DECRYPT_SUB_SYSTEM 3
 #define DOLBY_ADM_SHM_SUB_SYSTEM 4
@@ -30,6 +31,7 @@ int q6core_get_unlock_key(int id, int *key, dma_addr_t *paddr, size_t *plen);
 int q6core_add_remove_pool_pages(phys_addr_t buf_add, uint32_t bufsz,
 			uint32_t mempool_id, bool add_pages);
 int avcs_core_query_timer_offset(int64_t *av_offset, int32_t clock_id);
+int avtimer_runtime_suspend(struct device *dev);
 int q6core_get_service_version(uint32_t service_id,
 			       struct avcs_fwk_ver_info *ver_info,
 			       size_t size);
