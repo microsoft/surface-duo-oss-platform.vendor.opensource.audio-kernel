@@ -3454,8 +3454,14 @@ EXPORT_SYMBOL(q6asm_open_read_with_retry);
 
 int q6asm_open_compressed_with_retry(struct audio_client *ac, uint32_t format, uint32_t passthrough_flag)
 {
-	int i, rc;
+	uint8_t i;
+	int rc;
 
+	if (ac == NULL) {
+		pr_err("%s: ac= %d,  NULL\n",  __func__, ac);
+		rc = -EINVAL;
+		goto fail;
+	}
 	mutex_lock(&session_lock);
 	for (i = 0; i < ASM_ACTIVE_STREAMS_ALLOWED; i++) {
 		pr_debug("%s: session %d\n",
@@ -3473,7 +3479,7 @@ int q6asm_open_compressed_with_retry(struct audio_client *ac, uint32_t format, u
 	}
 	q6asm_session_clean_ignore();
 	mutex_unlock(&session_lock);
-
+fail:
 	return rc;
 }
 EXPORT_SYMBOL(q6asm_open_compressed_with_retry);
@@ -3956,8 +3962,14 @@ int q6asm_stream_open_write_with_retry(struct audio_client *ac, uint32_t format,
 				uint16_t bits_per_sample, int32_t stream_id,
 				bool is_gapless_mode)
 {
-	int i, rc;
+	uint8_t i;
+	int rc;
 
+	if (ac == NULL) {
+		pr_err("%s: ac = %d , NULL\n",  __func__, ac);
+		rc = -EINVAL;
+		goto fail;
+	}
 	mutex_lock(&session_lock);
 	for (i = 0; i < ASM_ACTIVE_STREAMS_ALLOWED; i++) {
 		pr_debug("%s: session %d \n",
@@ -3976,7 +3988,7 @@ int q6asm_stream_open_write_with_retry(struct audio_client *ac, uint32_t format,
 	}
 	q6asm_session_clean_ignore();
 	mutex_unlock(&session_lock);
-
+fail:
 	return rc;
 }
 EXPORT_SYMBOL(q6asm_stream_open_write_with_retry);
