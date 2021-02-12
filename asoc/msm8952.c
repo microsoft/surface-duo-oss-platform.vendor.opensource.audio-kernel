@@ -1020,28 +1020,28 @@ static int msm_bt_sample_rate_put(struct snd_kcontrol *kcontrol,
 	switch (ucontrol->value.integer.value[0]) {
 	case 1:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_16KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
 		break;
 	case 2:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
 		break;
 	case 3:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_48KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
 		break;
 	case 4:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
 		break;
 	case 5:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_96KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
 		break;
 	case 0:
 	default:
 		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_8KHZ;
-		slim_rx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_8KHZ;
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_8KHZ;
 		break;
 	}
 	pr_debug("%s: sample rates: slim7_rx = %d, slim7_tx = %dvalue = %d\n",
