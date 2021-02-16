@@ -433,7 +433,7 @@ static int mdm_mi2s_startup(struct snd_pcm_substream *substream)
 					"%s Set fmt for codec dai failed\n",
 					__func__);
 			}
-			ret = snd_soc_dai_set_sysclk(cpu_dai,
+			ret = snd_soc_dai_set_sysclk(codec_dai,
 					0, pdata->mclk_freq, SND_SOC_CLOCK_OUT);
 			if (ret < 0)
 				pr_err("%s Set sysclk for enti failed\n",
@@ -1525,12 +1525,12 @@ static const struct snd_soc_dapm_widget mdm9650_dapm_widgets[] = {
 	SND_SOC_DAPM_MIC("Analog Mic7", NULL),
 	SND_SOC_DAPM_MIC("Analog Mic8", NULL),
 
+	SND_SOC_DAPM_MIC("Digital Mic0", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic1", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic2", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic3", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic4", NULL),
 	SND_SOC_DAPM_MIC("Digital Mic5", NULL),
-	SND_SOC_DAPM_MIC("Digital Mic6", NULL),
 };
 
 static struct snd_soc_dapm_route wcd9335_audio_paths[] = {
@@ -1703,12 +1703,12 @@ static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_ignore_suspend(dapm, "ANCRight Headset Mic");
 	snd_soc_dapm_ignore_suspend(dapm, "ANCLeft Headset Mic");
 
+	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic0");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic1");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic2");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic3");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic4");
 	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic5");
-	snd_soc_dapm_ignore_suspend(dapm, "Digital Mic6");
 
 	snd_soc_dapm_ignore_suspend(dapm, "MADINPUT");
 	snd_soc_dapm_ignore_suspend(dapm, "MAD_CPE_INPUT");
@@ -2477,9 +2477,9 @@ static int mdm_asoc_machine_probe(struct platform_device *pdev)
 	}
 
 	pdata->mi2s_gpio_p[PRI_MI2S] = of_parse_phandle(pdev->dev.of_node,
-					"qcom,pri-mi2s-gpios", 0);
+					"qcom,pri-mi2s-gpio", 0);
 	pdata->mi2s_gpio_p[SEC_MI2S] = of_parse_phandle(pdev->dev.of_node,
-					"qcom,sec-mi2s-gpios", 0);
+					"qcom,sec-mi2s-gpio", 0);
 	for (index = PRI_MI2S; index < MI2S_MAX; index++)
 				atomic_set(&(pdata->mi2s_gpio_ref_count[index]), 0);
 
