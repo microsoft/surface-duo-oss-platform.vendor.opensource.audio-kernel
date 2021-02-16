@@ -814,7 +814,7 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 		msm_audio_ion_data.smmu_enabled = 0;
 		return 0;
 	}
-	q6_state = apr_get_q6_state();
+	q6_state = apr_get_modem_state();
 	if (q6_state == APR_SUBSYS_DOWN) {
 		dev_dbg(dev,
 			"defering %s, adsp_state %d\n",
@@ -887,6 +887,8 @@ exit:
 		msm_audio_ion_data.device_status |= MSM_AUDIO_ION_PROBED;
 
 	msm_audio_ion_data.cb_dev = dev;
+	INIT_LIST_HEAD(&msm_audio_ion_data.alloc_list);
+	mutex_init(&(msm_audio_ion_data.list_mutex));
 
 	return rc;
 }

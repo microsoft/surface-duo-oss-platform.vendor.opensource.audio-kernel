@@ -1659,8 +1659,7 @@ static int mdm_mi2s_audrx_init(struct snd_soc_pcm_runtime *rtd)
 				SPKR_L_BOOST, SPKR_L_VI};
 	u8 spkright_port_types[WSA881X_MAX_SWR_PORTS] = {SPKR_R, SPKR_R_COMP,
 				SPKR_R_BOOST, SPKR_R_VI};
-	unsigned int ch_rate[WSA881X_MAX_SWR_PORTS] = {SWR_CLK_RATE_2P4MHZ, SWR_CLK_RATE_0P6MHZ,
-							SWR_CLK_RATE_0P3MHZ, SWR_CLK_RATE_1P2MHZ};
+	unsigned int ch_rate[WSA881X_MAX_SWR_PORTS] = {2400, 600, 300, 1200};
 	unsigned int ch_mask[WSA881X_MAX_SWR_PORTS] = {0x1, 0xF, 0x3, 0x3};
 	pdata = snd_soc_card_get_drvdata(rtd->card);
 
