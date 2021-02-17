@@ -697,6 +697,7 @@ static void q6asm_session_free(struct audio_client *ac)
 	session_id = ac->session;
 	mutex_lock(&session[session_id].mutex_lock_per_session);
 	rtac_remove_popp_from_adm_devices(ac->session);
+	rtac_remove_nt_popp(ac->session);
 	spin_lock_irqsave(&(session[session_id].session_lock), flags);
 	session[ac->session].ac = NULL;
 	ac->session = 0;
@@ -4044,6 +4045,7 @@ static int __q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 	ac->topology = open.postprocopo_id;
 	ac->app_type = cal_info.app_type;
 
+	rtac_add_asm_non_tunnel_session(ac->session);
 
 	switch (wr_format) {
 	case FORMAT_LINEAR_PCM:
@@ -11490,10 +11492,6 @@ int q6asm_send_cal(struct audio_client *ac)
 	if (!ac) {
 		pr_err("%s: Audio client is NULL\n", __func__);
 		return -EINVAL;
-	}
-	if (ac->io_mode & NT_MODE) {
-		pr_debug("%s: called for NT MODE, exiting\n", __func__);
-		goto done;
 	}
 
 	if (cal_data[ASM_AUDSTRM_CAL] == NULL)
