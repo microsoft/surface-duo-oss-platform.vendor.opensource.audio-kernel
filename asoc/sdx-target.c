@@ -1874,7 +1874,6 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
 		SND_SOC_DAILINK_REG(multimedia2),
 	},
-#if 0
 	{/* hw:x,2 */
 		.name = "VoiceMMode1",
 		.stream_name = "VoiceMMode1",
@@ -1903,7 +1902,6 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.id = MSM_FRONTEND_DAI_VOIP,
 		SND_SOC_DAILINK_REG(msmvoip),
 	},
-#endif
 	{/* hw:x,4 */
 		.name = MSM_DAILINK_NAME(ULL),
 		.stream_name = "MultiMedia3",

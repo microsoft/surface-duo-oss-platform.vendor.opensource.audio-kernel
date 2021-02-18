@@ -15,6 +15,16 @@ SND_SOC_DAILINK_DEFS(multimedia2,
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp.0")));
 
+SND_SOC_DAILINK_DEFS(voicemmode1,
+	DAILINK_COMP_ARRAY(COMP_CPU("VoiceMMode1")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-voice")));
+
+SND_SOC_DAILINK_DEFS(msmvoip,
+	DAILINK_COMP_ARRAY(COMP_CPU("VoIP")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voip-dsp")));
+
 SND_SOC_DAILINK_DEFS(multimedia3,
 	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia3")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
