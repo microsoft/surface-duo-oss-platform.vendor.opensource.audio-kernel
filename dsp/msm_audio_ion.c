@@ -814,6 +814,13 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 		msm_audio_ion_data.smmu_enabled = 0;
 		return 0;
 	}
+	q6_state = apr_get_modem_state();
+	if (q6_state == APR_SUBSYS_DOWN) {
+		dev_dbg(dev,
+			"defering %s, adsp_state %d\n",
+			__func__, q6_state);
+		return -EPROBE_DEFER;
+	}
 
 	if (of_device_is_compatible(dev->of_node, "qcom,msm-audio-ion-cma")) {
 		msm_audio_ion_data.cb_cma_dev = dev;
@@ -828,13 +835,6 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 		goto exit;
 	}
 
-	q6_state = apr_get_q6_state();
-	if (q6_state == APR_SUBSYS_DOWN) {
-		dev_dbg(dev,
-			"defering %s, adsp_state %d\n",
-			__func__, q6_state);
-		return -EPROBE_DEFER;
-	}
 	dev_dbg(dev, "%s: adsp is ready\n", __func__);
 
 	rc = of_property_read_u32(dev->of_node,
@@ -887,6 +887,8 @@ exit:
 		msm_audio_ion_data.device_status |= MSM_AUDIO_ION_PROBED;
 
 	msm_audio_ion_data.cb_dev = dev;
+	INIT_LIST_HEAD(&msm_audio_ion_data.alloc_list);
+	mutex_init(&(msm_audio_ion_data.list_mutex));
 
 	return rc;
 }

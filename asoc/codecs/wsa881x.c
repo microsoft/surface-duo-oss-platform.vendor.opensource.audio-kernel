@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -1443,6 +1443,7 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 	u8 devnum = 0;
 	bool pin_state_current = false;
 	struct wsa_ctrl_platform_data *plat_data = NULL;
+	struct snd_soc_component *component;
 	const char *wsa881x_name_prefix_of = NULL;
 	char buffer[MAX_NAME_LEN];
 	int dev_index = 0;
@@ -1559,7 +1560,7 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 	memcpy(wsa881x->dai_driver, wsa_dai, sizeof(struct snd_soc_dai_driver));
 
 	/* Get last digit from HEX format */
-	dev_index = (int)((char)(pdev->addr & 0xF));
+	dev_index = pdev->dev_num;
 
 	snprintf(buffer, sizeof(buffer), "wsa-codec.%d", dev_index);
 	wsa881x->driver->name = kstrndup(buffer, strlen(buffer), GFP_KERNEL);
@@ -1581,6 +1582,16 @@ static int wsa881x_swr_probe(struct swr_device *pdev)
 			__func__);
 		goto err_mem;
 	}
+
+	wsa881x->wsa881x_name_prefix = kstrndup(wsa881x_name_prefix_of,
+			strlen(wsa881x_name_prefix_of), GFP_KERNEL);
+	component = snd_soc_lookup_component(&pdev->dev, wsa881x->driver->name);
+	if (!component) {
+		dev_err(&pdev->dev, "%s: component is NULL \n", __func__);
+		ret = -EINVAL;
+		goto err_mem;
+	}
+	component->name_prefix = wsa881x->wsa881x_name_prefix;
 
 	wsa881x->bolero_np = of_parse_phandle(pdev->dev.of_node,
 					      "qcom,bolero-handle", 0);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  */
 
 #include <sound/soc.h>
@@ -14,6 +14,16 @@ SND_SOC_DAILINK_DEFS(multimedia2,
 	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia2")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp.0")));
+
+SND_SOC_DAILINK_DEFS(voicemmode1,
+	DAILINK_COMP_ARRAY(COMP_CPU("VoiceMMode1")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-voice")));
+
+SND_SOC_DAILINK_DEFS(msmvoip,
+	DAILINK_COMP_ARRAY(COMP_CPU("VoIP")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voip-dsp")));
 
 SND_SOC_DAILINK_DEFS(multimedia3,
 	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia3")),
@@ -34,31 +44,6 @@ SND_SOC_DAILINK_DEFS(auxpcm_hostless,
 	DAILINK_COMP_ARRAY(COMP_CPU("AUXPCM_HOSTLESS")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-hostless")));
-
-SND_SOC_DAILINK_DEFS(multimedia5,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia5")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp.1")));
-
-SND_SOC_DAILINK_DEFS(multimedia10,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia10")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp.1")));
-
-SND_SOC_DAILINK_DEFS(multimedia8,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia8")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp-noirq")));
-
-SND_SOC_DAILINK_DEFS(multimedia9,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia9")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp.0")));
-
-SND_SOC_DAILINK_DEFS(multimedia16,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia16")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dsp-noirq")));
 
 SND_SOC_DAILINK_DEFS(multimedia6,
 	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia6")),
@@ -116,69 +101,13 @@ SND_SOC_DAILINK_DEFS(sec_mi2s_rx_hostless,
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-hostless")));
 
-SND_SOC_DAILINK_DEFS(dtmf_tx,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-stub-dev.4")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-dtmf")));
-
-SND_SOC_DAILINK_DEFS(cs_voice_host_rx_capture,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-stub-dev.5")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voice-host-pcm")));
-
-SND_SOC_DAILINK_DEFS(cs_voice_host_rx_playback,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-stub-dev.6")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voice-host-pcm")));
-
-SND_SOC_DAILINK_DEFS(cs_voice_host_tx_capture,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-stub-dev.7")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voice-host-pcm")));
-
-SND_SOC_DAILINK_DEFS(cs_voice_host_tx_playback,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-stub-dev.8")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-voice-host-pcm")));
-
-SND_SOC_DAILINK_DEFS(sec_auxpcm_rx_hostless,
-	DAILINK_COMP_ARRAY(COMP_CPU("SEC_AUXPCM_RX_HOSTLESS")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-hostless")));
-
-SND_SOC_DAILINK_DEFS(sec_auxpcm_tx_hostless,
-	DAILINK_COMP_ARRAY(COMP_CPU("SEC_AUXPCM_TX_HOSTLESS")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-hostless")));
-
 SND_SOC_DAILINK_DEFS(tasha_i2s_rx1,
-	DAILINK_COMP_ARRAY(COMP_CPU("snd-soc-dummy-dai")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("tasha_codec", "tasha_i2s_rx1")),
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-mi2s.0")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("tasha_codec", "tasha_i2s_rx1"),
+			COMP_CODEC("wsa-codec.1", "wsa_rx1")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
-SND_SOC_DAILINK_DEFS(sec_auxpcm_rx,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-auxpcm.2")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
-SND_SOC_DAILINK_DEFS(sec_auxpcm_tx,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-auxpcm.2")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
 
 SND_SOC_DAILINK_DEFS(tasha_i2s_tx1,
-	DAILINK_COMP_ARRAY(COMP_CPU("snd-soc-dummy-dai")),
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-mi2s.0")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("tasha_codec", "tasha_i2s_tx1")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
-SND_SOC_DAILINK_DEFS(auxpcm_rx,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-auxpcm.1")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
-SND_SOC_DAILINK_DEFS(auxpcm_tx,
-	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-auxpcm.1")),
-	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
-
