@@ -81,6 +81,7 @@ LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 endif
 ###########################################################
+ifeq ($(call is-board-platform-in-list,msm8953 msm8937 sdm710 qcs605),true)
 include $(CLEAR_VARS)
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DLKM_8909W)),true)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_machine_$(TARGET)_bg.ko
@@ -92,6 +93,7 @@ LOCAL_MODULE_TAGS         := optional
 LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
+endif
 ###########################################################
 ifeq ($(strip $(AUDIO_FEATURE_ENABLED_DLKM_8909W)),true)
 include $(CLEAR_VARS)
