@@ -992,7 +992,8 @@ static int tasha_cdc_req_mclk_enable(struct tasha_priv *tasha,
 		wcd_resmgr_enable_clk_block(tasha->resmgr, WCD_CLK_MCLK);
 	} else {
 		/* put MCLK */
-		wcd_resmgr_disable_clk_block(tasha->resmgr, WCD_CLK_MCLK);
+		if (wcd_resmgr_disable_clk_block(tasha->resmgr, WCD_CLK_MCLK) < 0)
+			goto unlock_mutex;
 		/* put BG */
 		wcd_resmgr_disable_master_bias(tasha->resmgr);
 		clk_disable_unprepare(tasha->wcd_ext_clk);
@@ -14599,7 +14600,7 @@ static int __tasha_enable_efuse_sensing(struct tasha_priv *tasha)
 			 WCD9335_CHIP_TIER_CTRL_EFUSE_STATUS, &val);
 
 	if (rc || (!(val & 0x01)))
-		WARN(1, "%s: Efuse sense is not complete\n", __func__);
+		pr_info("%s: Efuse sense is not complete\n", __func__);
 
 	__tasha_cdc_mclk_enable(tasha, false);
 
