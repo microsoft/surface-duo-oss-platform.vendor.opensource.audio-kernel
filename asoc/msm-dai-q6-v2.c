@@ -18,6 +18,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/of_device.h>
+#include <linux/ctype.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/soc.h>
@@ -45,6 +46,7 @@
 #define spdif_clock_value(rate) (2*rate*32*2)
 #define SPDIF_MAX_CHANNELS 2
 #define CHANNEL_STATUS_SIZE 24
+#define CHSTATUS_EVT_QUEUE_SIZE	16
 #define CHANNEL_STATUS_MASK_INIT 0x00
 #define CHANNEL_STATUS_MASK_DEFAULT 0xff
 #define PREEMPH_MASK 0x38
@@ -258,15 +260,22 @@ struct msm_dai_q6_dai_data {
 
 struct msm_dai_q6_spdif_dai_data {
 	DECLARE_BITMAP(status_mask, STATUS_MAX);
+	spinlock_t lock;
 	u32 rate;
 	u32 channels;
 	u32 bitwidth;
 	u16 port_id;
+	u8 chstatus_queued;
+	u8 chstatus_fmt_text;
 	struct afe_spdif_port_config spdif_port;
 	struct afe_event_fmt_update fmt_event;
 	struct kobject *kobj;
 	u8 chstatus_mask[SPDIF_MAX_CHANNELS * SPDIF_CHSTATUS_SIZE];
 	u8 chstatus[SPDIF_MAX_CHANNELS * SPDIF_CHSTATUS_SIZE];
+	spinlock_t chstatus_qlock;
+	int chstatus_qhead;
+	int chstatus_qtail;
+	struct afe_event_chstatus_update chstatus_qbuf[CHSTATUS_EVT_QUEUE_SIZE];
 };
 
 struct msm_dai_q6_spdif_event_msg {
@@ -1878,23 +1887,92 @@ static const struct snd_kcontrol_new spdif_tx_config_controls[] = {
 	SOC_ENUM_EXT("SEC SPDIF TX Format", spdif_tx_config_enum[1],
 			msm_dai_q6_spdif_format_get,
 			msm_dai_q6_spdif_format_put),
-        {
-                .access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
-                .iface  = SNDRV_CTL_ELEM_IFACE_MIXER,
-                .name   = "PRI SPDIF TX Channel Status Mask",
-                .info   = msm_dai_q6_spdif_chstatus_mask_info,
-                .get    = msm_dai_q6_spdif_chstatus_mask_get,
-                .put    = msm_dai_q6_spdif_chstatus_mask_put,
-        },
-        {
-                .access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
-                .iface  = SNDRV_CTL_ELEM_IFACE_MIXER,
-                .name   = "SEC SPDIF TX Channel Status Mask",
-                .info   = msm_dai_q6_spdif_chstatus_mask_info,
-                .get    = msm_dai_q6_spdif_chstatus_mask_get,
-                .put    = msm_dai_q6_spdif_chstatus_mask_put,
-        },
+	{
+		.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
+		.iface  = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name   = "PRI SPDIF TX Channel Status Mask",
+		.info   = msm_dai_q6_spdif_chstatus_mask_info,
+		.get    = msm_dai_q6_spdif_chstatus_mask_get,
+		.put    = msm_dai_q6_spdif_chstatus_mask_put,
+	},
+	{
+		.access = SNDRV_CTL_ELEM_ACCESS_READWRITE,
+		.iface  = SNDRV_CTL_ELEM_IFACE_MIXER,
+		.name   = "SEC SPDIF TX Channel Status Mask",
+		.info   = msm_dai_q6_spdif_chstatus_mask_info,
+		.get    = msm_dai_q6_spdif_chstatus_mask_get,
+		.put    = msm_dai_q6_spdif_chstatus_mask_put,
+	},
 };
+
+static int msm_dai_q6_spdif_pop_chstatus(
+	struct msm_dai_q6_spdif_dai_data *dai_data,
+	struct afe_event_chstatus_update *buf)
+{
+	int ret = 0;
+	unsigned long flags;
+	struct afe_event_chstatus_update *slot_ptr;
+
+	spin_lock_irqsave(&dai_data->chstatus_qlock, flags);
+
+	slot_ptr = &dai_data->chstatus_qbuf[dai_data->chstatus_qtail];
+
+	/* check if head slot is empty */
+	if (!slot_ptr->minor_version) {
+		ret = -1;
+	} else {
+		/* do not copy event data if buffer is invalid */
+		if (buf != NULL)
+			memcpy(buf, (void *)slot_ptr,
+			       sizeof(struct afe_event_chstatus_update));
+
+		/* mark tail slot as empty */
+		slot_ptr->minor_version = 0;
+
+		/* advance tail index to next slot */
+		dai_data->chstatus_qtail++;
+
+		/* keep tail index within the range */
+		if (dai_data->chstatus_qtail >= CHSTATUS_EVT_QUEUE_SIZE)
+			dai_data->chstatus_qtail = 0;
+	}
+
+	spin_unlock_irqrestore(&dai_data->chstatus_qlock, flags);
+
+	return ret;
+}
+
+static int msm_dai_q6_spdif_push_chstatus(
+	struct msm_dai_q6_spdif_dai_data *dai_data,
+	struct afe_event_chstatus_update *buf)
+{
+	struct afe_event_chstatus_update *slot_ptr;
+
+	if (buf == NULL)
+		return -EINVAL;
+
+	slot_ptr = &dai_data->chstatus_qbuf[dai_data->chstatus_qhead];
+
+	/* check if head slot is occupied then drop outdated event
+	   before adding new one */
+	if (slot_ptr->minor_version) {
+		struct afe_event_chstatus_update old_evt;
+		msm_dai_q6_spdif_pop_chstatus(dai_data, &old_evt);
+	}
+
+	/* save new event to head slot */
+	memcpy((void *)slot_ptr, buf, sizeof(struct afe_event_chstatus_update));
+
+	/* advance head index only if copied data has valid
+	   minor_version number */
+	if (slot_ptr->minor_version) {
+		dai_data->chstatus_qhead++;
+		if (dai_data->chstatus_qhead >= CHSTATUS_EVT_QUEUE_SIZE)
+			dai_data->chstatus_qhead = 0;
+	}
+
+	return 0;
+}
 
 static void msm_dai_q6_spdif_process_event(uint32_t opcode, uint32_t token,
 		uint32_t *payload, void *private_data)
@@ -1943,21 +2021,37 @@ static void msm_dai_q6_spdif_process_chstatus_event(uint32_t opcode,
 {
 	struct msm_dai_q6_spdif_chstatus_event_msg *event = NULL;
 	struct msm_dai_q6_spdif_dai_data *dai_data = NULL;
+	unsigned long flags;
 
-	event = (struct msm_dai_q6_spdif_chstatus_event_msg *)payload;
-	dai_data = (struct msm_dai_q6_spdif_dai_data *)private_data;
-
-	if (!event || !dai_data) {
+	if (!payload || !private_data) {
 		pr_err("%s: invalid arguments\n", __func__);
 		return;
 	}
 
-	memcpy(dai_data->chstatus,
-		event->chstatus_event.chstatus_a,
-		sizeof(event->chstatus_event.chstatus_a));
-	memcpy(dai_data->chstatus + sizeof(event->chstatus_event.chstatus_a),
-		event->chstatus_event.chstatus_b,
-		sizeof(event->chstatus_event.chstatus_b));
+	event    = (struct msm_dai_q6_spdif_chstatus_event_msg *)payload;
+	dai_data = (struct msm_dai_q6_spdif_dai_data *)private_data;
+
+	spin_lock_irqsave(&dai_data->lock, flags);
+
+	if (dai_data->chstatus_queued) {
+		msm_dai_q6_spdif_push_chstatus(dai_data, &event->chstatus_event);
+	} else {
+		memcpy(dai_data->chstatus, 
+			   event->chstatus_event.chstatus_a,
+               sizeof(event->chstatus_event.chstatus_a));
+		memcpy(dai_data->chstatus + sizeof(event->chstatus_event.chstatus_a),
+               event->chstatus_event.chstatus_b,
+               sizeof(event->chstatus_event.chstatus_b));
+	}
+
+	spin_unlock_irqrestore(&dai_data->lock, flags);
+}
+
+static void msm_dai_q6_spdif_chstatus_notify(void *priv)
+{
+	struct msm_dai_q6_spdif_dai_data *dai_data =
+		(struct msm_dai_q6_spdif_dai_data *)priv;
+	sysfs_notify(dai_data->kobj, NULL, "chstatus");
 }
 
 static int msm_dai_q6_spdif_hw_params(struct snd_pcm_substream *substream,
@@ -2039,12 +2133,18 @@ static int msm_dai_q6_spdif_prepare(struct snd_pcm_substream *substream,
 			rc = afe_spdif_reg_chstatus_event_cfg(dai->id,
 				AFE_MODULE_REGISTER_EVENT_FLAG,
 				msm_dai_q6_spdif_process_chstatus_event,
+				msm_dai_q6_spdif_chstatus_notify,
 				dai_data);
 			if (rc < 0)
 				dev_err(dai->dev,
 				"fail to register chstatus event, port 0X%0x\n",
 				dai->id);
 		}
+
+		spin_lock_init(&dai_data->chstatus_qlock);
+		dai_data->chstatus_qhead = 0;
+		dai_data->chstatus_qtail = 0;
+		memset(&dai_data->chstatus_qbuf, 0, sizeof(dai_data->chstatus_qbuf));
 
 		rc = afe_spdif_port_start(dai->id, &dai_data->spdif_port,
 				dai_data->rate);
@@ -2137,13 +2237,147 @@ static ssize_t msm_dai_q6_spdif_chstatus_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+	struct afe_event_chstatus_update event;
+	char *cursor = buf;
+	int sysfs_buf_len = PAGE_SIZE;
+	unsigned long flags;
+	int check;
+	int i;
+	int rc;
 
 	if (!dai_data)
 		return -EINVAL;
 
-	memcpy(buf, dai_data->chstatus, sizeof(dai_data->chstatus));
+	spin_lock_irqsave(&dai_data->lock, flags);
+	check = dai_data->chstatus_queued;
+	spin_unlock_irqrestore(&dai_data->lock, flags);
 
-	return sizeof(dai_data->chstatus);
+	if (check) {
+		if (msm_dai_q6_spdif_pop_chstatus(dai_data, &event) < 0)
+			return 0;
+	} else {
+		memcpy(event.chstatus_a,
+		       dai_data->chstatus,
+		       SPDIF_CHSTATUS_SIZE);
+		memcpy(event.chstatus_b,
+		       &dai_data->chstatus[SPDIF_CHSTATUS_SIZE],
+		       SPDIF_CHSTATUS_SIZE);
+	}
+
+	spin_lock_irqsave(&dai_data->lock, flags);
+	check = dai_data->chstatus_fmt_text;
+	spin_unlock_irqrestore(&dai_data->lock, flags);
+
+	if (check) {
+		rc = snprintf(cursor, sysfs_buf_len, "CH_A: ");
+		cursor += rc;
+		sysfs_buf_len -= rc;
+		for (i = 0; i < SPDIF_CHSTATUS_SIZE; ++i) {
+			rc = snprintf(cursor, sysfs_buf_len, "%02x ",
+				      event.chstatus_a[i]);
+			cursor += rc;
+			sysfs_buf_len -= rc;
+		}
+
+		cursor += snprintf(cursor, sysfs_buf_len, "\nCH_B: ");
+		for (i = 0; i < SPDIF_CHSTATUS_SIZE; ++i) {
+				rc = snprintf(cursor, sysfs_buf_len, "%02x ",
+						event.chstatus_b[i]);
+				cursor += rc;
+				sysfs_buf_len -= rc;
+		}
+
+		rc = snprintf(cursor, sysfs_buf_len, "\n");
+		cursor += rc;
+		sysfs_buf_len -= rc;
+
+		return cursor - buf;
+	} else {
+		memcpy(buf, event.chstatus_a, sizeof(event.chstatus_a));
+		memcpy(buf + sizeof(event.chstatus_a), event.chstatus_b,
+		       sizeof(event.chstatus_b));
+
+		return sizeof(event.chstatus_a) + sizeof(event.chstatus_b);
+	}
+}
+
+static ssize_t msm_dai_q6_spdif_sysfs_rda_chstatus_format(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+	ssize_t len;
+	len = snprintf(buf, PAGE_SIZE, "text=%d, queued=%d\n",
+		       dai_data->chstatus_fmt_text, dai_data->chstatus_queued);
+
+	return len;
+}
+
+static ssize_t msm_dai_q6_spdif_sysfs_wta_chstatus_format(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct msm_dai_q6_spdif_dai_data *dai_data = dev_get_drvdata(dev);
+	struct afe_event_chstatus_update event;
+	const char tok_text[] = "text=";       /* text or binary format */
+	const char tok_queue[] = "queued=";      /* queued or last one data */
+	unsigned long flags;
+	char *token;
+	char *mem, *cursor;
+
+	if (!dai_data)
+		return -EINVAL;
+
+	mem = kzalloc(count, GFP_KERNEL);
+	if (!mem)
+		return -ENOMEM;
+
+	memcpy(mem, buf, count);
+	cursor = mem;
+
+	while ((token = strsep(&cursor, ",\x20")) != NULL) {
+		if (!strncmp(tok_text, token, strlen(tok_text))) {
+			token += strlen(tok_text);
+			if (!isdigit(token[0]))
+				return -EINVAL;
+
+			spin_lock_irqsave(&dai_data->lock, flags);
+			if (token[0] == '0')
+				dai_data->chstatus_fmt_text = 0;
+			else
+				dai_data->chstatus_fmt_text = 1;
+			spin_unlock_irqrestore(&dai_data->lock, flags);
+		} else if (!strncmp(tok_queue, token, strlen(tok_queue))) {
+			token += strlen(tok_queue);
+			if (!isdigit(token[0]))
+				return -EINVAL;
+
+			spin_lock_irqsave(&dai_data->lock, flags);
+			if (token[0] == '0')
+				dai_data->chstatus_queued = 0;
+			else
+				dai_data->chstatus_queued = 1;
+			spin_unlock_irqrestore(&dai_data->lock, flags);
+
+			if (!dai_data->chstatus_queued) {
+				while (!msm_dai_q6_spdif_pop_chstatus(dai_data,
+								      &event))
+					;
+
+				if (event.minor_version > 0) {
+					memcpy(dai_data->chstatus,
+					       event.chstatus_a,
+					       sizeof(event.chstatus_a));
+					memcpy(dai_data->chstatus +
+					       sizeof(event.chstatus_a),
+					       event.chstatus_b,
+					       sizeof(event.chstatus_b));
+				}
+			}
+		}
+	}
+
+	kfree(mem);
+
+	return count;
 }
 
 static DEVICE_ATTR(audio_state, 0444, msm_dai_q6_spdif_sysfs_rda_audio_state,
@@ -2156,6 +2390,9 @@ static DEVICE_ATTR(audio_preemph, 0444,
 	msm_dai_q6_spdif_sysfs_rda_audio_preemph, NULL);
 static DEVICE_ATTR(chstatus, 0444,
 	msm_dai_q6_spdif_chstatus_show, NULL);
+static DEVICE_ATTR(chstatus_format, 0644,
+	msm_dai_q6_spdif_sysfs_rda_chstatus_format,
+	msm_dai_q6_spdif_sysfs_wta_chstatus_format);
 
 static struct attribute *msm_dai_q6_spdif_fs_attrs[] = {
 	&dev_attr_audio_state.attr,
@@ -2163,6 +2400,7 @@ static struct attribute *msm_dai_q6_spdif_fs_attrs[] = {
 	&dev_attr_audio_rate.attr,
 	&dev_attr_audio_preemph.attr,
 	&dev_attr_chstatus.attr,
+	&dev_attr_chstatus_format.attr,
 	NULL,
 };
 static struct attribute_group msm_dai_q6_spdif_fs_attrs_group = {
@@ -2303,6 +2541,9 @@ static int msm_dai_q6_spdif_dai_probe(struct snd_soc_dai *dai)
 			snd_soc_dapm_add_routes(dapm, &intercon, 1);
 		}
 	}
+
+	spin_lock_init(&dai_data->lock);
+
 	return rc;
 }
 

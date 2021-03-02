@@ -495,6 +495,7 @@ int afe_send_spdif_chstatus_mask_cfg(struct afe_spdif_chstatus_mask_config
 int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
 		void (*cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv),
+		void (*notify_cb)(void *priv),
 		void *private_data);
 
 int afe_vlsp_reg_event_cfg(u16 reg_flag,
