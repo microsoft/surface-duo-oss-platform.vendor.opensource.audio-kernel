@@ -142,6 +142,12 @@ struct afe_ctl {
 	int sec_spdif_chstatus_change;
 	struct work_struct afe_spdif_chstatus_work;
 
+	void (*vlsp_svc_cb)(u32 opcode, u32 token,
+		void *payload, u16 payload_size, void *priv);
+	void (*vlsp_svc_notify)(void *priv);
+	struct work_struct afe_vlsp_work;
+	void *vlsp_svc_private_data;
+
 	int	topology[AFE_MAX_PORTS];
 	struct cal_type_data *cal_data[MAX_AFE_CAL_TYPES];
 
@@ -706,6 +712,17 @@ static void afe_notify_spdif_chstatus_update(void *payload)
 	schedule_work(&this_afe.afe_spdif_chstatus_work);
 }
 
+static void afe_notify_vlsp_work_fn(struct work_struct *work)
+{
+	if (this_afe.vlsp_svc_notify)
+		this_afe.vlsp_svc_notify(this_afe.vlsp_svc_private_data);
+}
+
+static void afe_notify_vlsp(void *payload)
+{
+	schedule_work(&this_afe.afe_vlsp_work);
+}
+
 static bool afe_token_is_valid(uint32_t token)
 {
 	if (token >= AFE_MAX_PORTS) {
@@ -939,6 +956,13 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				return -EINVAL;
 		} else if (data->opcode == AFE_EVENT_RT_PROXY_PORT_STATUS) {
 			port_id = (uint16_t)(0x0000FFFF & payload[0]);
+		} else if (data->opcode == AFE_SVC_VLSP_EVENT) {
+			if (this_afe.vlsp_svc_cb) {
+				this_afe.vlsp_svc_cb(data->opcode, data->token,
+					data->payload, data->payload_size,
+					this_afe.vlsp_svc_private_data);
+			}
+			afe_notify_vlsp(data->payload);
 		} else if (data->opcode == AFE_PORT_MOD_EVENT) {
 			u32 flag_dc_presence[2];
 			uint32_t *payload = data->payload;
@@ -3744,6 +3768,119 @@ fail_idx:
 	return ret;
 }
 EXPORT_SYMBOL(afe_spdif_reg_event_cfg);
+
+/**
+ * afe_vlsp_reg_event_cfg -
+ *         register for event from AFE service VLSP
+ *
+ * @reg_flag: register or unregister
+ * @cb: callback function to invoke for events from vlsp service
+ * @notify: notification callback function to indidcate arrival of vlsp event
+ * @private_data: private data to sent back in callback fn
+ *
+ * Returns 0 on success or error on failure
+ */
+int afe_vlsp_reg_event_cfg(u16 reg_flag,
+		void (*cb)(u32 opcode, u32 token, void *payload,
+			   u16 payload_size, void *priv),
+		void (*notify)(void *priv),
+		void *private_data)
+{
+	struct afe_svc_cmd_evt_cfg_payload vlsp_event;
+	int ret = 0;
+
+	pr_debug("%s: enter\n", __func__);
+
+	vlsp_event.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+					    APR_HDR_LEN(APR_HDR_SIZE),
+					    APR_PKT_VER);
+	vlsp_event.hdr.pkt_size = sizeof(vlsp_event);
+	vlsp_event.hdr.src_port = 0;
+	vlsp_event.hdr.dest_port = 0;
+	vlsp_event.hdr.token = 0x0;
+	vlsp_event.hdr.opcode = AFE_SVC_CMD_EVENT_CFG;
+	vlsp_event.event_id = AFE_SVC_VLSP_EVENT;
+	vlsp_event.reg_flag = reg_flag;
+	pr_debug("%s: AFE vlsp event register opcode[0x%x] register:%d\n",
+		 __func__, vlsp_event.hdr.opcode, vlsp_event.reg_flag);
+
+	ret = afe_apr_send_pkt(&vlsp_event, &this_afe.wait_wakeup);
+	if (ret) {
+		pr_err("%s: failed to %sregister vlsp event %d\n", __func__,
+		       (reg_flag==AFE_MODULE_DEREGISTER_EVENT_FLAG) ? "de" : "",
+		       ret);
+	} else {
+		this_afe.vlsp_svc_cb = cb;
+		this_afe.vlsp_svc_notify = notify;
+		this_afe.vlsp_svc_private_data = private_data;
+	}
+	return ret;
+}
+EXPORT_SYMBOL(afe_vlsp_reg_event_cfg);
+
+/*
+ * afe_vlsp_send_cfg -
+ * 		 to configure AFE session with
+ * 		 gpio paramter configuration
+ *
+ *  @port_cfg: port configuration
+ *
+ *  Returns 0 on success or error value on port start failure.
+ */
+int afe_vlsp_send_cfg(struct afe_param_id_vlsp_cfg *p_cfg)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret;
+
+	pr_debug("%s: enter\n", __func__);
+	if (!p_cfg) {
+		pr_err("%s: Error, no configuration data\n", __func__);
+		ret = -EINVAL;
+	} else {
+		memset(&param_hdr, 0, sizeof(param_hdr));
+		param_hdr.module_id = AFE_MODULE_VLSP;
+		param_hdr.instance_id = INSTANCE_ID_0;
+		param_hdr.param_id = AFE_PARAM_ID_VLSP_CONFIG;
+		param_hdr.param_size = sizeof(struct afe_param_id_vlsp_cfg);
+
+		ret = q6afe_svc_pack_and_set_param_in_band(IDX_GLOBAL_CFG,
+					       param_hdr, (u8 *) p_cfg);
+		if (ret < 0)
+			pr_err("%s: AFE_PARAM_ID_VLSP_CONFIG failed! ret = %d\n",
+			       __func__, ret);
+	}
+	pr_debug("%s: leave\n", __func__);
+	return ret;
+}
+EXPORT_SYMBOL(afe_vlsp_send_cfg);
+
+/*
+ * afe_vlsp_send_reset -
+ * 		 to stop and clear all the active VLSP instances
+ *
+ *  Returns 0 on success or error value on port start failure.
+ */
+int afe_vlsp_send_reset(void)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret;
+
+	pr_debug("%s: enter\n", __func__);
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_VLSP;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_VLSP_RESET;
+	param_hdr.param_size = 0;
+
+	ret = q6afe_svc_pack_and_set_param_in_band(IDX_GLOBAL_CFG,
+				       param_hdr, NULL);
+	if (ret < 0)
+		pr_err("%s: AFE_PARAM_ID_VLSP_CONFIG failed! ret = %d\n",
+				__func__, ret);
+	pr_debug("%s: leave\n", __func__);
+	return ret;
+}
+EXPORT_SYMBOL(afe_vlsp_send_reset);
 
 int afe_send_slot_mapping_cfg(
 	struct afe_param_id_slot_mapping_cfg *slot_mapping_cfg,
@@ -10024,6 +10161,7 @@ int __init afe_init(void)
 		  afe_notify_spdif_fmt_update_work_fn);
 	INIT_WORK(&this_afe.afe_spdif_chstatus_work,
 		  afe_notify_spdif_chstatus_update_work_fn);
+	INIT_WORK(&this_afe.afe_vlsp_work, afe_notify_vlsp_work_fn);
 
 	this_afe.event_notifier.notifier_call  = afe_aud_event_notify;
 	msm_aud_evt_blocking_register_client(&this_afe.event_notifier);
