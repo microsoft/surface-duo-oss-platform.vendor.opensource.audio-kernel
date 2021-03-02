@@ -29,6 +29,10 @@
 #include "msm-dai-q6-v2.h"
 #include "codecs/core.h"
 
+#define VLSP_DEV_LOG_INFO	1
+#define VLSP_DEV_LOG_WARN	2
+#define VLSP_DEV_LOG_ERRO	4
+
 #define MSM_DAI_PRI_AUXPCM_DT_DEV_ID 1
 #define MSM_DAI_SEC_AUXPCM_DT_DEV_ID 2
 #define MSM_DAI_TERT_AUXPCM_DT_DEV_ID 3
@@ -103,6 +107,12 @@ enum {
 	/* track AFE Rx port status for bi-directional transfers */
 	STATUS_RX_PORT,
 	STATUS_MAX
+};
+
+enum {
+	STATUS_VLSP_REGISTERED, /* track VLSP event registration status */
+	STATUS_VLSP_CONFIGURED, /* track VLSP event configureation status */
+	STATUS_VLSP_MAX
 };
 
 enum {
@@ -325,6 +335,50 @@ struct msm_dai_q6_tdm_dai_data {
 	union afe_port_group_config group_cfg; /* hold tdm group config */
 	struct afe_tdm_port_config port_cfg; /* hold tdm config */
 	struct afe_param_id_tdm_lane_cfg lane_cfg; /* hold tdm lane config */
+};
+
+struct afe_event_vlsp_hdr {
+	u32 minor_version;
+	u32 channel_id;
+	u64 time_stamp;
+};
+
+struct msm_dai_q6_vlsp_quemsg {
+	u16 length;
+	union {
+		struct afe_event_vlsp_hdr hdr;
+		struct afe_event_vlsp_v1 v1;
+		struct afe_event_vlsp_v2 v2;
+	};
+};
+
+struct msm_dai_q6_vlsp_evtmsg {
+	union {
+		struct afe_event_vlsp_hdr hdr;
+		struct afe_event_vlsp_v1 v1;
+		struct afe_event_vlsp_v2 v2;
+	};
+};
+
+struct msm_dai_q6_vlsp_data {
+	DECLARE_BITMAP(status_mask, STATUS_MAX);
+	struct evtcfg_s {
+		int last_channel;
+		struct afe_param_id_vlsp_cfg cfg_table[VLSP_MAX_CHANNEL_CNT];
+	} evtcfg;
+	struct evtque_s {
+		spinlock_t qlock; /* spinlock for tail index */
+		int head;
+		int tail;
+		bool full;
+		u32 drops[VLSP_MAX_CHANNEL_CNT];
+		struct msm_dai_q6_vlsp_quemsg buffer[VLSP_EVT_QUEUE_SIZE];
+	} evtque;
+	u32 log_control;
+	struct delayed_work config_work;
+	struct device *dev;
+	struct class *cls;
+	dev_t devt;
 };
 
 /* MI2S format field for AFE_PORT_CMD_I2S_CONFIG command
@@ -13296,6 +13350,655 @@ static struct platform_driver msm_dai_cdc_dma_q6 = {
 	},
 };
 
+static int msm_dai_q6_vlsp_format_config(struct afe_param_id_vlsp_cfg *p_cfg,
+		char * p_buffer, int n_length)
+{
+	return snprintf(
+		p_buffer, n_length,
+		"ch=%d pin=%d trg=%d map=%d gate=%d pid=%d pcf=%d",
+		(int)p_cfg->channel_id,
+		(int)p_cfg->pin_num,
+		(int)p_cfg->pin_trigger_type,
+		(int)p_cfg->pin_map_type,
+		(int)p_cfg->pin_gate_type,
+		(int)p_cfg->peripheral_id,
+		(int)p_cfg->peripheral_config);
+}
+
+static int msm_dai_q6_vlsp_format_event(struct msm_dai_q6_vlsp_evtmsg *evt,
+		char * p_buffer, int n_length)
+{
+	if (AFE_API_VERSION_VLSP_EVENT_V1 == evt->hdr.minor_version) {
+		n_length = snprintf(p_buffer, n_length,
+			"ver=%d ch=%d ts=%llu pin=%d",
+			(int)evt->v1.minor_version,
+			(int)evt->v1.channel_id,
+			evt->v1.time_stamp,
+			(int)evt->v1.pin_state);
+	} else {
+		n_length = snprintf(p_buffer, n_length,
+			"ver=%d ch=%d ts=%llu pid=%08x seq=%d",
+			(int)evt->v2.minor_version,
+			(int)evt->v2.channel_id,
+			evt->v2.time_stamp,
+			(int)evt->v2.peripheral_id,
+			(int)evt->v2.sequence);
+	}
+	return n_length;
+}
+
+static int msm_dai_q6_vlsp_pop_event(struct msm_dai_q6_vlsp_data * dai_data,
+		void * buffer_ptr, u16 buffer_len)
+{
+	int ret = 0;
+	unsigned long flags;
+	struct msm_dai_q6_vlsp_quemsg *slot_ptr;
+
+	if (dai_data->log_control & VLSP_DEV_LOG_INFO)
+		pr_err("%s: enter\n", __func__);
+
+	spin_lock_irqsave(&dai_data->evtque.qlock, flags);
+
+	slot_ptr = &dai_data->evtque.buffer[dai_data->evtque.tail];
+
+	/* check if head slot is empty */
+	if (!slot_ptr->hdr.minor_version) {
+		ret = -1;
+	} else {
+		/* insert latest drop count to MSB of sequence field */
+		if (AFE_API_VERSION_VLSP_EVENT_V2 == slot_ptr->v2.minor_version)
+		{
+			int ch = slot_ptr->v2.channel_id;
+			u32 drops = dai_data->evtque.drops[ch];
+			slot_ptr->v2.sequence &= 0xffff;
+			slot_ptr->v2.sequence |= (drops << 16);
+		}
+
+		/* saturate the size to copy with the userspace buffer size */
+		ret = (slot_ptr->length > buffer_len) ?
+			buffer_len : slot_ptr->length;
+
+		/* do not copy event data if buffer is invalid */
+		if (buffer_ptr != NULL && ret > 0)
+			memcpy(buffer_ptr, (void *)&slot_ptr->hdr, ret);
+
+		/* mark tail slot as empty */
+		slot_ptr->hdr.minor_version = 0;
+
+		/* advance tail index to next slot */
+		dai_data->evtque.tail++;
+
+		/* keep tail index within the range */
+		if (dai_data->evtque.tail >= VLSP_EVT_QUEUE_SIZE)
+			dai_data->evtque.tail = 0;
+	}
+
+	spin_unlock_irqrestore(&dai_data->evtque.qlock, flags);
+
+	if (dai_data->log_control & VLSP_DEV_LOG_INFO)
+		pr_err("%s: leave (ret = %d)\n", __func__, ret);
+
+	return ret;
+}
+
+static int msm_dai_q6_vlsp_push_event(
+	struct msm_dai_q6_vlsp_data * dai_data,
+	void * buffer_ptr,
+	u16 buffer_len)
+{
+	struct msm_dai_q6_vlsp_quemsg *slot_ptr;
+
+	if (dai_data->log_control & VLSP_DEV_LOG_INFO) {
+		pr_err("%s: enter\n", __func__);
+		pr_err("%s: ring buffer (head=%d, tail=%d, full=%d)\n",
+			__func__,
+			(int)dai_data->evtque.head,
+			(int)dai_data->evtque.tail,
+			(int)dai_data->evtque.full);
+	}
+
+	slot_ptr = &dai_data->evtque.buffer[dai_data->evtque.head];
+
+	/* check if event buffer is valid */
+	if (buffer_ptr == NULL || buffer_len < 16)
+		return -1;
+
+	/* check if event is over-sized */
+	if (buffer_len > sizeof(struct msm_dai_q6_vlsp_evtmsg))
+		return -2;
+
+	/* check if head slot is occupied then drop outdated event
+	   before adding new one */
+	if (slot_ptr->hdr.minor_version) {
+		struct msm_dai_q6_vlsp_evtmsg old_evt;
+		int len = sizeof(old_evt);
+		len = msm_dai_q6_vlsp_pop_event(dai_data, &old_evt, len);
+		if (len > 0) {
+			dai_data->evtque.drops[old_evt.hdr.channel_id]++;
+			dai_data->evtque.full = true;
+			if (dai_data->log_control & VLSP_DEV_LOG_ERRO) {
+				char sbuff[128];
+				msm_dai_q6_vlsp_format_event(
+					&old_evt, sbuff, 128);
+				pr_err("%s: dropping old event {%s}!\n",
+					__func__, sbuff);
+			}
+		}
+	}
+
+	/* save new event to head slot */
+	slot_ptr->length = buffer_len;
+	memcpy((void *)&slot_ptr->hdr, buffer_ptr, buffer_len);
+
+	/* advance head index only if minor_version of copied data */
+	/* is valid */
+	if (slot_ptr->hdr.minor_version) {
+		dai_data->evtque.head++;
+		if (dai_data->evtque.head >= VLSP_EVT_QUEUE_SIZE)
+			dai_data->evtque.head = 0;
+	}
+	if (dai_data->log_control & VLSP_DEV_LOG_INFO) {
+		char sbuff[128];
+		msm_dai_q6_vlsp_format_event(
+			(struct msm_dai_q6_vlsp_evtmsg *)buffer_ptr,
+			sbuff,
+			128);
+		pr_err("%s: event {%s}!\n", __func__, sbuff);
+		pr_err("%s: ring buffer (head=%d, tail=%d, full=%d)\n",
+			__func__,
+			(int)dai_data->evtque.head,
+			(int)dai_data->evtque.tail,
+			(int)dai_data->evtque.full);
+		pr_err("%s: leave\n", __func__);
+	}
+	return 0;
+}
+
+static void msm_dai_q6_vlsp_process_event(u32 opcode, u32 token, void *payload,
+		u16 payload_size, void *private_data)
+{
+	struct msm_dai_q6_vlsp_data *dai_data;
+	int rc;
+
+	dai_data = (struct msm_dai_q6_vlsp_data *)private_data;
+	rc = msm_dai_q6_vlsp_push_event(dai_data, payload, payload_size);
+	if (dai_data->log_control & VLSP_DEV_LOG_INFO) {
+		struct msm_dai_q6_vlsp_evtmsg *evt;
+		char sbuff[128];
+
+		evt = (struct msm_dai_q6_vlsp_evtmsg *)payload;
+		msm_dai_q6_vlsp_format_event(evt, sbuff, 128);
+		pr_err("%s: @%llu, enqueue event {%s}, result=%d\n", __func__,
+			(uint64_t)ktime_get(),
+			sbuff,
+			rc);
+	}
+}
+
+static void msm_dai_q6_vlsp_notify(void *priv)
+{
+	struct msm_dai_q6_vlsp_data *dai_data =
+		(struct msm_dai_q6_vlsp_data *)priv;
+	sysfs_notify(&dai_data->dev->kobj, NULL, "event");
+}
+
+static ssize_t msm_dai_q6_vlsp_sysfs_rda_event(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct msm_dai_q6_vlsp_data *dai_data = dev_get_drvdata(dev);
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!test_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask)) {
+		pr_err("%s: vlsp service is not registered\n", __func__);
+		return -ENOSYS; /* function not supported */
+	}
+
+	return (ssize_t)msm_dai_q6_vlsp_pop_event(
+		dai_data,
+		buf,
+		MSM_DAI_SYSFS_ENTRY_MAX_LEN);
+}
+
+static ssize_t msm_dai_q6_vlsp_sysfs_rda_config(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct msm_dai_q6_vlsp_data *dai_data = dev_get_drvdata(dev);
+	ssize_t ret;
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!test_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask)) {
+		pr_err("%s: vlsp service is not registered\n", __func__);
+		return -ENOSYS; /* function not supported */
+	}
+
+	ret = msm_dai_q6_vlsp_format_config(
+		&dai_data->evtcfg.cfg_table[dai_data->evtcfg.last_channel],
+		buf,
+		MSM_DAI_SYSFS_ENTRY_MAX_LEN);
+
+	return ret;
+}
+
+static int vlsp_strtoint(char * p_token, int * p_value)
+{
+	int rc;
+	if (!strncmp("0x", p_token, 2))
+		rc = kstrtoint(p_token+2, 16, p_value);
+	else if (!strncmp("0b", p_token, 2))
+		rc = kstrtoint(p_token+2, 2, p_value);
+	else
+		rc = kstrtoint(p_token, 10, p_value);
+	return rc;
+}
+
+static ssize_t vlsp_parse_config(struct msm_dai_q6_vlsp_data *dai_data,
+	const char *buffer, size_t count, struct afe_param_id_vlsp_cfg * p_cfg)
+{
+	static const char tok_chi[] = "ch=";	/* vlsp channel id */
+	static const char tok_pin[] = "pin=";	/* pin number */
+	static const char tok_trg[] = "trg=";	/* irq trigger type */
+	static const char tok_map[] = "map=";	/* pin map type */
+	static const char tok_gat[] = "gate=";	/* irq gate type */
+	static const char tok_pid[] = "pid=";	/* peripheral_id */
+	static const char tok_pcf[] = "pcf=";	/* peripheral configruation */
+	static const char tok_log[] = "log=";	/* log control */
+	char *mem, *cursor, *token;
+	bool ifc_found = false;
+	int rc, val;
+
+	mem = kzalloc(count, GFP_KERNEL);
+	if (!mem)
+		return -ENOMEM;
+
+	memcpy(mem, buffer, count);
+	cursor = mem;
+
+	while ((token = strsep(&cursor, ",\x20")) != NULL) {
+		if (0==strncmp(tok_chi, token, strlen(tok_chi))) {
+			token += strlen(tok_chi);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_chi,rc);
+				break;
+			}
+
+			if (val < 0 || val >= VLSP_MAX_CHANNEL_CNT) {
+				pr_err( "%s: channel id (%d) "
+					"out of range (0..%d)!\n",
+					__func__,val,VLSP_MAX_CHANNEL_CNT-1);
+				break;
+			}
+			*p_cfg = dai_data->evtcfg.cfg_table[val];
+			p_cfg->channel_id = val;
+			ifc_found = true;
+		}
+		else if (0==strncmp(tok_pin, token, strlen(tok_pin))) {
+			token += strlen(tok_pin);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->pin_num = val;
+
+		} else if (0==strncmp(tok_trg, token, strlen(tok_trg))) {
+			token += strlen(tok_trg);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->pin_trigger_type = val;
+		} else if (0==strncmp(tok_map, token, strlen(tok_map))) {
+			token += strlen(tok_map);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->pin_map_type = val;
+
+		} else if (0==strncmp(tok_gat, token, strlen(tok_gat))) {
+			token += strlen(tok_gat);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->pin_gate_type = val;
+
+		} else if (0==strncmp(tok_pid, token, strlen(tok_pid))) {
+			token += strlen(tok_pid);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->peripheral_id = val;
+
+		} else if (0==strncmp(tok_pcf, token, strlen(tok_pcf))) {
+			token += strlen(tok_pcf);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			p_cfg->peripheral_config = val;
+		} else if (0==strncmp(tok_log, token, strlen(tok_log))) {
+			token += strlen(tok_log);
+			rc = vlsp_strtoint(token, &val);
+			if (rc) {
+				pr_err("%s: strtoint failed for '%s' - %d\n",
+					__func__,tok_pin,rc);
+				break;
+			}
+			dai_data->log_control = val;
+		} else {
+			pr_err("%s: parameter not supported for '%s'\n",
+				__func__, token);
+		}
+	}
+
+	if (ifc_found) {
+		p_cfg->minor_version = AFE_API_VERSION_VLSP_CONFIG;
+	} else {
+		count = -EINVAL;
+		pr_err("%s: no channel id!\n", __func__);
+	}
+
+	kfree(mem);
+
+	return (ssize_t)count;
+}
+
+static ssize_t msm_dai_q6_vlsp_sysfs_wta_config(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	static const char tok_reset[] = "reset";        /* vlsp reset cmd */
+	struct msm_dai_q6_vlsp_data *dai_data = dev_get_drvdata(dev);
+	struct afe_param_id_vlsp_cfg newcfg;
+	int rc, ret;
+
+	if (!dai_data) {
+		pr_err("%s: invalid input\n", __func__);
+		rc = -EINVAL;
+		goto done;
+	}
+
+	if (!test_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask)) {
+		pr_err("%s: vlsp service is not registered\n", __func__);
+		rc = -ENOSYS; /* function not supported */
+		goto done;
+	}
+
+	if (strncmp(buf, tok_reset, strlen(tok_reset)) == 0) {
+		ret = afe_vlsp_send_reset();
+		if (ret == 0) {
+			int table_size = sizeof(dai_data->evtcfg.cfg_table);
+			memset(&dai_data->evtcfg.cfg_table[0], 0, table_size);
+			rc = count;
+		} else {
+			rc = ret;
+		}
+		goto done;
+	}
+
+	ret = vlsp_parse_config(dai_data, buf, count, &newcfg);
+
+	if (ret > 0) {
+		char sbuf[128];
+
+		msm_dai_q6_vlsp_format_config(&newcfg, sbuf, 128);
+
+		ret = afe_vlsp_send_cfg(&newcfg);
+
+		if (ret == 0) {
+			set_bit(STATUS_VLSP_CONFIGURED, dai_data->status_mask);
+			pr_info("%s: new cfg = '%s'!\n", __func__, sbuf);
+			dai_data->evtcfg.cfg_table[newcfg.channel_id] = newcfg;
+			dai_data->evtcfg.last_channel = newcfg.channel_id;
+	        rc = count;
+		} else {
+			pr_err("%s: failed with setting new cfg = '%s'!\n",
+				__func__, sbuf);
+			rc = ret;
+		}
+	} else {
+		pr_err("%s: vlsp_parse_config() returned %d!\n",
+			__func__, ret);
+		rc = ret;
+	}
+
+done:
+	return rc;
+}
+
+static DEVICE_ATTR(event, 0444,
+	msm_dai_q6_vlsp_sysfs_rda_event,
+	NULL);
+static DEVICE_ATTR(config, 0644,
+	msm_dai_q6_vlsp_sysfs_rda_config,
+	msm_dai_q6_vlsp_sysfs_wta_config);
+static struct attribute *msm_dai_q6_vlsp_fs_attrs[] = {
+	&dev_attr_event.attr,
+	&dev_attr_config.attr,
+	NULL,
+};
+static struct attribute_group msm_dai_q6_vlsp_fs_attrs_group = {
+	.attrs = msm_dai_q6_vlsp_fs_attrs,
+};
+
+static void msm_dai_q6_vlsp_init_work(struct work_struct *work)
+{
+	struct msm_dai_q6_vlsp_data *dai_data =
+		container_of(
+			work,
+			struct msm_dai_q6_vlsp_data,
+			config_work.work);
+	struct afe_param_id_vlsp_cfg * p_cfg;
+	int i, rc;
+
+	rc = afe_q6_interface_prepare();
+	if (rc < 0) {
+		dev_err(dai_data->dev, "%s: afe_q6_interface is not ready!\n",
+			__func__);
+		/* retry - reschedule */
+		schedule_delayed_work(&dai_data->config_work,
+			msecs_to_jiffies(500));
+		return;
+	}
+
+	rc = afe_vlsp_reg_event_cfg(
+		AFE_MODULE_REGISTER_EVENT_FLAG,
+		msm_dai_q6_vlsp_process_event,
+		msm_dai_q6_vlsp_notify,
+		dai_data);
+	if (rc < 0) {
+		dev_err(dai_data->dev, "%s: vlsp event registration error!\n",
+			__func__);
+		return;
+	}
+	set_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask);
+
+	p_cfg = dai_data->evtcfg.cfg_table;
+	for (i = 0; i < VLSP_MAX_CHANNEL_CNT; i++, p_cfg++) {
+		if (AFE_API_VERSION_VLSP_CONFIG != p_cfg->minor_version)
+			continue;
+
+		if (afe_vlsp_send_cfg(p_cfg) == 0) {
+			dev_info(dai_data->dev, "%s: vlsp ch#%d configured!\n",
+				__func__, i);
+			continue;
+		}
+
+		dev_err(dai_data->dev, "%s: vlsp ch#%d config error!\n",
+			__func__, i);
+	}
+	set_bit(STATUS_VLSP_CONFIGURED, dai_data->status_mask);
+}
+
+static int msm_dai_q6_vlsp_probe(struct platform_device *pdev)
+{
+	static const char vlsp_config_property[] = "qcom,msm-q6-vlsp-config";
+	struct msm_dai_q6_vlsp_data *dai_data;
+	struct afe_param_id_vlsp_cfg newcfg;
+	const char * p_string;
+	char buffer[128];
+	int rc, count, i;
+
+	dev_err(&pdev->dev, "%s: VLSP probe\n", __func__);
+	dai_data = devm_kzalloc(&pdev->dev, sizeof(*dai_data), GFP_KERNEL);
+	if (!dai_data) {
+		rc = -ENOMEM;
+		goto done;
+	}
+
+	rc = alloc_chrdev_region(&dai_data->devt, 0, 1, "msm-q6-vlsp");
+	if (rc < 0) {
+		dev_err(&pdev->dev, "%s: Failed to alloc char dev, err = %d\n",
+			__func__, rc);
+		goto err_chrdev;
+	}
+
+	dai_data->cls = class_create(THIS_MODULE, "msm-q6-vlsp");
+	if (IS_ERR(dai_data->cls)) {
+		rc = PTR_ERR(dai_data->cls);
+		dev_err(&pdev->dev, "%s: Failed to create class, err = %d\n",
+			__func__, rc);
+		goto err_class;
+	}
+
+	dai_data->dev = device_create(dai_data->cls, NULL, dai_data->devt,
+		NULL, "c");
+	if (IS_ERR(dai_data->dev)) {
+		rc = PTR_ERR(dai_data->dev);
+		dev_err(&pdev->dev, "%s: Failed to create device, err = %d\n",
+			__func__, rc);
+		goto err_dev_create;
+	}
+
+	rc = sysfs_create_group(
+		&dai_data->dev->kobj,
+		&msm_dai_q6_vlsp_fs_attrs_group);
+	if (rc < 0) {
+		pr_err("%s: failed, rc=%d\n", __func__, rc);
+		goto err_cdev_add;
+	}
+
+	spin_lock_init(&dai_data->evtque.qlock);
+
+	for (i = 0; i < VLSP_MAX_CHANNEL_CNT; i++) {
+		//"qcom,msm-q6-vlsp-config-0"
+		snprintf(buffer, 128, "%s-%d", vlsp_config_property, i);
+		rc = of_property_read_string(pdev->dev.of_node,
+			buffer, &p_string);
+		if (rc) continue;
+
+		count = strlen(p_string) + 1;
+		rc = vlsp_parse_config(dai_data, p_string, count, &newcfg);
+		if (rc <= 0) continue;
+
+		dai_data->evtcfg.cfg_table[newcfg.channel_id] = newcfg;
+
+		msm_dai_q6_vlsp_format_config(&newcfg,
+			buffer, sizeof(buffer));
+
+		pr_info("%s: %s-%d = \"%s\"\n",
+			__func__, vlsp_config_property, i, buffer);
+	}
+
+	platform_set_drvdata(pdev, dai_data);
+	dev_set_drvdata(dai_data->dev, dai_data);
+
+	INIT_DELAYED_WORK(&dai_data->config_work, msm_dai_q6_vlsp_init_work);
+
+	schedule_delayed_work(&dai_data->config_work, msecs_to_jiffies(1000));
+
+	return 0;
+
+err_cdev_add:
+	device_destroy(dai_data->cls, dai_data->devt);
+err_dev_create:
+	class_destroy(dai_data->cls);
+err_class:
+	unregister_chrdev_region(0, 1);
+err_chrdev:
+	devm_kfree(&pdev->dev, dai_data);
+done:
+	return rc;
+}
+
+static int msm_dai_q6_vlsp_remove(struct platform_device *pdev)
+{
+	struct msm_dai_q6_vlsp_data *dai_data = platform_get_drvdata(pdev);
+	int rc = 0;
+
+	if (!dai_data)
+		return -1;
+
+	if (test_bit(STATUS_VLSP_CONFIGURED, dai_data->status_mask)) {
+		rc = afe_vlsp_send_reset();
+		if (rc < 0) {
+			dev_err(dai_data->dev,
+				"%s: failed to reset VLSP service!\n",
+				__func__);
+		}
+		clear_bit(STATUS_VLSP_CONFIGURED, dai_data->status_mask);
+	}
+
+	if (test_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask)) {
+		rc = afe_vlsp_reg_event_cfg(
+			AFE_MODULE_DEREGISTER_EVENT_FLAG,
+			NULL,
+			NULL,
+			NULL);
+		if (rc < 0) {
+			dev_err(dai_data->dev,
+				"%s: fail to deregister event for VLSP\n",
+				__func__);
+		}
+		clear_bit(STATUS_VLSP_REGISTERED, dai_data->status_mask);
+	}
+
+	device_destroy(dai_data->cls, dai_data->devt);
+	class_destroy(dai_data->cls);
+	unregister_chrdev_region(0, 1);
+
+	return rc;
+}
+
+static const struct of_device_id msm_vlsp_dt_match[] = {
+	{ .compatible = "qcom,msm-q6-vlsp", },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(of, msm_vlsp_dt_match);
+
+static struct platform_driver msm_dai_q6_vlsp = {
+	.probe = msm_dai_q6_vlsp_probe,
+	.remove = msm_dai_q6_vlsp_remove,
+	.driver = {
+		.name = "msm-q6-vlsp",
+		.owner = THIS_MODULE,
+		.of_match_table = msm_vlsp_dt_match,
+	},
+};
+
 int __init msm_dai_q6_init(void)
 {
 	int rc;
@@ -13367,8 +14070,17 @@ int __init msm_dai_q6_init(void)
 		pr_err("%s: fail to register dai CDC DMA\n", __func__);
 		goto dai_cdc_dma_q6_fail;
 	}
+
+	rc = platform_driver_register(&msm_dai_q6_vlsp);
+	if (rc) {
+		pr_err("%s: fail to register VLSP\n", __func__);
+		goto dai_q6_vlsp_fail;
+	}
+
 	return rc;
 
+dai_q6_vlsp_fail:
+	platform_driver_unregister(&msm_dai_cdc_dma_q6);
 dai_cdc_dma_q6_fail:
 	platform_driver_unregister(&msm_dai_q6_cdc_dma_driver);
 dai_cdc_dma_q6_dev_fail:
@@ -13395,6 +14107,7 @@ fail:
 
 void msm_dai_q6_exit(void)
 {
+	platform_driver_unregister(&msm_dai_q6_vlsp);
 	platform_driver_unregister(&msm_dai_cdc_dma_q6);
 	platform_driver_unregister(&msm_dai_q6_cdc_dma_driver);
 	platform_driver_unregister(&msm_dai_tdm_q6);
