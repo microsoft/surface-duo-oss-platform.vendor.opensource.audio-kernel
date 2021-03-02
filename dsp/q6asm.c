@@ -1120,7 +1120,7 @@ void q6asm_audio_client_free(struct audio_client *ac)
 		pr_err("%s: ac %pK\n", __func__, ac);
 		return;
 	}
-	if (!ac->session) {
+	if ((ac->session <= 0) || (ac->session > ASM_ACTIVE_STREAMS_ALLOWED)) {
 		pr_err("%s: ac session invalid\n", __func__);
 		return;
 	}
@@ -4614,6 +4614,11 @@ int q6asm_run(struct audio_client *ac, uint32_t flags,
 		pr_err("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
+        if ((ac->session <= 0) || (ac->session > ASM_ACTIVE_STREAMS_ALLOWED)) {
+		pr_err("%s: ac session invalid\n", __func__);
+		return -EINVAL;
+	}
+
 	pr_debug("%s: session[%d]\n", __func__, ac->session);
 
 	q6asm_add_hdr(ac, &run.hdr, sizeof(run), TRUE);
@@ -4672,6 +4677,11 @@ static int __q6asm_run_nowait(struct audio_client *ac, uint32_t flags,
 		pr_err("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
+        if ((ac->session <= 0) || (ac->session > ASM_ACTIVE_STREAMS_ALLOWED)) {
+		pr_err("%s: ac session invalid\n", __func__);
+		return -EINVAL;
+	}
+
 	pr_debug("%s: session[%d]\n", __func__, ac->session);
 
 	q6asm_stream_add_hdr_async(ac, &run.hdr, sizeof(run), TRUE, stream_id);
@@ -8536,6 +8546,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	if (mmap_region_cmd == NULL) {
 		rc = -EINVAL;
 		kfree(buffer_node);
+		buffer_node = NULL;
 		return rc;
 	}
 	mmap_regions = (struct avs_cmd_shared_mem_map_regions *)
@@ -8572,6 +8583,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 					mmap_regions->hdr.opcode, rc);
 		rc = -EINVAL;
 		kfree(buffer_node);
+		buffer_node = NULL;
 		goto fail_cmd;
 	}
 
@@ -8583,6 +8595,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		pr_err("%s: timeout. waited for memory_map\n", __func__);
 		rc = -ETIMEDOUT;
 		kfree(buffer_node);
+		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	if (atomic_read(&ac->mem_state) > 0) {
@@ -8592,6 +8605,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		rc = adsp_err_get_lnx_err_code(
 			atomic_read(&ac->mem_state));
 		kfree(buffer_node);
+		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	mutex_lock(&ac->cmd_lock);
@@ -8611,6 +8625,7 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	rc = 0;
 fail_cmd:
 	kfree(mmap_region_cmd);
+	mmap_region_cmd = NULL;
 	return rc;
 }
 EXPORT_SYMBOL(q6asm_memory_map_regions);
@@ -8706,6 +8721,7 @@ fail_cmd:
 		if (buf_node->buf_phys_addr == buf_add) {
 			list_del(&buf_node->list);
 			kfree(buf_node);
+			buf_node = NULL;
 			break;
 		}
 	}
