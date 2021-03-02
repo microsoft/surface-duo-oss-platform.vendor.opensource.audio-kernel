@@ -136,6 +136,8 @@ struct afe_ctl {
 		uint32_t token, uint32_t *payload, void *priv);
 	void (*sec_spdif_tx_chstatus_cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv);
+	void (*pri_spdif_tx_chstatus_notify_cb)(void *priv);
+	void (*sec_spdif_tx_chstatus_notify_cb)(void *priv);
 	void *pri_spdif_tx_chstatus_priv;
 	void *sec_spdif_tx_chstatus_priv;
 	int pri_spdif_chstatus_change;
@@ -669,6 +671,10 @@ static void afe_notify_spdif_chstatus_update_work_fn(struct work_struct *work)
 		if (ret)
 			pr_err("%s: Send UEvent %s failed :%d\n",
 			       __func__, event_pri, ret);
+
+		if (this_afe.pri_spdif_tx_chstatus_notify_cb)
+			this_afe.pri_spdif_tx_chstatus_notify_cb(
+				this_afe.pri_spdif_tx_private_data);
 	}
 	if (this_afe.sec_spdif_chstatus_change) {
 		this_afe.sec_spdif_chstatus_change = 0;
@@ -676,8 +682,11 @@ static void afe_notify_spdif_chstatus_update_work_fn(struct work_struct *work)
 		if (ret)
 			pr_err("%s: Send UEvent %s failed :%d\n",
 			       __func__, event_sec, ret);
-	}
 
+		if (this_afe.sec_spdif_tx_chstatus_notify_cb)
+			this_afe.sec_spdif_tx_chstatus_notify_cb(
+				this_afe.sec_spdif_tx_private_data);
+	}
 }
 
 static void afe_notify_spdif_fmt_update(void *payload)
@@ -3536,6 +3545,7 @@ EXPORT_SYMBOL(afe_spdif_port_start);
 int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
 		void (*cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv),
+		void (*notify_cb)(void *priv),
 		void *private_data)
 {
 	struct afe_port_cmd_event_cfg *config;
@@ -3577,9 +3587,11 @@ int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
 
 	if (port_id == AFE_PORT_ID_PRIMARY_SPDIF_TX) {
 		this_afe.pri_spdif_tx_chstatus_cb = cb;
+        this_afe.pri_spdif_tx_chstatus_notify_cb = notify_cb;
 		this_afe.pri_spdif_tx_chstatus_priv = private_data;
 	} else if (port_id == AFE_PORT_ID_SECONDARY_SPDIF_TX) {
 		this_afe.sec_spdif_tx_chstatus_cb = cb;
+        this_afe.sec_spdif_tx_chstatus_notify_cb = notify_cb;
 		this_afe.sec_spdif_tx_chstatus_priv = private_data;
 	} else {
 		pr_err("%s: wrong port id 0x%x\n", __func__, port_id);
