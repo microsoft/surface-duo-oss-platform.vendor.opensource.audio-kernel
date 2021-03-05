@@ -1,7 +1,7 @@
 /* include/linux/msm_audio.h
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2012, 2014, 2017, 2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012, 2014, 2017, 2019, 2021 The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -116,8 +116,10 @@
 
 #define AUDIO_PM_AWAKE      _IOW(AUDIO_IOCTL_MAGIC, 105, unsigned int)
 #define AUDIO_PM_RELAX      _IOW(AUDIO_IOCTL_MAGIC, 106, unsigned int)
+#define AUDIO_SET_EFFECTS_CONFIG_V2   _IOW(AUDIO_IOCTL_MAGIC, 107, \
+				struct msm_hwacc_effects_config)
 
-#define	AUDIO_MAX_COMMON_IOCTL_NUM	107
+#define	AUDIO_MAX_COMMON_IOCTL_NUM	108
 
 
 #define HANDSET_MIC			0x01

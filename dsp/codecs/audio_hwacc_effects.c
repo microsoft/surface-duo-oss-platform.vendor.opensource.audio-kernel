@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017, 2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -127,8 +127,8 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 					FORMAT_MULTI_CHANNEL_LINEAR_PCM,
 					effects->config.meta_mode_enabled,
 					effects->config.output.bits_per_sample,
-					true /*overwrite topology*/,
-					ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER);
+					effects->config.overwrite_topology,
+					effects->config.topology);
 		if (rc < 0) {
 			pr_err("%s: Open failed for hw accelerated effects:rc=%d\n",
 				__func__, rc);
@@ -136,6 +136,18 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 			mutex_unlock(&effects->lock);
 			goto ioctl_fail;
 		}
+
+		if (!effects->config.overwrite_topology) {
+			rc = q6asm_send_cal(effects->ac);
+			if (rc < 0) {
+				pr_err("%s: Seding cal to ADSP failed:rc=%d\n",
+					__func__, rc);
+				rc = -EINVAL;
+				mutex_unlock(&effects->lock);
+				goto ioctl_fail;
+			}
+		}
+
 		effects->opened = 1;
 
 		pr_debug("%s: dec buf size: %d, num_buf: %d, enc buf size: %d, num_buf: %d\n",
@@ -201,6 +213,22 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 			effects->started = 0;
 			pr_err("%s: ASM run state failed\n", __func__);
 		}
+		mutex_unlock(&effects->lock);
+		break;
+	}
+	case AUDIO_GET_SESSION_ID: {
+		mutex_lock(&effects->lock);
+
+		pr_debug("%s: session id : %u\n",
+			__func__, effects->ac->session);
+
+		if (copy_to_user((void *) arg, &effects->ac->session,
+				   sizeof(u16))) {
+			pr_err("%s: copy to user for AUDIO_GET_SESSION_ID failed\n",
+				__func__);
+			rc = -EFAULT;
+		}
+
 		mutex_unlock(&effects->lock);
 		break;
 	}
@@ -415,6 +443,7 @@ static long audio_effects_ioctl(struct file *file, unsigned int cmd,
 	long argvalues[MAX_PP_PARAMS_SZ] = {0};
 
 	switch (cmd) {
+	case AUDIO_SET_EFFECTS_CONFIG_V2:
 	case AUDIO_SET_EFFECTS_CONFIG: {
 		pr_debug("%s: AUDIO_SET_EFFECTS_CONFIG\n", __func__);
 		mutex_lock(&effects->lock);
@@ -425,6 +454,18 @@ static long audio_effects_ioctl(struct file *file, unsigned int cmd,
 				__func__);
 			rc = -EFAULT;
 		}
+
+		/*
+		 * added ioctl AUDIO_SET_EFFECTS_CONFIG_V2 to support
+		 * custom topology. hard coding HPX_MASTER topology only for
+		 * ioctl AUDIO_SET_EFFECTS_CONFIG
+		 */
+		if (cmd == AUDIO_SET_EFFECTS_CONFIG) {
+			effects->config.overwrite_topology = true;
+			effects->config.topology =
+				ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER;
+		}
+
 		pr_debug("%s: write buf_size: %d, num_buf: %d, sample_rate: %d, channel: %d\n",
 			 __func__, effects->config.output.buf_size,
 			 effects->config.output.num_buf,
@@ -435,6 +476,9 @@ static long audio_effects_ioctl(struct file *file, unsigned int cmd,
 			 effects->config.input.num_buf,
 			 effects->config.input.sample_rate,
 			 effects->config.input.num_channels);
+		pr_debug("%s: overwrite_topology %d, topology %d\n", __func__,
+			effects->config.overwrite_topology,
+			effects->config.topology);
 		mutex_unlock(&effects->lock);
 		break;
 	}
@@ -523,6 +567,7 @@ struct msm_hwacc_effects_config32 {
 };
 
 enum {
+	AUDIO_GET_SESSION_ID32 = _IOR(AUDIO_IOCTL_MAGIC, 82, unsigned short),
 	AUDIO_SET_EFFECTS_CONFIG32 = _IOW(AUDIO_IOCTL_MAGIC, 99,
 					  struct msm_hwacc_effects_config32),
 	AUDIO_EFFECTS_SET_BUF_LEN32 = _IOW(AUDIO_IOCTL_MAGIC, 100,
@@ -533,6 +578,8 @@ enum {
 	AUDIO_EFFECTS_READ32 = _IOWR(AUDIO_IOCTL_MAGIC, 103, compat_uptr_t),
 	AUDIO_EFFECTS_SET_PP_PARAMS32 = _IOW(AUDIO_IOCTL_MAGIC, 104,
 					   compat_uptr_t),
+	AUDIO_SET_EFFECTS_CONFIG32_V2 = _IOW(AUDIO_IOCTL_MAGIC, 107,
+					  struct msm_hwacc_effects_config32),
 	AUDIO_START32 = _IOW(AUDIO_IOCTL_MAGIC, 0, unsigned int),
 };
 
@@ -543,6 +590,7 @@ static long audio_effects_compat_ioctl(struct file *file, unsigned int cmd,
 	int rc = 0, i;
 
 	switch (cmd) {
+	case AUDIO_SET_EFFECTS_CONFIG32_V2:
 	case AUDIO_SET_EFFECTS_CONFIG32: {
 		struct msm_hwacc_effects_config32 config32;
 		struct msm_hwacc_effects_config *config = &effects->config;
@@ -581,6 +629,13 @@ static long audio_effects_compat_ioctl(struct file *file, unsigned int cmd,
 		config->meta_mode_enabled = config32.meta_mode_enabled;
 		config->overwrite_topology = config32.overwrite_topology;
 		config->topology = config32.topology;
+
+		if (cmd == AUDIO_SET_EFFECTS_CONFIG32) {
+			effects->config.overwrite_topology = true;
+			effects->config.topology =
+				ASM_STREAM_POSTPROC_TOPO_ID_HPX_MASTER;
+		}
+
 		pr_debug("%s: write buf_size: %d, num_buf: %d, sample_rate: %d, channels: %d\n",
 			 __func__, effects->config.output.buf_size,
 			 effects->config.output.num_buf,
@@ -591,6 +646,9 @@ static long audio_effects_compat_ioctl(struct file *file, unsigned int cmd,
 			 effects->config.input.num_buf,
 			 effects->config.input.sample_rate,
 			 effects->config.input.num_channels);
+		pr_debug("%s: overwrite_topology %d, topology %d\n", __func__,
+			effects->config.overwrite_topology,
+			effects->config.topology);
 		mutex_unlock(&effects->lock);
 		break;
 	}
@@ -656,6 +714,11 @@ static long audio_effects_compat_ioctl(struct file *file, unsigned int cmd,
 	}
 	case AUDIO_START32: {
 		rc = audio_effects_shared_ioctl(file, AUDIO_START, arg);
+		break;
+	}
+	case AUDIO_GET_SESSION_ID32: {
+		rc =
+		audio_effects_shared_ioctl(file, AUDIO_GET_SESSION_ID, arg);
 		break;
 	}
 	case AUDIO_EFFECTS_WRITE32: {

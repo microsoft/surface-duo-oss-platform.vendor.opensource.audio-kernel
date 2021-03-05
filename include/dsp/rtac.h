@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2013-2015, 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2013-2015, 2017-2019, 2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -58,6 +58,11 @@ struct rtac_popp_data {
 	uint32_t	app_type;
 };
 
+struct rtac_asm {
+	uint32_t		num_of_popp;
+	struct rtac_popp_data	popp[RTAC_MAX_ACTIVE_POPP];
+};
+
 struct rtac_adm_data {
 	uint32_t		topology_id;
 	uint32_t		afe_topology;
@@ -76,8 +81,10 @@ struct rtac_adm {
 
 void rtac_add_adm_device(u32 port_id, u32 copp_id, u32 path_id, u32 popp_id,
 			u32 app_type, u32 acdb_dev_id);
+void rtac_add_asm_non_tunnel_session(u32 popp_id);
 void rtac_remove_adm_device(u32 port_id, u32 copp_id);
 void rtac_remove_popp_from_adm_devices(u32 popp_id);
+void rtac_remove_nt_popp(u32 popp_id);
 void rtac_add_voice(u32 cvs_handle, u32 cvp_handle, u32 rx_afe_port,
 	u32 tx_afe_port, u32 rx_acdb_id, u32 tx_acdb_id, u32 session_id);
 void rtac_remove_voice(u32 cvs_handle);
