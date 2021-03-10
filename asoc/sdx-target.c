@@ -323,6 +323,7 @@ static void mdm_mi2s_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	int ret;
 	struct snd_soc_card *card = rtd->card;
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
 
 	if (atomic_dec_return(&(pdata->mi2s_gpio_ref_count[PRI_MI2S])) == 0) {
@@ -348,6 +349,7 @@ static void mdm_mi2s_shutdown(struct snd_pcm_substream *substream)
 		} else {
 			pr_err("%s: Invalid lpass audio hw node\n", __func__);
 		}
+		mdm_enable_codec_ext_clk(codec_dai->component, 0, true);
 	}
 }
 
@@ -371,6 +373,7 @@ static int mdm_mi2s_startup(struct snd_pcm_substream *substream)
 					goto err;
 				}
 			}
+			mdm_enable_codec_ext_clk(codec_dai->component, 1, true);
 			pdata->core_audio_vote_count++;
 			iowrite32(I2S_SEL << I2S_PCM_SEL_OFFSET,
 					pdata->lpaif_pri_muxsel_virt_addr);

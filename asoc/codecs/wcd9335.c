@@ -1125,7 +1125,7 @@ int tasha_enable_efuse_sensing(struct snd_soc_component *component)
 		tasha_enable_sido_buck(component);
 	}
 
-	//tasha_cdc_mclk_enable(component, false, false);
+	tasha_cdc_mclk_enable(component, false, false);
 
 	return 0;
 }
