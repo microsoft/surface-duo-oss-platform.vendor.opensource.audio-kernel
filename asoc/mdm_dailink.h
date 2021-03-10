@@ -45,8 +45,8 @@ SND_SOC_DAILINK_DEFS(auxpcm_hostless,
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-hostless")));
 
-SND_SOC_DAILINK_DEFS(multimedia6,
-	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia6")),
+SND_SOC_DAILINK_DEFS(multimedia4,
+	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia4")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-loopback")));
 

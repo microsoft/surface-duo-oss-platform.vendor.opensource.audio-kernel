@@ -2030,8 +2030,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		SND_SOC_DAILINK_REG(dtmf_rx_hostless),
 	},
 	{
-		.name = "MDM Media6",
-		.stream_name = "MultiMedia6",
+		.name = "MDM Media4",
+		.stream_name = "MultiMedia4",
 		.dynamic = 1,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
@@ -2041,8 +2041,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		/* this dainlink has playback support */
-		.id = MSM_FRONTEND_DAI_MULTIMEDIA6,
-		SND_SOC_DAILINK_REG(multimedia6),
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA4,
+		SND_SOC_DAILINK_REG(multimedia4),
 	},
 	/* FE TDM DAI links */
 	{
