@@ -1220,6 +1220,39 @@ static bool route_check_fe_id_adm_support(int fe_id)
 	return rc;
 }
 
+/*
+ * msm_pcm_routing_get_pp_ch_cnt:
+ *	Read the processed channel count
+ *
+ * @fe_id: Front end ID
+ * @session_type: Inidicates RX or TX session type
+ */
+int msm_pcm_routing_get_pp_ch_cnt(int fe_id, int session_type)
+{
+	struct msm_pcm_stream_app_type_cfg cfg_data;
+	int be_id = 0, app_type_idx = 0, app_type = 0;
+	int ret;
+
+	memset(&cfg_data, 0, sizeof(cfg_data));
+
+	if (!is_mm_lsm_fe_id(fe_id)) {
+		pr_err("%s: bad MM ID\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = msm_pcm_routing_get_stream_app_type_cfg(fe_id, session_type,
+						      &be_id, &cfg_data);
+	if (ret) {
+		pr_err("%s: cannot get stream app type cfg\n",__func__);
+		return ret;
+	}
+
+	app_type = cfg_data.app_type;
+	app_type_idx = msm_pcm_routing_get_lsm_app_type_idx(app_type);
+	return lsm_app_type_cfg[app_type_idx].num_out_channels;
+}
+EXPORT_SYMBOL(msm_pcm_routing_get_pp_ch_cnt);
+
 int msm_pcm_routing_reg_phy_compr_stream(int fe_id, int perf_mode,
 					  int dspst_id, int stream_type,
 					  uint32_t passthr_mode)
@@ -15203,9 +15236,9 @@ static int msm_routing_put_app_type_cfg_control(struct snd_kcontrol *kcontrol,
 
 	memset(app_type_cfg, 0, MAX_APP_TYPES*
 				sizeof(struct msm_pcm_routing_app_type_data));
-	if (num_app_types > MAX_APP_TYPES) {
-		pr_err("%s: number of app types exceed the max supported\n",
-			__func__);
+	if (num_app_types > MAX_APP_TYPES || num_app_types < 0) {
+		pr_err("%s: number of app types %d is invalid\n",
+			__func__, num_app_types) ;
 		return -EINVAL;
 	}
 	for (j = 0; j < num_app_types; j++) {
@@ -15372,20 +15405,23 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 					struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
+	int shift = ((struct soc_multi_mixer_control *)
+				kcontrol->private_value)->shift;
 	int i = 0, j;
-	int num_app_types;
+	int num_app_types = ucontrol->value.integer.value[i++];
 
 	mutex_lock(&routing_lock);
-	if (ucontrol->value.integer.value[0] > MAX_APP_TYPES) {
-		pr_err("%s: number of app types exceed the max supported\n",
-			__func__);
+	memset(lsm_app_type_cfg, 0, MAX_APP_TYPES*
+	       sizeof(struct msm_pcm_routing_app_type_data));
+
+	if (ucontrol->value.integer.value[0] < 0 ||
+		ucontrol->value.integer.value[0] > MAX_APP_TYPES) {
+		pr_err("%s: number of app types %ld is invalid\n",
+			__func__, ucontrol->value.integer.value[0]);
 		mutex_unlock(&routing_lock);
 		return -EINVAL;
 	}
 
-	num_app_types = ucontrol->value.integer.value[i++];
-	memset(lsm_app_type_cfg, 0, MAX_APP_TYPES*
-	       sizeof(struct msm_pcm_routing_app_type_data));
 
 	for (j = 0; j < num_app_types; j++) {
 		lsm_app_type_cfg[j].app_type =
@@ -15394,6 +15430,10 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 				ucontrol->value.integer.value[i++];
 		lsm_app_type_cfg[j].bit_width =
 				ucontrol->value.integer.value[i++];
+		/* Shift of 1 indicates this is V2 mixer control */
+		if (shift == 1)
+			lsm_app_type_cfg[j].num_out_channels =
+				ucontrol->value.integer.value[i++];
 	}
 	mutex_unlock(&routing_lock);
 	return 0;
@@ -15401,6 +15441,9 @@ static int msm_routing_put_lsm_app_type_cfg_control(
 
 static const struct snd_kcontrol_new lsm_app_type_cfg_controls[] = {
 	SOC_SINGLE_MULTI_EXT("Listen App Type Config", SND_SOC_NOPM, 0,
+	0xFFFFFFFF, 0, 128, msm_routing_get_lsm_app_type_cfg_control,
+	msm_routing_put_lsm_app_type_cfg_control),
+	SOC_SINGLE_MULTI_EXT("Listen App Type Config V2", SND_SOC_NOPM, 1,
 	0xFFFFFFFF, 0, 128, msm_routing_get_lsm_app_type_cfg_control,
 	msm_routing_put_lsm_app_type_cfg_control),
 };
