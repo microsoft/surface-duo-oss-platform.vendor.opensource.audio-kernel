@@ -19,6 +19,10 @@
 #include <linux/ion.h>
 #include <ipc/apr.h>
 #include <dsp/msm_audio_ion.h>
+#include <linux/qcom_scm.h>
+#include <linux/of_address.h>
+#include <linux/of_reserved_mem.h>
+#include <soc/qcom/secure_buffer.h>
 
 #define MSM_AUDIO_ION_PROBED (1 << 0)
 
@@ -274,6 +278,37 @@ static void *msm_audio_ion_map_kernel(struct dma_buf *dma_buf)
 
 exit:
 	return addr;
+}
+
+static void msm_audio_protect_memory_region(struct platform_device *pdev)
+{
+	int ret = 0;
+	phys_addr_t addr = 0;
+	struct reserved_mem *rmem = NULL;
+	u64 size = 0;
+	struct device_node *node = NULL;
+
+	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+	rmem = of_reserved_mem_lookup(node);
+	if (!rmem) {
+		pr_err("unable to acquire memory-region of heap\n");
+		ret = -EINVAL;
+		goto exit;
+	}
+	ret = of_reserved_mem_device_init_by_idx(&pdev->dev, pdev->dev.of_node, 0);
+	of_node_put(node);
+	if (ret) {
+		pr_err("Failed to initialize reserved mem, ret %d\n", ret);
+		goto exit;
+	}
+	addr = rmem->base;
+	size = (size_t)rmem->size;
+
+	ret = qcom_scm_mem_protect_audio((phys_addr_t) addr , (size_t) size);
+	pr_err("%s: addr = %08x size = %zu rc = %d\n", __func__, (phys_addr_t)addr, (size_t) size, ret);
+
+exit:
+	return;
 }
 
 static int msm_audio_ion_unmap_kernel(struct dma_buf *dma_buf)
@@ -801,7 +836,9 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 	const char *msm_audio_ion_dt = "qcom,smmu-enabled";
 	const char *msm_audio_ion_smmu = "qcom,smmu-version";
 	const char *msm_audio_ion_smmu_sid_mask = "qcom,smmu-sid-mask";
+	const char *mdm_audio_ion_scm = "qcom,scm-mp-enabled";
 	bool smmu_enabled;
+	bool scm_mp_enabled;
 	enum apr_subsys_state q6_state;
 	struct device *dev = &pdev->dev;
 	struct of_phandle_args iommuspec;
@@ -832,6 +869,12 @@ static int msm_audio_ion_probe(struct platform_device *pdev)
 
 	if (!smmu_enabled) {
 		dev_dbg(dev, "%s: SMMU is Disabled\n", __func__);
+		scm_mp_enabled = of_property_read_bool(dev->of_node,
+						       mdm_audio_ion_scm);
+		if (scm_mp_enabled)
+			msm_audio_protect_memory_region(pdev);
+		else
+			pr_debug("%s: scm mp enabled not found\n", __func__);
 		goto exit;
 	}
 
