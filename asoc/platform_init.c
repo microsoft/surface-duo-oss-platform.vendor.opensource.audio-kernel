@@ -12,30 +12,34 @@ static int __init audio_platform_init(void)
 	msm_fe_dai_init();
 	msm_dai_q6_init();
 	msm_dai_stub_init();
+	msm_soc_routing_platform_init();
+#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
 	msm_pcm_afe_init();
 	msm_pcm_dtmf_init();
 	msm_pcm_hostless_init();
 	msm_voice_host_init();
 	msm_pcm_loopback_init();
 	msm_pcm_dsp_init();
-	msm_soc_routing_platform_init();
-	msm_pcm_voice_init();
 	msm_pcm_voip_init();
+#endif
+	msm_pcm_voice_init();
 
 	return 0;
 }
 
 static void audio_platform_exit(void)
 {
-	msm_pcm_voip_exit();
 	msm_pcm_voice_exit();
-	msm_soc_routing_platform_exit();
+#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+	msm_pcm_voip_exit();
 	msm_pcm_dsp_exit();
 	msm_pcm_loopback_exit();
 	msm_voice_host_exit();
 	msm_pcm_hostless_exit();
 	msm_pcm_dtmf_exit();
 	msm_pcm_afe_exit();
+#endif
+	msm_soc_routing_platform_exit();
 	msm_dai_stub_exit();
 	msm_dai_q6_exit();
 	msm_fe_dai_exit();
