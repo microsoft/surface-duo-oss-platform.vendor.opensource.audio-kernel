@@ -4185,17 +4185,53 @@ exit:
 	return ret;
 }
 
+static uint32_t q6afe_port_media_sample_rate(struct afe_dec_config *cfg, union afe_port_config *afe_config)
+{
+	uint32_t sample_rate;
+
+	switch (cfg->format) {
+	case ASM_MEDIA_FMT_AAC_V2:
+		sample_rate = cfg->data.aac_config.sample_rate;
+		break;
+	case ASM_MEDIA_FMT_SBC:
+		sample_rate = cfg->data.sbc_config.sample_rate;
+		break;
+	case ASM_MEDIA_FMT_APTX:
+		sample_rate = cfg->data.aptx_classic_config.sample_rate;
+		break;
+	case ASM_MEDIA_FMT_APTX_HD:
+		sample_rate = cfg->data.aptx_hd_config.sample_rate;
+		break;
+	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
+		if (!cfg->abr_dec_cfg.is_abr_enabled) {
+			sample_rate =
+			(cfg->data.aptx_ad_config.sample_rate == APTX_44_1) ?
+				AFE_PORT_SAMPLE_RATE_44_1K :
+				AFE_PORT_SAMPLE_RATE_48K;
+			break;
+		}
+		/* fall through for abr enabled case */
+	default:
+		sample_rate = afe_config->slim_sch.sample_rate;
+	}
+
+	return sample_rate;
+}
+
 static int q6afe_send_ttp_config(u16 port_id,
 			union afe_port_config afe_config,
-			struct afe_ttp_config *ttp_cfg)
+			struct afe_ttp_config *ttp_cfg,
+			struct afe_dec_config *dec_cfg)
 {
 	struct afe_ttp_gen_enable_t ttp_gen_enable;
 	struct afe_ttp_gen_cfg_t ttp_gen_cfg;
+	struct afe_ttp_gen_stream_cfg_t ttp_gen_stream_cfg;
 	struct param_hdr_v3 param_hdr;
 	int ret;
 
 	memset(&ttp_gen_enable, 0, sizeof(ttp_gen_enable));
 	memset(&ttp_gen_cfg, 0, sizeof(ttp_gen_cfg));
+	memset(&ttp_gen_stream_cfg, 0, sizeof(ttp_gen_stream_cfg));
 	memset(&param_hdr, 0, sizeof(param_hdr));
 
 	param_hdr.module_id = AFE_MODULE_ID_DECODER;
@@ -4223,8 +4259,22 @@ static int q6afe_send_ttp_config(u16 port_id,
 					       q6audio_get_port_index(port_id),
 					       param_hdr,
 					       (u8 *) &ttp_gen_cfg);
-	if (ret)
+	if (ret) {
 		pr_err("%s: AVS_DEPACKETIZER_PARAM_ID_TTP_GEN_CFG for port 0x%x failed %d\n",
+			__func__, port_id, ret);
+		goto exit;
+	}
+
+	ttp_gen_stream_cfg.sample_rate =
+			q6afe_port_media_sample_rate(dec_cfg, &afe_config);
+	param_hdr.param_id = AVS_DEPACKETIZER_PARAM_ID_TTP_GEN_STREAM_CFG;
+	param_hdr.param_size = sizeof(struct afe_ttp_gen_stream_cfg_t);
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+					       q6audio_get_port_index(port_id),
+					       param_hdr,
+					       (u8 *) &ttp_gen_stream_cfg);
+	if (ret)
+		pr_err("%s: AVS_DEPACKETIZER_PARAM_ID_TTP_GEN_STREAM_CFG for port 0x%x failed %d\n",
 			__func__, port_id, ret);
 exit:
 	return ret;
@@ -4364,36 +4414,8 @@ static int q6afe_send_dec_config(u16 port_id,
 	param_hdr.param_id = AFE_PARAM_ID_PORT_MEDIA_TYPE;
 	param_hdr.param_size = sizeof(struct afe_port_media_type_t);
 	media_type.minor_version = AFE_API_VERSION_PORT_MEDIA_TYPE;
-	switch (cfg->format) {
-	case ASM_MEDIA_FMT_AAC_V2:
-		media_type.sample_rate =
-			cfg->data.aac_config.sample_rate;
-		break;
-	case ASM_MEDIA_FMT_SBC:
-		media_type.sample_rate =
-			cfg->data.sbc_config.sample_rate;
-		break;
-	case ASM_MEDIA_FMT_APTX:
-		media_type.sample_rate =
-			cfg->data.aptx_classic_config.sample_rate;
-		break;
-	case ASM_MEDIA_FMT_APTX_HD:
-		media_type.sample_rate =
-			cfg->data.aptx_hd_config.sample_rate;
-		break;
-	case ASM_MEDIA_FMT_APTX_ADAPTIVE:
-		if (!cfg->abr_dec_cfg.is_abr_enabled) {
-			media_type.sample_rate =
-			(cfg->data.aptx_ad_config.sample_rate == APTX_44_1) ?
-				AFE_PORT_SAMPLE_RATE_44_1K :
-				AFE_PORT_SAMPLE_RATE_48K;
-			break;
-		}
-		/* fall through for abr enabled case */
-	default:
-		media_type.sample_rate =
-			afe_config.slim_sch.sample_rate;
-	}
+	media_type.sample_rate = q6afe_port_media_sample_rate(cfg, &afe_config);
+
 	if (afe_in_bit_width)
 		media_type.bit_width = afe_in_bit_width;
 	else
@@ -5114,7 +5136,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		}
 		if (ttp_cfg != NULL) {
 			ret = q6afe_send_ttp_config(port_id, *afe_config,
-						    ttp_cfg);
+						    ttp_cfg, dec_cfg);
 			if (ret) {
 				pr_err("%s: AFE TTP config for port 0x%x failed %d\n",
 					 __func__, port_id, ret);

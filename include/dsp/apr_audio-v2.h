@@ -4772,6 +4772,10 @@ struct afe_enc_config {
  * Configure TTP generator params in AFE.
  */
 #define AVS_DEPACKETIZER_PARAM_ID_TTP_GEN_CFG           0x000132F0
+/*
+ * Configure TTP generator i stream config params.
+ */
+#define AVS_DEPACKETIZER_PARAM_ID_TTP_GEN_STREAM_CFG           0x000132FF
 #define MAX_TTP_OFFSET_PAIRS  4
 struct afe_ttp_gen_enable_t {
 	uint16_t enable;
@@ -4813,6 +4817,13 @@ struct afe_ttp_config {
 	struct afe_ttp_gen_enable_t ttp_gen_enable;
 	struct afe_ttp_gen_cfg_t ttp_gen_cfg;
 };
+
+struct afe_ttp_gen_stream_cfg_t {
+	uint32_t sample_rate;
+	/*
+	 * afeport media sample rate
+	 */
+} __packed;
 
 union afe_dec_config_data {
 	struct asm_sbc_dec_cfg_t sbc_config;
