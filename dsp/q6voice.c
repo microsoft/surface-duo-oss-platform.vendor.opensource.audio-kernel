@@ -453,6 +453,7 @@ int voice_get_idx_for_session(u32 session_id)
 
 	return idx;
 }
+EXPORT_SYMBOL(voice_get_idx_for_session);
 
 static struct voice_data *voice_get_session_by_idx(int idx)
 {
@@ -5807,7 +5808,7 @@ static int voice_send_vol_step_cmd(struct voice_data *v)
 	cvp_vol_step_cmd.cvp_set_vol_step.value = v->dev_rx.volume_step_value;
 	cvp_vol_step_cmd.cvp_set_vol_step.ramp_duration_ms =
 					v->dev_rx.volume_ramp_duration_ms;
-	 pr_debug("%s step_value:%d, ramp_duration_ms:%d",
+	pr_debug("%s step_value:%d, ramp_duration_ms:%d",
 			__func__,
 			cvp_vol_step_cmd.cvp_set_vol_step.value,
 			cvp_vol_step_cmd.cvp_set_vol_step.ramp_duration_ms);
@@ -10245,7 +10246,7 @@ int __init voice_init(void)
 	/* set default value */
 	common.default_mute_val = 0;  /* default is un-mute */
 	common.default_sample_val = 8000;
-	common.default_vol_step_val = 0;
+	common.default_vol_step_val = 1;
 	common.default_vol_ramp_duration_ms = DEFAULT_VOLUME_RAMP_DURATION;
 	common.default_mute_ramp_duration_ms = DEFAULT_MUTE_RAMP_DURATION;
 	common.cvp_version = 0;
