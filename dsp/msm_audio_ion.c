@@ -423,7 +423,7 @@ int msm_audio_ion_alloc(struct dma_buf **dma_buf, size_t bufsz,
 		*dma_buf = ion_alloc(bufsz, ION_HEAP(ION_SYSTEM_HEAP_ID), 0);
 	} else {
 		pr_debug("%s: audio heap is used\n", __func__);
-		*dma_buf = ion_alloc(bufsz, ION_HEAP(ION_AUDIO_HEAP_ID), 0);
+		*dma_buf = ion_alloc(bufsz, ION_HEAP(ION_SYSTEM_HEAP_ID), 0);
 	}
 	if (IS_ERR_OR_NULL((void *)(*dma_buf))) {
 		if (IS_ERR((void *)(*dma_buf)))
