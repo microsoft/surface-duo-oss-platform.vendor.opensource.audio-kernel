@@ -1910,6 +1910,11 @@ static int msm_pcm_routing_channel_mixer(int fe_id, bool perf_mode,
 	for (i = 0; i < ADM_MAX_CHANNELS && channel_input[fe_id][i] > 0;
 		++i) {
 		be_id = channel_input[fe_id][i] - 1;
+		if (be_id < 0 || be_id >= MSM_BACKEND_DAI_MAX) {
+			pr_err("%s: Received out of bounds be_id %d\n",
+					__func__, be_id);
+			return -EINVAL;
+		}
 		channel_mixer[fe_id].input_channels[i] =
 						msm_bedais[be_id].channel;
 
@@ -3633,10 +3638,10 @@ static int msm_pcm_get_out_chs(struct snd_kcontrol *kcontrol,
 static int msm_pcm_put_out_chs(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	u16 fe_id = 0;
-
+	u16 fe_id = 0, out_ch = 0;
 	fe_id = ((struct soc_multi_mixer_control *)
 			kcontrol->private_value)->shift;
+	out_ch = ucontrol->value.integer.value[0];
 	if (fe_id >= MSM_FRONTEND_DAI_MM_SIZE) {
 		pr_err("%s: invalid FE %d\n", __func__, fe_id);
 		return -EINVAL;
@@ -3645,6 +3650,12 @@ static int msm_pcm_put_out_chs(struct snd_kcontrol *kcontrol,
 	pr_debug("%s: fe_id is %d, output channels = %d\n", __func__,
 			fe_id,
 			(unsigned int)(ucontrol->value.integer.value[0]));
+	if (out_ch < 0 ||
+		out_ch > ADM_MAX_CHANNELS) {
+		pr_err("%s: invalid output channel %d\n", __func__,
+				out_ch);
+		return -EINVAL;
+	}
 	channel_mixer[fe_id].output_channel =
 			(unsigned int)(ucontrol->value.integer.value[0]);
 
@@ -5507,21 +5518,24 @@ static int msm_ec_ref_rate_put(struct snd_kcontrol *kcontrol,
 		msm_ec_ref_sampling_rate = 16000;
 		break;
 	case 3:
-		msm_ec_ref_sampling_rate = 32000;
+		msm_ec_ref_sampling_rate = 24000;
 		break;
 	case 4:
-		msm_ec_ref_sampling_rate = 44100;
+		msm_ec_ref_sampling_rate = 32000;
 		break;
 	case 5:
-		msm_ec_ref_sampling_rate = 48000;
+		msm_ec_ref_sampling_rate = 44100;
 		break;
 	case 6:
-		msm_ec_ref_sampling_rate = 96000;
+		msm_ec_ref_sampling_rate = 48000;
 		break;
 	case 7:
-		msm_ec_ref_sampling_rate = 192000;
+		msm_ec_ref_sampling_rate = 96000;
 		break;
 	case 8:
+		msm_ec_ref_sampling_rate = 192000;
+		break;
+	case 9:
 		msm_ec_ref_sampling_rate = 384000;
 		break;
 	default:
@@ -5724,12 +5738,12 @@ static int msm_routing_afe_lb_tx_port_put(struct snd_kcontrol *kcontrol,
 }
 
 static const char *const ec_ref_rate_text[] = {"0", "8000", "16000",
-	"32000", "44100", "48000", "96000", "192000", "384000"};
+	"24000", "32000", "44100", "48000", "96000", "192000", "384000"};
 
 static const struct soc_enum msm_route_ec_ref_params_enum[] = {
 	SOC_ENUM_SINGLE_EXT(17, ec_ref_ch_text),
 	SOC_ENUM_SINGLE_EXT(3, ec_ref_bit_format_text),
-	SOC_ENUM_SINGLE_EXT(9, ec_ref_rate_text),
+	SOC_ENUM_SINGLE_EXT(10, ec_ref_rate_text),
 };
 
 static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
@@ -20236,6 +20250,10 @@ static const struct snd_kcontrol_new quat_mi2s_rx_port_mixer_controls[] = {
 	MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
 	MSM_BACKEND_DAI_SLIMBUS_7_TX, 1, 0, msm_routing_get_port_mixer,
 	msm_routing_put_port_mixer),
+	SOC_DOUBLE_EXT("INTERNAL_BT_SCO_TX", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
+	MSM_BACKEND_DAI_INT_BT_SCO_TX, 1, 0, msm_routing_get_port_mixer,
+	msm_routing_put_port_mixer),
 };
 
 static const struct snd_kcontrol_new quin_mi2s_rx_port_mixer_controls[] = {
@@ -30044,6 +30062,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"QUAT_MI2S_RX Port Mixer", "AUX_PCM_UL_TX", "AUX_PCM_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_8_TX", "SLIMBUS_8_TX"},
 	{"QUAT_MI2S_RX Port Mixer", "SLIM_7_TX", "SLIMBUS_7_TX"},
+	{"QUAT_MI2S_RX Port Mixer", "INTERNAL_BT_SCO_TX", "INT_BT_SCO_TX"},
 	{"QUAT_MI2S_RX", NULL, "QUAT_MI2S_RX Port Mixer"},
 
 	{"QUIN_MI2S_RX Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},

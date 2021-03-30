@@ -44,7 +44,7 @@
 							217, void *)
 #define AUDIO_SET_RTAC_AFE_CAL		_IOWR(CAL_IOCTL_MAGIC, \
 							218, void *)
-#define AUDIO_GET_RTAC_ASM_INFO		_IOWR(CAL_IOCTL_MAGIC, \
+#define AUDIO_GET_RTAC_ASM_INFO		_IOR(CAL_IOCTL_MAGIC, \
 							219, void *)
 
 enum {
