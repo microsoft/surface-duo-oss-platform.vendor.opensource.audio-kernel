@@ -3993,8 +3993,6 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 					result = true;
 					pr_debug("%s: cma_alloc %d\n",
 						 __func__, cal_block->cma_mem);
-				}
-				if (result) {
 					pr_debug("%s: use hyp assigned %d, use buffer %d\n",
 						 __func__, this_adm.hyp_assigned,
 						cal_block->buffer_number);
@@ -4078,9 +4076,6 @@ int adm_close(int port_id, int perf_mode, int copp_idx)
 			result = true;
 			pr_debug("%s: cma_alloc %d\n",
 				 __func__, cal_block->cma_mem);
-		}
-
-		if (result) {
 			pr_debug("%s: use hyp assigned %d, use buffer %d\n",
 				  __func__, this_adm.hyp_assigned,
 				  cal_block->buffer_number);
