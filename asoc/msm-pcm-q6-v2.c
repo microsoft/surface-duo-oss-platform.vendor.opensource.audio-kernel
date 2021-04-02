@@ -1791,6 +1791,18 @@ static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 
 	pr_debug("%s: chmap ctl for fe_id: %llu, session_type: %d\n",
 			__func__, fe_id, session_type);
+
+	chmap = msm_pcm_get_chmap(fe_id, session_type);
+	if (!chmap) {
+		pr_err("%s: invalid chmap handle\n", __func__);
+		return -EINVAL;
+	}
+	for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
+		chmap->channel_map[i] =
+			ucontrol->value.integer.value[i];
+
+	chmap->set_channel_map = true;
+
 	substream = snd_pcm_chmap_substream(info, idx);
 	if (!substream)
 		return -ENODEV;
@@ -1807,17 +1819,6 @@ static int msm_pcm_chmap_ctl_put(struct snd_kcontrol *kcontrol,
 		pr_err("%s:platform data is NULL\n",__func__);
 		return -EINVAL;
 	}
-
-	chmap = msm_pcm_get_chmap(fe_id, session_type);
-	if (!chmap) {
-		pr_err("%s: invalid chmap handle\n", __func__);
-		return -EINVAL;
-	}
-	for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
-		chmap->channel_map[i] =
-			ucontrol->value.integer.value[i];
-
-	chmap->set_channel_map = true;
 
 	mutex_lock(&pdata->lock);
 	prtd = substream->runtime->private_data;
