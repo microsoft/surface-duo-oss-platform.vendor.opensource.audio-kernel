@@ -7899,7 +7899,7 @@ static int tasha_amic_pwr_lvl_get(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *component =
 			snd_soc_kcontrol_component(kcontrol);
-	u16 amic_reg;
+	u16 amic_reg = 0;
 
 	if (!strcmp(kcontrol->id.name, "AMIC_1_2 PWR MODE"))
 		amic_reg = WCD9335_ANA_AMIC1;
@@ -7921,8 +7921,8 @@ static int tasha_amic_pwr_lvl_put(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *component =
 			snd_soc_kcontrol_component(kcontrol);
-	u32 mode_val;
-	u16 amic_reg;
+	u32 mode_val = 0;
+	u16 amic_reg = 0;
 
 	mode_val = ucontrol->value.enumerated.item[0];
 
@@ -11497,7 +11497,7 @@ static int tasha_get_channel_map(struct snd_soc_dai *dai,
 	struct tasha_priv *tasha_p =
 		snd_soc_component_get_drvdata(dai->component);
 	u32 i = 0;
-	struct wcd9xxx_ch *ch;
+	struct wcd9xxx_ch *ch = NULL;
 
 	switch (dai->id) {
 	case AIF1_PB:
@@ -12996,10 +12996,10 @@ static irqreturn_t tasha_slimbus_irq(int irq, void *data)
 {
 	struct tasha_priv *priv = data;
 	unsigned long status = 0;
-	int i, j, port_id, k;
+	int i, j, port_id = 0, k;
 	u32 bit;
-	u8 val, int_val = 0;
-	bool tx, cleared;
+	u8 val = 0, int_val = 0;
+	bool tx = 0, cleared = 0;
 	unsigned short reg = 0;
 
 	for (i = TASHA_SLIM_PGD_PORT_INT_STATUS_RX_0, j = 0;
