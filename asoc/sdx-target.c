@@ -1846,6 +1846,21 @@ static void *def_tasha_mbhc_cal(void)
 /* Digital audio interface connects codec <---> CPU */
 static struct snd_soc_dai_link mdm_dai[] = {
 	/* FrontEnd DAI Links */
+	{/* hw:x,0 */
+		.name = "VoiceMMode1",
+		.stream_name = "VoiceMMode1",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			    SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_VOICEMMODE1,
+		SND_SOC_DAILINK_REG(voicemmode1),
+	},
+#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
 	{
 		.name = MSM_DAILINK_NAME(Media1),
 		.stream_name = "MultiMedia1",
@@ -1876,20 +1891,6 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
 		SND_SOC_DAILINK_REG(multimedia2),
-	},
-	{/* hw:x,2 */
-		.name = "VoiceMMode1",
-		.stream_name = "VoiceMMode1",
-		.dynamic = 1,
-		.dpcm_playback = 1,
-		.dpcm_capture = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			    SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-		.id = MSM_FRONTEND_DAI_VOICEMMODE1,
-		SND_SOC_DAILINK_REG(voicemmode1),
 	},
 	{/* hw:x,3 */
 		.name = "MSM VoIP",
@@ -1952,22 +1953,6 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		SND_SOC_DAILINK_REG(auxpcm_hostless),
 	},
-#if 0
-	{/* hw:x,15 */
-		.name = "VoiceMMode2",
-		.stream_name = "VoiceMMode2",
-		.dynamic = 1,
-		.dpcm_playback = 1,
-		.dpcm_capture = 1,
-		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
-			    SND_SOC_DPCM_TRIGGER_POST},
-		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
-		.ignore_suspend = 1,
-		.ignore_pmdown_time = 1,
-		.id = MSM_FRONTEND_DAI_VOICEMMODE2,
-		SND_SOC_DAILINK_REG(voicemmode2),
-	},
-#endif
 	{/* hw:x,32 */
 		.name = "Primary MI2S RX_Hostless",
 		.stream_name = "Primary MI2S_RX Hostless Playback",
@@ -2030,8 +2015,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		SND_SOC_DAILINK_REG(dtmf_rx_hostless),
 	},
 	{
-		.name = "MDM Media6",
-		.stream_name = "MultiMedia6",
+		.name = "MDM Media4",
+		.stream_name = "MultiMedia4",
 		.dynamic = 1,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
@@ -2041,8 +2026,8 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		/* this dainlink has playback support */
-		.id = MSM_FRONTEND_DAI_MULTIMEDIA6,
-		SND_SOC_DAILINK_REG(multimedia6),
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA4,
+		SND_SOC_DAILINK_REG(multimedia4),
 	},
 	/* FE TDM DAI links */
 	{
@@ -2093,6 +2078,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.ignore_pmdown_time = 1,
 		SND_SOC_DAILINK_REG(sec_tdm_tx_0_hostless),
 	},
+#endif
 };
 
 static struct snd_soc_dai_link mdm_mi2s_be_dai[] = {
@@ -2160,8 +2146,6 @@ static int mdm_populate_dai_link_component_of_node(
 	struct device *cdev = card->dev;
 	struct snd_soc_dai_link *dai_link = card->dai_link;
 	struct device_node *np = NULL;
-	//int codecs_enabled = 0;
-	//struct snd_soc_dai_link_component *codecs_comp = NULL;
 
 	if (!cdev) {
 		dev_err(cdev, "%s: Sound card device memory NULL\n", __func__);

@@ -1680,11 +1680,8 @@ static const struct snd_kcontrol_new dtmf_detect_enable_mixer_controls[] = {
 	SOC_SINGLE_EXT("MultiMedia1 DTMF Detect Enable", SND_SOC_NOPM,
 	MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, NULL,
 	msm_qti_pp_put_dtmf_module_enable),
-	SOC_SINGLE_EXT("MultiMedia6 DTMF Detect Enable", SND_SOC_NOPM,
-	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, NULL,
-	msm_qti_pp_put_dtmf_module_enable),
-	SOC_SINGLE_EXT("MultiMedia21 DTMF Detect Enable", SND_SOC_NOPM,
-	MSM_FRONTEND_DAI_MULTIMEDIA21, 1, 0, NULL,
+	SOC_SINGLE_EXT("MultiMedia4 DTMF Detect Enable", SND_SOC_NOPM,
+	MSM_FRONTEND_DAI_MULTIMEDIA4, 1, 0, NULL,
 	msm_qti_pp_put_dtmf_module_enable),
 };
 

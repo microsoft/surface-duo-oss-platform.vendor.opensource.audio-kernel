@@ -409,6 +409,8 @@ int afe_cmd_memory_map_nowait(int port_id, phys_addr_t dma_addr_p,
 int afe_cmd_memory_unmap(u32 dma_addr_p);
 int afe_cmd_memory_unmap_nowait(u32 dma_addr_p);
 void afe_set_dtmf_gen_rx_portid(u16 rx_port_id, int set);
+void afe_set_dtmf_gen_rx_portid_session(u16 rx_port_id, int set,
+			int session_idx);
 int afe_dtmf_generate_rx(int64_t duration_in_ms,
 			 uint16_t high_freq,
 			 uint16_t low_freq, uint16_t gain);
