@@ -191,7 +191,6 @@ ifdef CONFIG_SND_SOC_CPE
 endif
 
 ifdef CONFIG_SND_SOC_QDSP6V2
-	PLATFORM_OBJS += msm-audio-effects-q6-v2.o
 	PLATFORM_OBJS += msm-dai-fe.o
 	PLATFORM_OBJS += msm-dai-q6-v2.o
 	PLATFORM_OBJS += msm-dai-stub-v2.o
@@ -200,6 +199,7 @@ ifdef CONFIG_SND_SOC_QDSP6V2
 	PLATFORM_OBJS += msm-pcm-voice-v2.o
 	PLATFORM_OBJS += platform_init.o
 ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+	PLATFORM_OBJS += msm-audio-effects-q6-v2.o
 	PLATFORM_OBJS += msm-pcm-afe-v2.o
 	PLATFORM_OBJS += msm-pcm-dtmf-v2.o
 	PLATFORM_OBJS += msm-pcm-hostless.o
