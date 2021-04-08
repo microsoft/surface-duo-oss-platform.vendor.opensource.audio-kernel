@@ -309,6 +309,9 @@ static int wdsp_init_components(struct wdsp_mgr_priv *wdsp)
 
 		cmpnt = WDSP_GET_COMPONENT(wdsp, i);
 
+		if (!cmpnt)
+			continue;
+
 		/* Init is allowed to be NULL */
 		if (!cmpnt->ops || !cmpnt->ops->init)
 			continue;
@@ -1167,6 +1170,11 @@ static void *wdsp_mgr_parse_phandle(struct wdsp_mgr_priv *wdsp,
 	}
 
 	cmpnt = WDSP_GET_COMPONENT(wdsp, value);
+	if (!cmpnt) {
+		WDSP_ERR(wdsp, "cmpnt %d is NULL", value);
+		goto done;
+	}
+
 	if (cmpnt->np || cmpnt->cdev_name) {
 		WDSP_ERR(wdsp, "cmpnt %d already added", value);
 		cmpnt = NULL;
