@@ -130,10 +130,8 @@ struct mdm_machine_data {
 	u32 mclk_freq;
 	bool prim_mi2s_mode;
 	bool sec_mi2s_mode;
-	u16 prim_auxpcm_mode;
 	struct device_node *prim_master_p;
 	struct device_node *prim_slave_p;
-	u16 sec_auxpcm_mode;
 	u16 sec_tdm_mode;
 	struct device_node *sec_master_p;
 	struct device_node *sec_slave_p;
@@ -2081,6 +2079,116 @@ static struct snd_soc_dai_link mdm_dai[] = {
 #endif
 };
 
+static int mdm_auxpcm_startup(struct snd_pcm_substream *substream)
+{
+	int ret = 0;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *card = rtd->card;
+	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
+
+	if (pdata->lpaif_pri_muxsel_virt_addr != NULL) {
+		ret = afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_ON);
+		if (ret < 0) {
+			ret = -EINVAL;
+			goto done;
+		}
+		iowrite32(PCM_SEL << I2S_PCM_SEL_OFFSET,
+			  pdata->lpaif_pri_muxsel_virt_addr);
+		if (pdata->lpass_mux_spkr_ctl_virt_addr != NULL) {
+			if (mdm_auxpcm_mode == 1) {
+				iowrite32(PRI_TLMM_CLKS_EN_MASTER,
+				  pdata->lpass_mux_spkr_ctl_virt_addr);
+			} else if (mdm_auxpcm_mode == 0) {
+					iowrite32(PRI_TLMM_CLKS_EN_SLAVE,
+				  pdata->lpass_mux_spkr_ctl_virt_addr);
+			} else {
+				dev_err(card->dev, "%s Invalid primary auxpcm mode\n",
+				__func__);
+				ret = -EINVAL;
+			}
+		} else {
+			dev_err(card->dev, "%s lpass_mux_spkr_ctl_virt_addr is NULL\n",
+			__func__);
+			ret = -EINVAL;
+		}
+	} else {
+		dev_err(card->dev, "%s lpaif_pri_muxsel_virt_addr is NULL\n",
+		       __func__);
+		ret = -EINVAL;
+		goto done;
+	}
+	afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_OFF);
+done:
+	return ret;
+}
+
+static struct snd_soc_ops mdm_auxpcm_be_ops = {
+	.startup = mdm_auxpcm_startup,
+};
+
+static int mdm_sec_auxpcm_startup(struct snd_pcm_substream *substream)
+{
+	int ret = 0;
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_card *card = rtd->card;
+	struct mdm_machine_data *pdata = snd_soc_card_get_drvdata(card);
+
+	if (pdata->lpaif_sec_muxsel_virt_addr != NULL) {
+		ret = afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_ON);
+		if (ret < 0) {
+			ret = -EINVAL;
+			goto done;
+		}
+		iowrite32(PCM_SEL << I2S_PCM_SEL_OFFSET,
+			  pdata->lpaif_sec_muxsel_virt_addr);
+		if (pdata->lpass_mux_mic_ctl_virt_addr != NULL) {
+			if (mdm_sec_auxpcm_mode == 1) {
+				iowrite32(SEC_TLMM_CLKS_EN_MASTER,
+				  pdata->lpass_mux_mic_ctl_virt_addr);
+			} else if (mdm_sec_auxpcm_mode == 0) {
+					iowrite32(SEC_TLMM_CLKS_EN_SLAVE,
+					      pdata->lpass_mux_mic_ctl_virt_addr);
+			} else {
+				dev_err(card->dev, "%s Invalid primary auxpcm mode\n",
+						__func__);
+						ret = -EINVAL;
+			}
+		} else {
+			dev_err(card->dev,
+				"%s lpass_gpio_mux_mic_ctl_virt_addr is NULL\n",
+			__func__);
+			ret = -EINVAL;
+		}
+	} else {
+		dev_err(card->dev,
+			"%s lpaif_sec_muxsel_virt_addr is NULL\n", __func__);
+		ret = -EINVAL;
+		goto done;
+	}
+	afe_enable_lpass_core_shared_clock(MI2S_RX, CLOCK_OFF);
+done:
+	return ret;
+}
+
+static struct snd_soc_ops mdm_sec_auxpcm_be_ops = {
+	.startup = mdm_sec_auxpcm_startup,
+};
+
+static int mdm_auxpcm_be_params_fixup(struct snd_soc_pcm_runtime *rtd,
+					  struct snd_pcm_hw_params *params)
+{
+	struct snd_interval *rate =
+		hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
+
+	struct snd_interval *channels =
+		hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS);
+
+	rate->min = rate->max = mdm_auxpcm_rate;
+	channels->min = channels->max = 1;
+
+	return 0;
+}
+
 static struct snd_soc_dai_link mdm_mi2s_be_dai[] = {
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
@@ -2128,6 +2236,53 @@ static struct snd_soc_dai_link mdm_mi2s_be_dai[] = {
 		.ops = &mdm_sec_mi2s_be_ops,
 		.ignore_suspend = 1,
 		SND_SOC_DAILINK_REG(sec_mi2s_tx),
+	},
+	{
+		.name = LPASS_BE_AUXPCM_RX,
+		.stream_name = "AUX PCM Playback",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_AUXPCM_RX,
+		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
+		.ops = &mdm_auxpcm_be_ops,
+		.ignore_pmdown_time = 1,
+		/* this dainlink has playback support */
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(auxpcm_rx),
+	},
+	{
+		.name = LPASS_BE_AUXPCM_TX,
+		.stream_name = "AUX PCM Capture",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_AUXPCM_TX,
+		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
+		.ops = &mdm_auxpcm_be_ops,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(auxpcm_tx),
+	},
+	{
+		.name = LPASS_BE_SEC_AUXPCM_RX,
+		.stream_name = "Sec AUX PCM Playback",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_SEC_AUXPCM_RX,
+		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
+		.ops = &mdm_sec_auxpcm_be_ops,
+		.ignore_pmdown_time = 1,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(sec_auxpcm_rx),
+	},
+	{
+		.name = LPASS_BE_SEC_AUXPCM_TX,
+		.stream_name = "Sec AUX PCM Capture",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_SEC_AUXPCM_TX,
+		.be_hw_params_fixup = mdm_auxpcm_be_params_fixup,
+		.ops = &mdm_sec_auxpcm_be_ops,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(sec_auxpcm_tx),
 	},
 };
 
