@@ -5134,7 +5134,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 				goto fail_cmd;
 			}
 		}
-		if (ttp_cfg != NULL) {
+		if (ttp_cfg != NULL && dec_cfg != NULL) {
 			ret = q6afe_send_ttp_config(port_id, *afe_config,
 						    ttp_cfg, dec_cfg);
 			if (ret) {
