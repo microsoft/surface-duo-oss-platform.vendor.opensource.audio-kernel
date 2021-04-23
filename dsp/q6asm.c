@@ -145,24 +145,6 @@ struct generic_get_data_ {
 };
 static struct generic_get_data_ *generic_get_data;
 
-#ifdef CONFIG_DEBUG_FS
-#define OUT_BUFFER_SIZE 56
-#define IN_BUFFER_SIZE 24
-
-static struct timeval out_cold_tv;
-static struct timeval out_warm_tv;
-static struct timeval out_cont_tv;
-static struct timeval in_cont_tv;
-static long out_enable_flag;
-static long in_enable_flag;
-static struct dentry *out_dentry;
-static struct dentry *in_dentry;
-static int in_cont_index;
-/*This var is used to keep track of first write done for cold output latency */
-static int out_cold_index;
-static char *out_buffer;
-static char *in_buffer;
-
 static uint32_t adsp_reg_event_opcode[] = {
 	ASM_STREAM_CMD_REGISTER_PP_EVENTS,
 	ASM_STREAM_CMD_REGISTER_ENCDEC_EVENTS,
@@ -276,6 +258,24 @@ uint8_t q6asm_get_stream_id_from_token(uint32_t token)
 	return asm_token._token.stream_id;
 }
 EXPORT_SYMBOL(q6asm_get_stream_id_from_token);
+
+#ifdef CONFIG_DEBUG_FS
+#define OUT_BUFFER_SIZE 56
+#define IN_BUFFER_SIZE 24
+
+static struct timeval out_cold_tv;
+static struct timeval out_warm_tv;
+static struct timeval out_cont_tv;
+static struct timeval in_cont_tv;
+static long out_enable_flag;
+static long in_enable_flag;
+static struct dentry *out_dentry;
+static struct dentry *in_dentry;
+static int in_cont_index;
+/*This var is used to keep track of first write done for cold output latency */
+static int out_cold_index;
+static char *out_buffer;
+static char *in_buffer;
 
 static int audio_output_latency_dbgfs_open(struct inode *inode,
 							struct file *file)
@@ -1843,11 +1843,8 @@ static int32_t q6asm_srvc_callback(struct apr_client_data *data, void *priv)
 				buf_node = list_entry(ptr,
 						struct asm_buffer_node,
 						list);
-				if (buf_node->buf_phys_addr ==
-				common_client.port[i].buf->phys) {
-					list_del(&buf_node->list);
-					kfree(buf_node);
-				}
+				list_del(&buf_node->list);
+				kfree(buf_node);
 			}
 			pr_debug("%s: Clearing custom topology\n", __func__);
 		}
@@ -5735,13 +5732,17 @@ EXPORT_SYMBOL(q6asm_enc_cfg_blk_pcm_v2);
 
 static int __q6asm_enc_cfg_blk_pcm_v5(struct audio_client *ac,
 				      uint32_t rate, uint32_t channels,
+				      bool use_default_chmap,
+				      char *channel_map,
 				      uint16_t bits_per_sample,
 				      uint16_t sample_word_size,
 				      uint16_t endianness,
 				      uint16_t mode)
 {
 	return q6asm_enc_cfg_blk_pcm_v5(ac, rate, channels,
-					bits_per_sample, true, false, NULL,
+					bits_per_sample,
+					use_default_chmap, false,
+					channel_map,
 					sample_word_size, endianness, mode);
 }
 
@@ -5850,20 +5851,28 @@ EXPORT_SYMBOL(q6asm_enc_cfg_blk_pcm_format_support_v4);
  * @rate: sample rate
  * @channels: number of channels
  * @bits_per_sample: bit width of encoder session
+ * @use_default_chmap: true if default channel map to be used
+ * @channel_map: input channel map
  * @sample_word_size: Size in bits of the word that holds a sample of a channel
  * @endianness: endianness of the pcm data
  * @mode: Mode to provide additional info about the pcm input data
  */
 int q6asm_enc_cfg_blk_pcm_format_support_v5(struct audio_client *ac,
 					    uint32_t rate, uint32_t channels,
+					    bool use_default_chmap,
+					    char *channel_map,
 					    uint16_t bits_per_sample,
 					    uint16_t sample_word_size,
 					    uint16_t endianness,
 					    uint16_t mode)
 {
 	 return __q6asm_enc_cfg_blk_pcm_v5(ac, rate, channels,
-					   bits_per_sample, sample_word_size,
-					   endianness, mode);
+					   use_default_chmap,
+					   channel_map,
+					   bits_per_sample,
+					   sample_word_size,
+					   endianness,
+					   mode);
 }
 
 EXPORT_SYMBOL(q6asm_enc_cfg_blk_pcm_format_support_v5);
