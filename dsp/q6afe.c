@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -252,6 +252,8 @@ bool afe_close_done[3] = {true, true, true};
 
 #define SIZEOF_CFG_CMD(y) \
 		(sizeof(struct apr_hdr) + sizeof(u16) + (sizeof(struct y)))
+
+static bool is_afe_proxy_port(int port_id);
 
 static int afe_get_cal_hw_delay(int32_t path,
 				struct audio_cal_hw_delay_entry *entry);
@@ -877,13 +879,12 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			}
 		} else if (data->opcode ==
 				AFE_SERVICE_CMDRSP_SHARED_MEM_MAP_REGIONS) {
+			int cal_index = atomic_read(&this_afe.mem_map_cal_index);
 			pr_debug("%s: mmap_handle: 0x%x, cal index %d\n",
 				 __func__, payload[0],
-				 atomic_read(&this_afe.mem_map_cal_index));
-			if (atomic_read(&this_afe.mem_map_cal_index) != -1)
-				atomic_set(&this_afe.mem_map_cal_handles[
-					atomic_read(
-					&this_afe.mem_map_cal_index)],
+				 cal_index);
+			if (cal_index != -1)
+				atomic_set(&this_afe.mem_map_cal_handles[cal_index],
 					(uint32_t)payload[0]);
 			else
 				this_afe.mmap_handle = payload[0];
@@ -7511,6 +7512,29 @@ int afe_validate_port(u16 port_id)
 	return ret;
 }
 
+static bool is_afe_proxy_port(int port_id)
+{
+	bool ret = false;
+	switch(port_id) {
+	case RT_PROXY_DAI_001_RX:
+	case RT_PROXY_DAI_001_TX:
+	case RT_PROXY_DAI_002_RX:
+	case RT_PROXY_DAI_002_TX:
+	case RT_PROXY_DAI_003_RX:
+	case RT_PROXY_DAI_003_TX:
+	{
+		ret = true;
+		break;
+	}
+	default:
+		pr_debug("%s: afe port %d is not a proxy port\n",
+			__func__, port_id);
+		ret = false;
+	}
+
+	return ret;
+}
+
 int afe_convert_virtual_to_portid(u16 port_id)
 {
 	int ret;
@@ -7587,15 +7611,18 @@ int afe_close(int port_id)
 
 	if (this_afe.apr == NULL) {
 		pr_err("%s: AFE is already closed\n", __func__);
-		if ((port_id == RT_PROXY_DAI_001_RX) ||
-		    (port_id == RT_PROXY_DAI_002_TX) ||
-		    (port_id == RT_PROXY_DAI_003_RX))
-			pcm_afe_instance[port_id & 0x3] = 0;
-		if ((port_id == RT_PROXY_DAI_002_RX) ||
-		    (port_id == RT_PROXY_DAI_001_TX) ||
-		    (port_id == RT_PROXY_DAI_003_TX))
-			proxy_afe_instance[port_id & 0x3] = 0;
-		afe_close_done[port_id & 0x2] = true;
+
+		if (is_afe_proxy_port(port_id)) {
+			if ((port_id == RT_PROXY_DAI_001_RX) ||
+			   (port_id == RT_PROXY_DAI_002_TX) ||
+			   (port_id == RT_PROXY_DAI_003_RX))
+				pcm_afe_instance[port_id & 0x3] = 0;
+			if ((port_id == RT_PROXY_DAI_002_RX) ||
+			   (port_id == RT_PROXY_DAI_001_TX) ||
+			   (port_id == RT_PROXY_DAI_003_TX))
+				proxy_afe_instance[port_id & 0x3] = 0;
+			afe_close_done[port_id & 0x3] = true;
+		}
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
@@ -9094,7 +9121,8 @@ static int afe_get_cal_sp_th_vi_param(int32_t cal_type, size_t data_size,
 	int ret = 0;
 
 	if (cal_data == NULL ||
-	    data_size != sizeof(*cal_data) ||
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr) ||
 	    this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL)
 		return 0;
 
@@ -9121,7 +9149,8 @@ static int afe_get_cal_sp_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size != sizeof(*cal_data))
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL]->lock);
