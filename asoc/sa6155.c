@@ -7449,6 +7449,8 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		pr_err("%s: Registration with SND event FWK failed ret = %d\n",
 			__func__, ret);
 
+	tdm_rx_cfg[TDM_TERT][TDM_0].channels = 2; //mixer 'TERT_TDM_RX_0 Channels' Two
+
 	place_marker("M - DRIVER Audio Ready");
 	return 0;
 err:
