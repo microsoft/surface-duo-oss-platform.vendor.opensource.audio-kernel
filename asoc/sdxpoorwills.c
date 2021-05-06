@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -75,6 +75,8 @@
 #define WCD9XXX_MBHC_DEF_BUTTONS 8
 #define WCD9XXX_MBHC_DEF_RLOADS 5
 
+#define PERIOD_SIZE_320 320
+
 /* Spk control */
 #define SDX_SPK_ON 1
 #define SDX_HIFI_ON 1
@@ -114,6 +116,13 @@ struct dev_config {
 	u32 sample_rate;
 	u32 bit_format;
 	u32 channels;
+};
+
+struct proxy_dev_config {
+	u32 sample_rate;
+	u32 bit_format;
+	u32 channels;
+	u32 period_size;
 };
 
 struct sdx_machine_data {
@@ -236,10 +245,11 @@ static int sdx_hifi_control;
 static atomic_t mi2s_ref_count;
 static atomic_t sec_mi2s_ref_count;
 
-static struct dev_config proxy_cfg = {
+static struct proxy_dev_config proxy_tx_cfg = {
 	.sample_rate = SAMPLE_RATE_48KHZ,
 	.bit_format = SNDRV_PCM_FORMAT_S16_LE,
 	.channels = 2,
+	.period_size = PERIOD_SIZE_320,
 };
 
 static struct snd_soc_card snd_soc_card_tavil_sdx = {
@@ -1301,6 +1311,127 @@ static int sdx_auxpcm_be_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
+static int proxy_tx_format_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	switch (proxy_tx_cfg.bit_format) {
+	case SNDRV_PCM_FORMAT_S32_LE:
+		ucontrol->value.integer.value[0] = 2;
+		break;
+	case SNDRV_PCM_FORMAT_S24_LE:
+		ucontrol->value.integer.value[0] = 1;
+		break;
+	case SNDRV_PCM_FORMAT_S16_LE:
+	default:
+		ucontrol->value.integer.value[0] = 0;
+		break;
+	}
+
+	pr_debug("%s: proxy_tx_format = %d, ucontrol value = %ld\n",
+		 __func__, proxy_tx_cfg.bit_format,
+		 ucontrol->value.integer.value[0]);
+	return 0;
+}
+
+static int proxy_tx_format_put(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	int rc = 0;
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 2:
+		proxy_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S32_LE;
+		break;
+	case 1:
+		proxy_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S24_LE;
+		break;
+	case 0:
+	default:
+		proxy_tx_cfg.bit_format = SNDRV_PCM_FORMAT_S16_LE;
+		break;
+	}
+	pr_debug("%s: proxy_tx_format = %d, ucontrol value = %ld\n",
+		 __func__, proxy_tx_cfg.bit_format,
+		 ucontrol->value.integer.value[0]);
+
+	return rc;
+}
+
+static int proxy_tx_sample_rate_get(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	int sample_rate_val;
+
+	switch (proxy_tx_cfg.sample_rate) {
+	case SAMPLE_RATE_48KHZ:
+		sample_rate_val = 3;
+		break;
+	case SAMPLING_RATE_32KHZ:
+		sample_rate_val = 2;
+		break;
+	case SAMPLE_RATE_16KHZ:
+		sample_rate_val = 1;
+		break;
+	case SAMPLE_RATE_8KHZ:
+	default:
+		sample_rate_val = 0;
+		break;
+	}
+
+	ucontrol->value.integer.value[0] = sample_rate_val;
+	pr_debug("%s: proxy_tx_sample_rate = %d\n", __func__,
+		proxy_tx_cfg.sample_rate);
+	return 0;
+}
+
+static int proxy_tx_sample_rate_put(struct snd_kcontrol *kcontrol,
+				   struct snd_ctl_elem_value *ucontrol)
+{
+	switch (ucontrol->value.integer.value[0]) {
+	case 3:
+		proxy_tx_cfg.sample_rate = SAMPLE_RATE_48KHZ;
+		break;
+	case 2:
+		proxy_tx_cfg.sample_rate = SAMPLING_RATE_32KHZ;
+		break;
+	case 1:
+		proxy_tx_cfg.sample_rate = SAMPLE_RATE_16KHZ;
+		break;
+	case 0:
+		proxy_tx_cfg.sample_rate = SAMPLE_RATE_8KHZ;
+		break;
+	default:
+		proxy_tx_cfg.sample_rate = SAMPLE_RATE_48KHZ;
+		break;
+	}
+
+	pr_debug("%s: control value = %ld, proxy_tx_sample_rate = %d\n",
+		__func__, ucontrol->value.integer.value[0],
+		proxy_tx_cfg.sample_rate);
+	return 0;
+}
+
+static int proxy_tx_psize_get(struct snd_kcontrol *kcontrol,
+              struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s: proxy_tx period_size = %d\n",
+		__func__, proxy_tx_cfg.period_size);
+	ucontrol->value.integer.value[0] = proxy_tx_cfg.period_size;
+
+	return 0;
+}
+
+static int proxy_tx_psize_put(struct snd_kcontrol *kcontrol,
+              struct snd_ctl_elem_value *ucontrol)
+{
+	proxy_tx_cfg.period_size = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: proxy_tx period_size = %d\n",
+	__func__, proxy_tx_cfg.period_size);
+
+	return 0;
+}
+
 static int tdm_get_sample_rate(int value)
 {
 	int sample_rate = 0;
@@ -1668,6 +1799,26 @@ static int sdx_tdm_rx_ch_put(struct snd_kcontrol *kcontrol,
 			 ucontrol->value.enumerated.item[0] + 1);
 	}
 	return ret;
+}
+
+static int proxy_tx_ch_get(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s: proxy_tx channels = %d\n",
+		 __func__, proxy_tx_cfg.channels);
+	ucontrol->value.integer.value[0] = proxy_tx_cfg.channels - 1;
+
+	return 0;
+}
+
+static int proxy_tx_ch_put(struct snd_kcontrol *kcontrol,
+			       struct snd_ctl_elem_value *ucontrol)
+{
+	proxy_tx_cfg.channels = ucontrol->value.integer.value[0] + 1;
+	pr_debug("%s: proxy_tx channels = %d\n",
+		 __func__, proxy_tx_cfg.channels);
+
+	return 1;
 }
 
 static int sdx_tdm_tx_ch_get(struct snd_kcontrol *kcontrol,
@@ -2061,6 +2212,12 @@ static const char *const mi2s_rate_text[] = {"rate_8000",
 						"rate_16000", "rate_48000"};
 static const char *const mode_text[] = {"master", "slave"};
 
+static char const *proxy_ch_text[] = {"One", "Two", "Three", "Four", "Five",
+					"Six", "Seven", "Eight"};
+static char const *proxy_bit_format_text[] = {"S16_LE", "S24_LE", "S32_LE"};
+static char const *proxy_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
+						"KHZ_48"};
+
 static char const *tdm_ch_text[] = {"One", "Two", "Three", "Four",
 				    "Five", "Six", "Seven", "Eight"};
 static char const *tdm_bit_format_text[] = {"S16_LE", "S24_LE", "S32_LE"};
@@ -2086,6 +2243,10 @@ static SOC_ENUM_SINGLE_EXT_DECL(tdm_tx_sample_rate, tdm_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_chs, tdm_ch_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_format, tdm_bit_format_text);
 static SOC_ENUM_SINGLE_EXT_DECL(tdm_rx_sample_rate, tdm_sample_rate_text);
+
+static SOC_ENUM_SINGLE_EXT_DECL(proxy_tx_sample_rate, proxy_sample_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(proxy_tx_chs, proxy_ch_text);
+static SOC_ENUM_SINGLE_EXT_DECL(proxy_tx_format, proxy_bit_format_text);
 
 static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("Speaker Function",   sdx_enum[0],
@@ -2130,6 +2291,18 @@ static const struct snd_kcontrol_new sdx_snd_controls[] = {
 	SOC_ENUM_EXT("SEC_AUXPCM Mode", sdx_enum[6],
 				 sdx_sec_auxpcm_mode_get,
 				 sdx_sec_auxpcm_mode_put),
+	SOC_SINGLE_EXT("PROXY_TX PeriodSize", SND_SOC_NOPM, 0, 1, 0,
+				proxy_tx_psize_get,
+				proxy_tx_psize_put),
+	SOC_ENUM_EXT("PROXY_TX SampleRate", proxy_tx_sample_rate,
+				proxy_tx_sample_rate_get,
+				proxy_tx_sample_rate_put),
+	SOC_ENUM_EXT("PROXY_TX Format", proxy_tx_format,
+				proxy_tx_format_get,
+				proxy_tx_format_put),
+	SOC_ENUM_EXT("PROXY_TX Channels", proxy_tx_chs,
+				proxy_tx_ch_get,
+				proxy_tx_ch_put),
 	SOC_ENUM_EXT("PRI_TDM_RX_0 SampleRate", tdm_rx_sample_rate,
 			sdx_tdm_rx_sample_rate_get,
 			sdx_tdm_rx_sample_rate_put),
@@ -2867,13 +3040,26 @@ static struct snd_soc_dai_link sdx_common_misc_fe_dai_links[] = {
 static int msm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 				  struct snd_pcm_hw_params *params)
 {
+	struct snd_soc_dai_link *dai_link = rtd->dai_link;
 	struct snd_interval *rate = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_RATE);
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
+	struct snd_interval *period_size = hw_param_interval(params,
+					SNDRV_PCM_HW_PARAM_PERIOD_SIZE);
 
-	channels->min = channels->max = proxy_cfg.channels;
-	rate->min = rate->max = proxy_cfg.sample_rate;
+	switch (dai_link->id) {
+	case MSM_BACKEND_DAI_AFE_PCM_TX:
+		channels->min = channels->max = proxy_tx_cfg.channels;
+		rate->min = rate->max = proxy_tx_cfg.sample_rate;
+		period_size->min = period_size->max = proxy_tx_cfg.period_size;
+		break;
+	default:
+		channels->min = channels->max = 2;
+		rate->min = rate->max = SAMPLE_RATE_48KHZ;
+		break;
+	}
+
 	return 0;
 }
 
