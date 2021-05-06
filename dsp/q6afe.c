@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/debugfs.h>
@@ -268,9 +268,9 @@ struct afe_ctl {
 
 struct afe_clkinfo_per_port {
 	u16 port_id; /* AFE port ID */
-	uint32_t clk_id; /* Clock ID */
 	uint32_t mclk_src_id; /* MCLK SRC ID */
 	uint32_t mclk_freq; /* MCLK_FREQ */
+	char clk_src_name[CLK_SRC_NAME_MAX];
 };
 
 struct afe_ext_mclk_cb_info {
@@ -279,56 +279,62 @@ struct afe_ext_mclk_cb_info {
 };
 
 static struct afe_clkinfo_per_port clkinfo_per_port[] = {
-	{ AFE_PORT_ID_PRIMARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_PRI_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SECONDARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_SEC_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_TERTIARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_TER_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUATERNARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_QUAD_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUINARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_QUI_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SENARY_MI2S_RX, Q6AFE_LPASS_CLK_ID_SEN_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_PRIMARY_PCM_RX, Q6AFE_LPASS_CLK_ID_PRI_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SECONDARY_PCM_RX, Q6AFE_LPASS_CLK_ID_SEC_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_TERTIARY_PCM_RX, Q6AFE_LPASS_CLK_ID_TER_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUATERNARY_PCM_RX, Q6AFE_LPASS_CLK_ID_QUAD_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUINARY_PCM_RX, Q6AFE_LPASS_CLK_ID_QUIN_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SENARY_PCM_RX, Q6AFE_LPASS_CLK_ID_SEN_PCM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_PRIMARY_TDM_RX, Q6AFE_LPASS_CLK_ID_PRI_TDM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SECONDARY_TDM_RX, Q6AFE_LPASS_CLK_ID_SEC_TDM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_TERTIARY_TDM_RX, Q6AFE_LPASS_CLK_ID_TER_TDM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUATERNARY_TDM_RX, Q6AFE_LPASS_CLK_ID_QUAD_TDM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_QUINARY_TDM_RX, Q6AFE_LPASS_CLK_ID_QUIN_TDM_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
+	{ AFE_PORT_ID_PRIMARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SECONDARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_TERTIARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUATERNARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUINARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SENARY_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_PRIMARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SECONDARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_TERTIARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUATERNARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUINARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SENARY_PCM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_PRIMARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SECONDARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_TERTIARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUATERNARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_QUINARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SENARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SEPTENARY_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_HSIF0_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_HSIF1_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_HSIF2_TDM_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
 	{ AFE_PORT_ID_PRIMARY_SPDIF_RX,
-		AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_OUTPUT_CORE,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
 	{ AFE_PORT_ID_PRIMARY_SPDIF_TX,
-		AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_INPUT_CORE,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
 	{ AFE_PORT_ID_SECONDARY_SPDIF_RX,
-		AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_OUTPUT_CORE,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
 	{ AFE_PORT_ID_SECONDARY_SPDIF_TX,
-		AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_INPUT_CORE,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_PRIMARY_META_MI2S_RX, Q6AFE_LPASS_CLK_ID_PRI_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
-	{ AFE_PORT_ID_SECONDARY_META_MI2S_RX, Q6AFE_LPASS_CLK_ID_PRI_MI2S_IBIT,
-		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT},
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_PRIMARY_META_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
+	{ AFE_PORT_ID_SECONDARY_META_MI2S_RX,
+		MCLK_SRC_INT, Q6AFE_EXT_MCLK_FREQ_DEFAULT, ""},
 };
 
 static struct afe_ext_mclk_cb_info afe_ext_mclk;
@@ -337,6 +343,7 @@ static atomic_t afe_ports_mad_type[SLIMBUS_PORT_LAST - SLIMBUS_0_RX];
 static unsigned long afe_configured_cmd;
 
 static struct afe_ctl this_afe;
+static char clk_src_name[CLK_SRC_MAX][CLK_SRC_NAME_MAX];
 
 #define TIMEOUT_MS 1000
 #define Q6AFE_MAX_VOLUME 0x3FFF
@@ -975,6 +982,20 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		mutex_lock(&this_afe.afe_cmd_lock);
 		for (i = 0; i < AFE_LPASS_CORE_HW_VOTE_MAX; i++)
 			this_afe.lpass_hw_core_client_hdl[i] = 0;
+
+		/*
+		 * Free the port mapping structures used for AVCS module
+		 * load/unload.
+		 */
+		for (i = 0; i < MAX_ALLOWED_USE_CASES; i++) {
+			if (pm[i]) {
+				kfree(pm[i]->payload);
+				pm[i]->payload = NULL;
+				kfree(pm[i]);
+				pm[i] = NULL;
+			}
+		}
+
 		mutex_unlock(&this_afe.afe_cmd_lock);
 
 		/*
@@ -4789,6 +4810,40 @@ void afe_set_routing_callback(routing_cb cb)
 }
 EXPORT_SYMBOL(afe_set_routing_callback);
 
+/**
+ * afe_port_send_logging_cfg -
+ *         set AFE port logging status
+ *
+ * @port_id: AFE port id number
+ * @log_disable: logging payload
+ *
+ * Returns 0 on success or error value on set param failure
+ */
+int afe_port_send_logging_cfg(u16 port_id,
+	struct afe_param_id_port_data_log_disable_t *log_disable)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = -EINVAL;
+
+	pr_debug("%s: enter, port: 0x%x logging flag: %x\n", __func__, port_id,
+		log_disable->disable_logging_flag);
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	param_hdr.module_id = AFE_MODULE_AUDIO_DEV_INTERFACE;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_PORT_DATA_LOGGING_DISABLE;
+	param_hdr.param_size = sizeof(&log_disable);
+
+	ret = q6afe_pack_and_set_param_in_band(port_id,
+		q6audio_get_port_index(port_id), param_hdr, (u8*)log_disable);
+	if (ret)
+		pr_err("%s: AFE port logging setting for port 0x%x failed %d\n",
+			__func__, port_id, ret);
+
+	return ret;
+}
+EXPORT_SYMBOL(afe_port_send_logging_cfg);
+
 int afe_port_send_usb_dev_param(u16 port_id, union afe_port_config *afe_config)
 {
 	struct afe_param_id_usb_audio_dev_params usb_dev;
@@ -6612,6 +6667,134 @@ int afe_get_port_index(u16 port_id)
 		return IDX_RT_PROXY_PORT_002_RX;
 	case RT_PROXY_PORT_002_TX:
 		return IDX_RT_PROXY_PORT_002_TX;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_0;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_0;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_1:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_1;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_1:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_1;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_2:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_2;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_2:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_2;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_3:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_3;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_3:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_3;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_4:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_4;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_4:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_4;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_5:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_5;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_5:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_5;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_6:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_6;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_6:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_6;
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_7:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_RX_7;
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_7:
+		return IDX_AFE_PORT_ID_SEPTENARY_TDM_TX_7;
+	case AFE_PORT_ID_HSIF0_TDM_RX:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_0;
+	case AFE_PORT_ID_HSIF0_TDM_TX:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_0;
+	case AFE_PORT_ID_HSIF0_TDM_RX_1:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_1;
+	case AFE_PORT_ID_HSIF0_TDM_TX_1:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_1;
+	case AFE_PORT_ID_HSIF0_TDM_RX_2:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_2;
+	case AFE_PORT_ID_HSIF0_TDM_TX_2:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_2;
+	case AFE_PORT_ID_HSIF0_TDM_RX_3:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_3;
+	case AFE_PORT_ID_HSIF0_TDM_TX_3:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_3;
+	case AFE_PORT_ID_HSIF0_TDM_RX_4:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_4;
+	case AFE_PORT_ID_HSIF0_TDM_TX_4:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_4;
+	case AFE_PORT_ID_HSIF0_TDM_RX_5:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_5;
+	case AFE_PORT_ID_HSIF0_TDM_TX_5:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_5;
+	case AFE_PORT_ID_HSIF0_TDM_RX_6:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_6;
+	case AFE_PORT_ID_HSIF0_TDM_TX_6:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_6;
+	case AFE_PORT_ID_HSIF0_TDM_RX_7:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_RX_7;
+	case AFE_PORT_ID_HSIF0_TDM_TX_7:
+		return IDX_AFE_PORT_ID_HSIF0_TDM_TX_7;
+	case AFE_PORT_ID_HSIF1_TDM_RX:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_0;
+	case AFE_PORT_ID_HSIF1_TDM_TX:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_0;
+	case AFE_PORT_ID_HSIF1_TDM_RX_1:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_1;
+	case AFE_PORT_ID_HSIF1_TDM_TX_1:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_1;
+	case AFE_PORT_ID_HSIF1_TDM_RX_2:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_2;
+	case AFE_PORT_ID_HSIF1_TDM_TX_2:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_2;
+	case AFE_PORT_ID_HSIF1_TDM_RX_3:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_3;
+	case AFE_PORT_ID_HSIF1_TDM_TX_3:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_3;
+	case AFE_PORT_ID_HSIF1_TDM_RX_4:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_4;
+	case AFE_PORT_ID_HSIF1_TDM_TX_4:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_4;
+	case AFE_PORT_ID_HSIF1_TDM_RX_5:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_5;
+	case AFE_PORT_ID_HSIF1_TDM_TX_5:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_5;
+	case AFE_PORT_ID_HSIF1_TDM_RX_6:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_6;
+	case AFE_PORT_ID_HSIF1_TDM_TX_6:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_6;
+	case AFE_PORT_ID_HSIF1_TDM_RX_7:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_RX_7;
+	case AFE_PORT_ID_HSIF1_TDM_TX_7:
+		return IDX_AFE_PORT_ID_HSIF1_TDM_TX_7;
+	case AFE_PORT_ID_HSIF2_TDM_RX:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_0;
+	case AFE_PORT_ID_HSIF2_TDM_TX:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_0;
+	case AFE_PORT_ID_HSIF2_TDM_RX_1:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_1;
+	case AFE_PORT_ID_HSIF2_TDM_TX_1:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_1;
+	case AFE_PORT_ID_HSIF2_TDM_RX_2:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_2;
+	case AFE_PORT_ID_HSIF2_TDM_TX_2:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_2;
+	case AFE_PORT_ID_HSIF2_TDM_RX_3:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_3;
+	case AFE_PORT_ID_HSIF2_TDM_TX_3:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_3;
+	case AFE_PORT_ID_HSIF2_TDM_RX_4:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_4;
+	case AFE_PORT_ID_HSIF2_TDM_TX_4:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_4;
+	case AFE_PORT_ID_HSIF2_TDM_RX_5:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_5;
+	case AFE_PORT_ID_HSIF2_TDM_TX_5:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_5;
+	case AFE_PORT_ID_HSIF2_TDM_RX_6:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_6;
+	case AFE_PORT_ID_HSIF2_TDM_TX_6:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_6;
+	case AFE_PORT_ID_HSIF2_TDM_RX_7:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_RX_7;
+	case AFE_PORT_ID_HSIF2_TDM_TX_7:
+		return IDX_AFE_PORT_ID_HSIF2_TDM_TX_7;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -7103,6 +7286,14 @@ int afe_port_group_set_param(u16 group_id,
 	case AFE_GROUP_DEVICE_ID_QUINARY_TDM_TX:
 	case AFE_GROUP_DEVICE_ID_SENARY_TDM_RX:
 	case AFE_GROUP_DEVICE_ID_SENARY_TDM_TX:
+	case AFE_GROUP_DEVICE_ID_SEPTENARY_TDM_RX:
+	case AFE_GROUP_DEVICE_ID_SEPTENARY_TDM_TX:
+	case AFE_GROUP_DEVICE_ID_HSIF0_TDM_RX:
+	case AFE_GROUP_DEVICE_ID_HSIF0_TDM_TX:
+	case AFE_GROUP_DEVICE_ID_HSIF1_TDM_RX:
+	case AFE_GROUP_DEVICE_ID_HSIF1_TDM_TX:
+	case AFE_GROUP_DEVICE_ID_HSIF2_TDM_RX:
+	case AFE_GROUP_DEVICE_ID_HSIF2_TDM_TX:
 		cfg_type = AFE_PARAM_ID_GROUP_DEVICE_TDM_CONFIG;
 		break;
 	default:
@@ -8824,6 +9015,70 @@ static bool is_port_valid(u16 port_id)
 	case AFE_PORT_ID_RX_CODEC_DMA_RX_7:
 	case RT_PROXY_PORT_002_RX:
 	case RT_PROXY_PORT_002_TX:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_1:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_1:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_2:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_2:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_3:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_3:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_4:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_4:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_5:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_5:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_6:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_6:
+	case AFE_PORT_ID_SEPTENARY_TDM_RX_7:
+	case AFE_PORT_ID_SEPTENARY_TDM_TX_7:
+	case AFE_PORT_ID_HSIF0_TDM_RX:
+	case AFE_PORT_ID_HSIF0_TDM_TX:
+	case AFE_PORT_ID_HSIF0_TDM_RX_1:
+	case AFE_PORT_ID_HSIF0_TDM_TX_1:
+	case AFE_PORT_ID_HSIF0_TDM_RX_2:
+	case AFE_PORT_ID_HSIF0_TDM_TX_2:
+	case AFE_PORT_ID_HSIF0_TDM_RX_3:
+	case AFE_PORT_ID_HSIF0_TDM_TX_3:
+	case AFE_PORT_ID_HSIF0_TDM_RX_4:
+	case AFE_PORT_ID_HSIF0_TDM_TX_4:
+	case AFE_PORT_ID_HSIF0_TDM_RX_5:
+	case AFE_PORT_ID_HSIF0_TDM_TX_5:
+	case AFE_PORT_ID_HSIF0_TDM_RX_6:
+	case AFE_PORT_ID_HSIF0_TDM_TX_6:
+	case AFE_PORT_ID_HSIF0_TDM_RX_7:
+	case AFE_PORT_ID_HSIF0_TDM_TX_7:
+	case AFE_PORT_ID_HSIF1_TDM_RX:
+	case AFE_PORT_ID_HSIF1_TDM_TX:
+	case AFE_PORT_ID_HSIF1_TDM_RX_1:
+	case AFE_PORT_ID_HSIF1_TDM_TX_1:
+	case AFE_PORT_ID_HSIF1_TDM_RX_2:
+	case AFE_PORT_ID_HSIF1_TDM_TX_2:
+	case AFE_PORT_ID_HSIF1_TDM_RX_3:
+	case AFE_PORT_ID_HSIF1_TDM_TX_3:
+	case AFE_PORT_ID_HSIF1_TDM_RX_4:
+	case AFE_PORT_ID_HSIF1_TDM_TX_4:
+	case AFE_PORT_ID_HSIF1_TDM_RX_5:
+	case AFE_PORT_ID_HSIF1_TDM_TX_5:
+	case AFE_PORT_ID_HSIF1_TDM_RX_6:
+	case AFE_PORT_ID_HSIF1_TDM_TX_6:
+	case AFE_PORT_ID_HSIF1_TDM_RX_7:
+	case AFE_PORT_ID_HSIF1_TDM_TX_7:
+	case AFE_PORT_ID_HSIF2_TDM_RX:
+	case AFE_PORT_ID_HSIF2_TDM_TX:
+	case AFE_PORT_ID_HSIF2_TDM_RX_1:
+	case AFE_PORT_ID_HSIF2_TDM_TX_1:
+	case AFE_PORT_ID_HSIF2_TDM_RX_2:
+	case AFE_PORT_ID_HSIF2_TDM_TX_2:
+	case AFE_PORT_ID_HSIF2_TDM_RX_3:
+	case AFE_PORT_ID_HSIF2_TDM_TX_3:
+	case AFE_PORT_ID_HSIF2_TDM_RX_4:
+	case AFE_PORT_ID_HSIF2_TDM_TX_4:
+	case AFE_PORT_ID_HSIF2_TDM_RX_5:
+	case AFE_PORT_ID_HSIF2_TDM_TX_5:
+	case AFE_PORT_ID_HSIF2_TDM_RX_6:
+	case AFE_PORT_ID_HSIF2_TDM_TX_6:
+	case AFE_PORT_ID_HSIF2_TDM_RX_7:
+	case AFE_PORT_ID_HSIF2_TDM_TX_7:
 	{
 		return true;
 	}
@@ -8957,8 +9212,7 @@ int afe_close(int port_id)
 				proxy_afe_instance[port_id & 0x3] = 0;
 			afe_close_done[port_id & 0x3] = true;
 		}
-		ret = -EINVAL;
-		goto fail_cmd;
+		return -EINVAL;
 	}
 	pr_debug("%s: port_id = 0x%x\n", __func__, port_id);
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
@@ -9217,53 +9471,73 @@ static int afe_get_port_idx(u16 port_id)
 	return -EINVAL;
 }
 
-static int afe_get_clk_id(u16 port_id)
+static int afe_get_clk_src(u16 port_id, char *clk_src)
 {
-	u16 afe_port = 0;
-	uint32_t clk_id = -EINVAL;
 	int idx = 0;
 
 	idx = afe_get_port_idx(port_id);
 	if (idx < 0) {
 		pr_err("%s: cannot get clock id for port id 0x%x\n", __func__,
-			afe_port);
+			idx);
 		return -EINVAL;
 	}
 
-	clk_id = clkinfo_per_port[idx].clk_id;
-	pr_debug("%s: clk id 0x%x port id 0x%x\n", __func__, clk_id,
-		  afe_port);
+	if (clkinfo_per_port[idx].clk_src_name == NULL)
+		return -EINVAL;
+	strlcpy(clk_src, clkinfo_per_port[idx].clk_src_name,
+				CLK_SRC_NAME_MAX);
+	pr_debug("%s: clk src name %s port id 0x%x\n", __func__, clk_src,
+		  idx);
 
-	return clk_id;
+	return 0;
 }
 
 /**
- * afe_set_clk_id - Update clock id for AFE port
+ * afe_set_source_clk - Set audio interface PLL clock source
  *
  * @port_id: AFE port id
- * @clk_id: CLock ID
+ * @clk_src: Clock source name for port id
  *
  * Returns 0 on success, appropriate error code otherwise
  */
-int afe_set_clk_id(u16 port_id, uint32_t clk_id)
+int afe_set_source_clk(u16 port_id, const char *clk_src)
 {
-	u16 afe_port = 0;
 	int idx = 0;
 
 	idx = afe_get_port_idx(port_id);
 	if (idx < 0) {
 		pr_debug("%s: cannot set clock id for port id 0x%x\n", __func__,
-			afe_port);
+			idx);
 		return -EINVAL;
 	}
 
-	clkinfo_per_port[idx].clk_id = clk_id;
-	pr_debug("%s: updated clk id 0x%x port id 0x%x\n", __func__,
-		  clkinfo_per_port[idx].clk_id, afe_port);
+	if (clk_src == NULL)
+		return -EINVAL;
+	strlcpy(clkinfo_per_port[idx].clk_src_name, clk_src, CLK_SRC_NAME_MAX);
+	pr_debug("%s: updated clk src name %s port id 0x%x\n", __func__,
+		  clkinfo_per_port[idx].clk_src_name, idx);
 
 	return 0;
 }
-EXPORT_SYMBOL(afe_set_clk_id);
+EXPORT_SYMBOL(afe_set_source_clk);
+
+/**
+ * afe_set_clk_src_array -  Set afe clk src array from machine driver
+ *
+ * @clk_src_array: clk src array for integral and fract clk src
+ *
+ */
+void afe_set_clk_src_array(const char *clk_src_array[CLK_SRC_MAX])
+{
+	int i;
+
+	for (i = 0; i < CLK_SRC_MAX; i++) {
+		if (clk_src_array[i] != NULL)
+			strlcpy(clk_src_name[i], clk_src_array[i],
+					CLK_SRC_NAME_MAX);
+	}
+}
+EXPORT_SYMBOL(afe_set_clk_src_array);
 
 /**
  * afe_set_pll_clk_drift - Set audio interface PLL clock drift
@@ -9279,8 +9553,33 @@ int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 {
 	struct afe_set_clk_drift clk_drift;
 	struct param_hdr_v3 param_hdr;
-	uint32_t clk_id;
+	char clk_src_name[CLK_SRC_NAME_MAX];
 	int index = 0, ret = 0;
+	uint32_t build_major_version = 0;
+	uint32_t build_minor_version = 0;
+	uint32_t build_branch_version = 0;
+	int afe_api_version = 0;
+
+	ret = q6core_get_avcs_avs_build_version_info(
+			&build_major_version, &build_minor_version,
+						&build_branch_version);
+	if (ret < 0) {
+		pr_err("%s error in retrieving avs build version %d\n",
+				__func__, ret);
+		return ret;
+	}
+
+	afe_api_version = q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_AFE_V);
+	if (afe_api_version < 0) {
+		pr_err("%s error in retrieving afe api version %d\n",
+				__func__, afe_api_version);
+		return afe_api_version;
+	}
+
+	pr_debug("%s: mjor: %u, mnor: %u, brnch: %u, afe_api: %u\n",
+		__func__, build_major_version, build_minor_version,
+		build_branch_version, afe_api_version);
 
 	memset(&param_hdr, 0, sizeof(param_hdr));
 	memset(&clk_drift, 0, sizeof(clk_drift));
@@ -9298,24 +9597,18 @@ int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 		return ret;
 	}
 
-	clk_id = afe_get_clk_id(port_id);
-	if (clk_id < 0) {
-		pr_err("%s: cannot get clk id for port id 0x%x\n",
+	ret = afe_get_clk_src(port_id, clk_src_name);
+	if (ret) {
+		pr_err("%s: cannot get clk src name for port id 0x%x\n",
 			__func__, port_id);
-		return -EINVAL;
-	}
-
-	if (clk_id & 0x01) {
-		pr_err("%s: cannot adjust clock drift for external clock id 0x%x\n",
-			__func__, clk_id);
 		return -EINVAL;
 	}
 
 	clk_drift.clk_drift = set_clk_drift;
 	clk_drift.clk_reset = clk_reset;
-	clk_drift.clk_id = clk_id;
-	pr_debug("%s: clk id = 0x%x clk drift  = %d clk reset = %d port id 0x%x\n",
-		  __func__, clk_drift.clk_id, clk_drift.clk_drift,
+	strlcpy(clk_drift.clk_src_name, clk_src_name, CLK_SRC_NAME_MAX);
+	pr_debug("%s: clk src= %s clkdrft= %d clkrst= %d port id 0x%x\n",
+		  __func__, clk_drift.clk_src_name, clk_drift.clk_drift,
 		 clk_drift.clk_reset, port_id);
 
 	mutex_lock(&this_afe.afe_clk_lock);
@@ -9324,12 +9617,22 @@ int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 	param_hdr.param_id = AFE_PARAM_ID_CLOCK_ADJUST;
 	param_hdr.param_size = sizeof(struct afe_set_clk_drift);
 
-	ret = q6afe_svc_pack_and_set_param_in_band(index, param_hdr,
-						   (u8 *) &clk_drift);
-	if (ret < 0)
-		pr_err_ratelimited("%s: AFE PLL clk drift failed with ret %d\n",
-				    __func__, ret);
+	if ((build_major_version == AVS_BUILD_MAJOR_VERSION_V2) &&
+	    (build_minor_version == AVS_BUILD_MINOR_VERSION_V9) &&
+	    (build_branch_version == AVS_BUILD_BRANCH_VERSION_V3) &&
+	    (afe_api_version >= AFE_API_VERSION_V10)) {
 
+		param_hdr.param_size = sizeof(struct afe_set_clk_drift);
+		ret = q6afe_svc_pack_and_set_param_in_band(index, param_hdr,
+						   (u8 *) &clk_drift);
+		if (ret < 0)
+			pr_err_ratelimited("%s: AFE PLL clk drift failed with ret %d\n",
+				    __func__, ret);
+	} else {
+		ret = -EINVAL;
+		pr_err_ratelimited("%s: AFE PLL clk drift failed ver mismatch %d\n",
+				    __func__, ret);
+	}
 	mutex_unlock(&this_afe.afe_clk_lock);
 	return ret;
 }
@@ -9511,10 +9814,19 @@ int afe_set_lpass_clock_v2(u16 port_id, struct afe_clk_set *cfg)
 		return -EINVAL;
 	}
 
-	ret = afe_set_clk_id(port_id, cfg->clk_id);
-	if (ret < 0)
-		pr_err("%s: afe_set_clk_id fail %d\n", __func__, ret);
-
+	if (clk_src_name != NULL) {
+		if (cfg->clk_freq_in_hz % AFE_SAMPLING_RATE_8KHZ) {
+			if (clk_src_name[CLK_SRC_FRACT] != NULL)
+				ret = afe_set_source_clk(port_id,
+						clk_src_name[CLK_SRC_FRACT]);
+		} else if (clk_src_name[CLK_SRC_INTEGRAL] != NULL) {
+			ret = afe_set_source_clk(port_id,
+					clk_src_name[CLK_SRC_INTEGRAL]);
+		}
+		if (ret < 0)
+			pr_err("%s: afe_set_source_clk fail %d\n",
+				__func__, ret);
+	}
 	idx = afe_get_port_idx(port_id);
 	if (idx < 0) {
 		pr_err("%s: cannot get clock id for port id 0x%x\n", __func__,
@@ -10868,6 +11180,7 @@ static int afe_get_cal_sp_th_vi_param(int32_t cal_type, size_t data_size,
 
 	if (cal_data == NULL ||
 	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr) ||
 	    this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL)
 		return 0;
 
@@ -10896,7 +11209,8 @@ static int afe_get_cal_spv4_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_V4_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size != sizeof(*cal_data))
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_V4_EX_VI_CAL]->lock);
@@ -10963,7 +11277,8 @@ static int afe_get_cal_sp_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size != sizeof(*cal_data))
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL]->lock);
