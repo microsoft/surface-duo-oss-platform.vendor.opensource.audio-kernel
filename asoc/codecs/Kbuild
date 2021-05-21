@@ -220,9 +220,14 @@ endif
 
 
 ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
+  ifneq ($(BOARD_OPENSOURCE_DIR), )
+	AUDIO_KERNEL_OUT := $(OUT)/obj/$(BOARD_OPENSOURCE_DIR)/audio-kernel
+  else
+	AUDIO_KERNEL_OUT := $(OUT)/obj/vendor/qcom/opensource/audio-kernel
+  endif # BOARD_OPENSOURCE_DIR
+  KBUILD_EXTRA_SYMBOLS +=$(AUDIO_KERNEL_OUT)/dsp/Module.symvers
+  KBUILD_EXTRA_SYMBOLS +=$(AUDIO_KERNEL_OUT)/soc/Module.symvers
+  KBUILD_EXTRA_SYMBOLS +=$(AUDIO_KERNEL_OUT)/ipc/Module.symvers
 endif
 
 ifeq ($(KERNEL_BUILD), 1)
