@@ -1426,7 +1426,7 @@ int msm_pcm_routing_set_stream_ec_ref_chmix_cfg(
 			pr_debug("%s: ch[%d][%d] weight = %d",
 				 __func__, i, j, cfg_data->channel_weight[i][j]);
 
-	if (fedai_id < 0 || fedai_id > MSM_FRONTEND_DAI_MAX) {
+	if (fedai_id < 0 || fedai_id >= MSM_FRONTEND_DAI_MAX) {
 		pr_err("%s: Received out of bounds fedai_id %d\n",
 			__func__, fedai_id);
 		ret = -EINVAL;
@@ -3772,6 +3772,8 @@ static int msm_routing_adm_get_backend_idx(struct snd_kcontrol *kcontrol)
 		backend_id = MSM_BACKEND_DAI_SLIMBUS_7_RX;
 	} else if (strnstr(kcontrol->id.name, "SLIM9_TX", sizeof("SLIM9_TX"))) {
 		backend_id = MSM_BACKEND_DAI_SLIMBUS_9_TX;
+	} else if (strnstr(kcontrol->id.name, "SLIM7_TX", sizeof("SLIM7_TX"))) {
+		backend_id = MSM_BACKEND_DAI_SLIMBUS_7_TX;
 	} else {
 		pr_err("%s: unsupported backend id: %s",
 			__func__, kcontrol->id.name);
@@ -3823,6 +3825,9 @@ static const struct snd_kcontrol_new adm_channel_config_controls[] = {
 			msm_routing_adm_channel_config_get,
 			msm_routing_adm_channel_config_put),
 	SOC_ENUM_EXT("SLIM9_TX ADM Channels", adm_override_chs,
+			msm_routing_adm_channel_config_get,
+			msm_routing_adm_channel_config_put),
+	SOC_ENUM_EXT("SLIM7_TX ADM Channels", adm_override_chs,
 			msm_routing_adm_channel_config_get,
 			msm_routing_adm_channel_config_put),
 };
@@ -6080,6 +6085,10 @@ static int get_ec_ref_port_id(int value, int *index)
 		*index = 42;
 		port_id = AFE_PORT_ID_PRIMARY_TDM_TX;
 		break;
+	case 43:
+		*index = 43;
+		port_id = AFE_PORT_ID_QUINARY_MI2S_RX;
+		break;
 	default:
 		*index = 0; /* NONE */
 		pr_err("%s: Invalid value %d\n", __func__, value);
@@ -6138,7 +6147,7 @@ static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
 	"SLIM_7_RX", "RX_CDC_DMA_RX_0", "RX_CDC_DMA_RX_1", "RX_CDC_DMA_RX_2",
 	"RX_CDC_DMA_RX_3", "TX_CDC_DMA_TX_0", "TERT_TDM_RX_2", "SEC_TDM_TX_0",
 	"DISPLAY_PORT1", "SEN_MI2S_RX", "QUIN_TDM_TX_0", "SENARY_MI2S_TX",
-	"PRI_TDM_RX_0", "PRI_TDM_TX_0",
+	"PRI_TDM_RX_0", "PRI_TDM_TX_0", "QUIN_MI2S_RX",
 };
 
 static const struct soc_enum msm_route_ec_ref_rx_enum[] = {
@@ -33562,6 +33571,7 @@ static const struct snd_soc_dapm_route intercon_mi2s[] = {
 	{"AUDIO_REF_EC_UL10 MUX", "TERT_MI2S_TX", "TERT_MI2S_TX"},
 	{"AUDIO_REF_EC_UL10 MUX", "QUAT_MI2S_TX", "QUAT_MI2S_TX"},
 	{"AUDIO_REF_EC_UL10 MUX", "SENARY_MI2S_TX", "SENARY_MI2S_TX"},
+	{"AUDIO_REF_EC_UL10 MUX", "QUIN_MI2S_RX", "QUIN_MI2S_RX"},
 
 	{"AUDIO_REF_EC_UL16 MUX", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"AUDIO_REF_EC_UL16 MUX", "SEC_MI2S_TX", "SEC_MI2S_TX"},
