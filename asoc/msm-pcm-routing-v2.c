@@ -31652,7 +31652,7 @@ static int asrc_get_module_location(struct asrc_module_config_params *params,
 					int *copp_index, int *port_id)
 {
 	int ret = 0;
-	int fe_id = params->fe_id;
+	int fe_id;
 	int dir = params->dir;
 	int be_id = params->be_id;
 	int copp_idx = 0;
@@ -31670,6 +31670,7 @@ static int asrc_get_module_location(struct asrc_module_config_params *params,
 
 	mutex_lock(&routing_lock);
 
+	fe_id = params->fe_id;
 	bedai = &msm_bedais[be_id];
 	if (afe_get_port_type(bedai->port_id) != port_type) {
 		pr_err("%s: port_type not match: be_dai %d type %d\n",
@@ -32014,6 +32015,10 @@ static int msm_dai_q6_asrc_config_put(
 		break;
 	case ENABLE_ASRC_DRIFT_HW:
 		idx = get_drift_src_idx(param & ~0x0100); /* group device */
+		if (idx < 0) {
+			pr_err("%s: Trying to access invalid index\n", __func__);
+			return -EINVAL;
+		}
 		mutex_lock(&asrc_cfg[idx].lock);
 		asrc_cfg[idx].drift_src = param & ~0x0100;
 		mutex_unlock(&asrc_cfg[idx].lock);

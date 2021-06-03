@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2018,2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -411,6 +411,7 @@ unlock_and_exit:
 	pr_debug("%s: thread stopped\n", __func__);
 	CPE_SVC_REL_LOCK(&t_info->msg_lock, "msg_lock");
 	complete_and_exit(&t_info->thread_comp, 0);
+	return 0;
 }
 
 static void cpe_create_worker_thread(struct cpe_info *t_info)

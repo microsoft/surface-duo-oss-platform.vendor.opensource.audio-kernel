@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -9109,6 +9109,11 @@ static int msm_pcm_afe_port_logging_ctl_get(struct snd_kcontrol *kcontrol,
 {
 	int port_idx = afe_port_logging_port_id - AFE_PORT_ID_TDM_PORT_RANGE_START;
 
+	if (afe_port_logging_port_id <  AFE_PORT_ID_TDM_PORT_RANGE_START) {
+		pr_err("%s: Trying to access invalid index port id\n", __func__);
+		return -EINVAL;
+	}
+
 	ucontrol->value.integer.value[0] = afe_port_logging_port_id;
 	ucontrol->value.integer.value[1] = afe_port_logging_item[port_idx];
 
@@ -9135,6 +9140,11 @@ static int msm_pcm_afe_port_logging_ctl_put(struct snd_kcontrol *kcontrol,
 			__func__, port_id, ret);
 
 	afe_port_logging_port_id = port_id;
+	if (port_id < AFE_PORT_ID_TDM_PORT_RANGE_START) {
+		pr_err("%s: Trying to access invalid index port id\n", __func__);
+		return -EINVAL;
+	}
+
 	port_idx = port_id - AFE_PORT_ID_TDM_PORT_RANGE_START;
 	afe_port_logging_item[port_idx] = ucontrol->value.integer.value[1];
 
