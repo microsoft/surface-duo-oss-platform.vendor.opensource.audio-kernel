@@ -10698,6 +10698,8 @@ static int afe_get_cal_sp_th_vi_v_vali_param(int32_t cal_type, size_t data_size,
 	void *params = NULL;
 	struct afe_sp_v4_channel_v_vali_params *v_vali_params;
 
+	memset(&th_vi_v_vali, 0, sizeof(struct afe_sp_th_vi_v_vali_get_param));
+
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL ||
 	    cal_data == NULL ||
 	    data_size != sizeof(*cal_data))
@@ -10769,6 +10771,8 @@ static int afe_get_cal_sp_th_vi_ftm_param(int32_t cal_type, size_t data_size,
 	uint32_t size;
 	void *params = NULL;
 	struct afe_sp_v4_channel_ftm_params *th_vi_ftm_params = NULL;
+
+	memset(&th_vi, 0, sizeof(struct afe_sp_th_vi_get_param));
 
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL ||
 	    cal_data == NULL ||
@@ -10842,6 +10846,7 @@ static int afe_get_cal_sp_th_vi_param(int32_t cal_type, size_t data_size,
 
 	if (cal_data == NULL ||
 	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr) ||
 	    this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL)
 		return 0;
 
@@ -10870,7 +10875,8 @@ static int afe_get_cal_spv4_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_V4_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size != sizeof(*cal_data))
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_V4_EX_VI_CAL]->lock);
@@ -10937,7 +10943,8 @@ static int afe_get_cal_sp_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size != sizeof(*cal_data))
+	    data_size > sizeof(*cal_data) ||
+	    data_size < sizeof(cal_data->cal_hdr))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL]->lock);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/irq.h>
@@ -414,7 +414,7 @@ static int swrm_get_port_config(struct swr_master *master)
 {
 	u32 ch_rate = 0;
 	u32 num_ch = 0;
-	int i, uc_idx;
+	int i, uc_idx = 0;
 	u32 portcount = 0;
 
 	for (i = 0; i < SWR_MSTR_PORT_LEN; i++) {

@@ -289,6 +289,12 @@ static void msm_audio_protect_memory_region(struct platform_device *pdev)
 	struct device_node *node = NULL;
 
 	node = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+	if (!node) {
+		pr_err("node is NULL\n");
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	rmem = of_reserved_mem_lookup(node);
 	if (!rmem) {
 		pr_err("unable to acquire memory-region of heap\n");
