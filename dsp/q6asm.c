@@ -4008,7 +4008,8 @@ EXPORT_SYMBOL(q6asm_stream_open_write_v5);
 static int __q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 				   uint32_t wr_format, bool is_meta_data_mode,
 				   uint32_t bits_per_sample,
-				   bool overwrite_topology, int topology)
+				   bool overwrite_topology, int topology,
+				   uint32_t pcm_format_block_ver)
 {
 	int rc = 0x00;
 	struct asm_stream_cmd_open_readwrite_v2 open;
@@ -4047,7 +4048,7 @@ static int __q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 	switch (wr_format) {
 	case FORMAT_LINEAR_PCM:
 	case FORMAT_MULTI_CHANNEL_LINEAR_PCM:
-		open.dec_fmt_id = ASM_MEDIA_FMT_MULTI_CHANNEL_PCM_V2;
+		open.dec_fmt_id = q6asm_get_pcm_format_id(pcm_format_block_ver);
 		break;
 	case FORMAT_MPEG4_AAC:
 		open.dec_fmt_id = ASM_MEDIA_FMT_AAC_V2;
@@ -4110,7 +4111,7 @@ static int __q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 	switch (rd_format) {
 	case FORMAT_LINEAR_PCM:
 	case FORMAT_MULTI_CHANNEL_LINEAR_PCM:
-		open.enc_cfg_id = ASM_MEDIA_FMT_MULTI_CHANNEL_PCM_V2;
+		open.enc_cfg_id = q6asm_get_pcm_format_id(pcm_format_block_ver);
 		break;
 	case FORMAT_MPEG4_AAC:
 		open.enc_cfg_id = ASM_MEDIA_FMT_AAC_V2;
@@ -4194,7 +4195,8 @@ int q6asm_open_read_write(struct audio_client *ac, uint32_t rd_format,
 	return __q6asm_open_read_write(ac, rd_format, wr_format,
 				       true/*meta data mode*/,
 				       16 /*bits_per_sample*/,
-				       false /*overwrite_topology*/, 0);
+				       false /*overwrite_topology*/, 0,
+				       PCM_MEDIA_FORMAT_V2 /*pcm_format_block_ver*/);
 }
 EXPORT_SYMBOL(q6asm_open_read_write);
 
@@ -4219,9 +4221,36 @@ int q6asm_open_read_write_v2(struct audio_client *ac, uint32_t rd_format,
 {
 	return __q6asm_open_read_write(ac, rd_format, wr_format,
 				       is_meta_data_mode, bits_per_sample,
-				       overwrite_topology, topology);
+				       overwrite_topology, topology,
+				       PCM_MEDIA_FORMAT_V2 /*pcm_format_block_ver*/);
 }
 EXPORT_SYMBOL(q6asm_open_read_write_v2);
+
+/**
+ * q6asm_open_read_write_v5 -
+ *       command to open ASM in bi-directional read/write mode
+ *
+ * @ac: Audio client handle
+ * @rd_format: capture format for ASM
+ * @wr_format: playback format for ASM
+ * @is_meta_data_mode: mode to indicate if meta data present
+ * @bits_per_sample: number of bits per sample
+ * @overwrite_topology: topology to be overwritten flag
+ * @topology: Topology for ASM
+ *
+ * Returns 0 on success or error on failure
+ */
+int q6asm_open_read_write_v5(struct audio_client *ac, uint32_t rd_format,
+			     uint32_t wr_format, bool is_meta_data_mode,
+			     uint32_t bits_per_sample, bool overwrite_topology,
+			     int topology)
+{
+	return __q6asm_open_read_write(ac, rd_format, wr_format,
+				       is_meta_data_mode, bits_per_sample,
+				       overwrite_topology, topology,
+				       PCM_MEDIA_FORMAT_V5 /*pcm_format_block_ver*/);
+}
+EXPORT_SYMBOL(q6asm_open_read_write_v5);
 
 /**
  * q6asm_open_loopback_v2 -
