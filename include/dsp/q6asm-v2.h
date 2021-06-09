@@ -369,6 +369,11 @@ int q6asm_open_read_write_v2(struct audio_client *ac, uint32_t rd_format,
 			     uint32_t bits_per_sample, bool overwrite_topology,
 			     int topology);
 
+int q6asm_open_read_write_v5(struct audio_client *ac, uint32_t rd_format,
+			     uint32_t wr_format, bool is_meta_data_mode,
+			     uint32_t bits_per_sample, bool overwrite_topology,
+			     int topology);
+
 int q6asm_open_loopback_v2(struct audio_client *ac,
 			   uint16_t bits_per_sample);
 
