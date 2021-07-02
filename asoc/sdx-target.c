@@ -1858,7 +1858,7 @@ static struct snd_soc_dai_link mdm_dai[] = {
 		.id = MSM_FRONTEND_DAI_VOICEMMODE1,
 		SND_SOC_DAILINK_REG(voicemmode1),
 	},
-#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+#ifdef CONFIG_ENABLE_AUDIO_PLAY_REC
 	{
 		.name = MSM_DAILINK_NAME(Media1),
 		.stream_name = "MultiMedia1",

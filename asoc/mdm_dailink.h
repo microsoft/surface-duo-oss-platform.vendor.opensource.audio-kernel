@@ -10,7 +10,7 @@ SND_SOC_DAILINK_DEFS(voicemmode1,
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-voice")));
 
-#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+#ifdef CONFIG_ENABLE_AUDIO_PLAY_REC
 SND_SOC_DAILINK_DEFS(multimedia1,
 	DAILINK_COMP_ARRAY(COMP_CPU("MultiMedia1")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("snd-soc-dummy", "snd-soc-dummy-dai")),
@@ -135,7 +135,7 @@ SND_SOC_DAILINK_DEFS(sec_auxpcm_tx,
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
-#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+#ifndef CONFIG_ENABLE_AUDIO_PLAY_REC
 SND_SOC_DAILINK_DEFS(pri_tdm_rx_0,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-tdm.36864")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),

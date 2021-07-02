@@ -13,7 +13,7 @@ static int __init audio_platform_init(void)
 	msm_dai_q6_init();
 	msm_dai_stub_init();
 	msm_soc_routing_platform_init();
-#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+#ifdef CONFIG_ENABLE_AUDIO_PLAY_REC
 	msm_pcm_afe_init();
 	msm_pcm_dtmf_init();
 	msm_pcm_hostless_init();
@@ -30,7 +30,8 @@ static int __init audio_platform_init(void)
 static void audio_platform_exit(void)
 {
 	msm_pcm_voice_exit();
-#ifndef CONFIG_DISABLE_AUDIO_PLAY_REC
+	msm_soc_routing_platform_exit();
+#ifdef CONFIG_ENABLE_AUDIO_PLAY_REC
 	msm_pcm_voip_exit();
 	msm_pcm_dsp_exit();
 	msm_pcm_loopback_exit();
@@ -39,7 +40,6 @@ static void audio_platform_exit(void)
 	msm_pcm_dtmf_exit();
 	msm_pcm_afe_exit();
 #endif
-	msm_soc_routing_platform_exit();
 	msm_dai_stub_exit();
 	msm_dai_q6_exit();
 	msm_fe_dai_exit();
