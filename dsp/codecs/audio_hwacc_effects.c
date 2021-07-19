@@ -15,6 +15,7 @@
 #include <linux/compat.h>
 #include "q6audio_common.h"
 #include <dsp/msm-audio-effects-q6-v2.h>
+#include <dsp/q6core.h>
 #include "audio_utils_aio.h"
 
 #define MAX_CHANNELS_SUPPORTED		8
@@ -110,11 +111,33 @@ static void audio_effects_event_handler(uint32_t opcode, uint32_t token,
 	}
 }
 
+static inline uint16_t audio_effects_get_word_size(uint32_t bit_per_sample)
+{
+	uint16_t sample_word_size;
+
+	switch (bit_per_sample) {
+	case 32:
+		sample_word_size = 32;
+		break;
+	case 24:
+		sample_word_size = 32;
+		break;
+	case 16:
+	default:
+		sample_word_size = 16;
+		break;
+	}
+
+	return sample_word_size;
+}
+
 static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 				      unsigned long arg)
 {
 	struct q6audio_effects *effects = file->private_data;
 	int rc = 0;
+	uint16_t ip_word_size = 16;
+	uint16_t op_word_size = 16;
 
 	switch (cmd) {
 	case AUDIO_START: {
@@ -122,13 +145,24 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 
 		mutex_lock(&effects->lock);
 
-		rc = q6asm_open_read_write_v2(effects->ac,
-					FORMAT_LINEAR_PCM,
-					FORMAT_MULTI_CHANNEL_LINEAR_PCM,
-					effects->config.meta_mode_enabled,
-					effects->config.output.bits_per_sample,
-					effects->config.overwrite_topology,
-					effects->config.topology);
+		if ((q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+				ADSP_ASM_API_VERSION_V2))
+			rc = q6asm_open_read_write_v5(effects->ac,
+						FORMAT_LINEAR_PCM,
+						FORMAT_MULTI_CHANNEL_LINEAR_PCM,
+						effects->config.meta_mode_enabled,
+						effects->config.output.bits_per_sample,
+						effects->config.overwrite_topology,
+						effects->config.topology);
+		else
+			rc = q6asm_open_read_write_v2(effects->ac,
+						FORMAT_LINEAR_PCM,
+						FORMAT_MULTI_CHANNEL_LINEAR_PCM,
+						effects->config.meta_mode_enabled,
+						effects->config.output.bits_per_sample,
+						effects->config.overwrite_topology,
+						effects->config.topology);
 		if (rc < 0) {
 			pr_err("%s: Open failed for hw accelerated effects:rc=%d\n",
 				__func__, rc);
@@ -178,12 +212,33 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 		atomic_set(&effects->out_count, effects->config.output.num_buf);
 		effects->buf_alloc = 1;
 
+		ip_word_size = audio_effects_get_word_size(
+							effects->config.input.bits_per_sample);
+
+		op_word_size = audio_effects_get_word_size(
+							effects->config.output.bits_per_sample);
+
 		pr_debug("%s: enc: sample_rate: %d, num_channels: %d\n",
 			 __func__, effects->config.input.sample_rate,
 			effects->config.input.num_channels);
-		rc = q6asm_enc_cfg_blk_pcm(effects->ac,
-					   effects->config.input.sample_rate,
-					   effects->config.input.num_channels);
+
+		if ((q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+				ADSP_ASM_API_VERSION_V2))
+			rc = q6asm_enc_cfg_blk_pcm_format_support_v5(
+							effects->ac,
+							effects->config.input.sample_rate,
+							effects->config.input.num_channels,
+							true,
+							NULL,
+							effects->config.input.bits_per_sample,
+							ip_word_size,
+							ASM_LITTLE_ENDIAN,
+							DEFAULT_QF);
+		else
+			rc = q6asm_enc_cfg_blk_pcm(effects->ac,
+						effects->config.input.sample_rate,
+						effects->config.input.num_channels);
 		if (rc < 0) {
 			pr_err("%s: pcm read block config failed\n", __func__);
 			rc = -EINVAL;
@@ -193,10 +248,21 @@ static int audio_effects_shared_ioctl(struct file *file, unsigned int cmd,
 			 __func__, effects->config.output.sample_rate,
 			effects->config.output.num_channels,
 			effects->config.output.bits_per_sample);
-		rc = q6asm_media_format_block_pcm_format_support(
-				effects->ac, effects->config.output.sample_rate,
-				effects->config.output.num_channels,
-				effects->config.output.bits_per_sample);
+
+		if ((q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+				ADSP_ASM_API_VERSION_V2))
+			rc = q6asm_media_format_block_pcm_format_support_v5(
+					effects->ac, effects->config.output.sample_rate,
+					effects->config.output.num_channels,
+					effects->config.output.bits_per_sample,
+					effects->ac->stream_id, true, NULL,
+					op_word_size, ASM_LITTLE_ENDIAN, DEFAULT_QF);
+		else
+			rc = q6asm_media_format_block_pcm_format_support(
+					effects->ac, effects->config.output.sample_rate,
+					effects->config.output.num_channels,
+					effects->config.output.bits_per_sample);
 		if (rc < 0) {
 			pr_err("%s: pcm write format block config failed\n",
 				__func__);
