@@ -498,6 +498,15 @@ int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
 		void (*notify_cb)(void *priv),
 		void *private_data);
 
+int afe_vlsp_reg_event_cfg(u16 reg_flag,
+		void (*cb)(u32 opcode, u32 token, void *payload,
+			   u16 payload_size, void *priv),
+		void (*notify)(void *priv),
+		void *private_data);
+
+int afe_vlsp_send_cfg(struct afe_param_id_vlsp_cfg *port_cfg);
+int afe_vlsp_send_reset(void);
+
 int afe_turn_onoff_hw_mad(u16 mad_type, u16 mad_enable);
 int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type);
 enum afe_mad_type afe_port_get_mad_type(u16 port_id);
