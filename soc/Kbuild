@@ -170,7 +170,11 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 KBUILD_CPPFLAGS += $(CDEFINES)
 
 ifeq ($(KERNEL_BUILD), 0)
-KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
+ ifneq ($(BOARD_OPENSOURCE_DIR), )
+	KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/$(BOARD_OPENSOURCE_DIR)/audio-kernel/dsp/Module.symvers
+  else
+	KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/dsp/Module.symvers
+  endif # BOARD_OPENSOURCE_DIR
 endif
 
 # Currently, for versions of gcc which support it, the kernel Makefile
