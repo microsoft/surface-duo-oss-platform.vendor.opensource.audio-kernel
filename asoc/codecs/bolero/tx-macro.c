@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -675,7 +675,7 @@ static int tx_macro_tx_mixer_put(struct snd_kcontrol *kcontrol,
 	}
 	snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, enable, update);
 	dev_dbg(tx_dev,
-		"%s: dai_id %d, active_ch_mask %d, active_ch_cnt: %d\n",
+		"%s: dai_id %d, active_ch_mask %ld, active_ch_cnt: %ld\n",
 		__func__, dai_id, tx_priv->active_ch_mask[dai_id],
 		tx_priv->active_ch_cnt[dai_id]);
 
@@ -1166,7 +1166,7 @@ static int tx_macro_get_channel_map(struct snd_soc_dai *dai,
 	case TX_MACRO_AIF3_CAP:
 		*tx_slot = tx_priv->active_ch_mask[dai->id];
 		*tx_num = tx_priv->active_ch_cnt[dai->id];
-		dev_dbg(tx_dev, "%s: dai_id %d, active_ch_mask %d, active_ch_cnt: %d\n",
+		dev_dbg(tx_dev, "%s: dai_id %d, active_ch_mask %ld, active_ch_cnt: %ld\n",
 			__func__, dai->id, tx_priv->active_ch_mask[dai->id],
 			tx_priv->active_ch_cnt[dai->id]);
 		break;

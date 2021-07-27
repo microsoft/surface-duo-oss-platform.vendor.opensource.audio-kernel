@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2017, 2019-2020 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2017, 2019-2021 The Linux Foundation. All rights reserved.
  * Copyright (c) 2018, Linaro Limited
  *
  * This program is free software; you can redistribute it and/or modify
@@ -516,7 +516,7 @@ static int gpr_probe(struct rpmsg_device *rpdev)
 		GPR_DOMAIN_MODEM == gpr_priv->dest_domain_id) {
 		schedule_work(&gpr_priv->notifier_reg_work);
 	} else {
-		dev_err(dev, "%s: invalid dest_domain_id %s\n", __func__,
+		dev_err(dev, "%s: invalid dest_domain_id %d\n", __func__,
 		  gpr_priv->dest_domain_id);
 		return -EINVAL;
 	}
