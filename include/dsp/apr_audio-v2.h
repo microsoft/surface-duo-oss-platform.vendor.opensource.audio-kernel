@@ -2971,6 +2971,114 @@ struct afe_spdif_port_config {
 	struct afe_param_id_spdif_ch_status_cfg  ch_status_b;
 } __packed;
 
+/* Common VLSP Event ID */
+#define AFE_SVC_VLSP_EVENT 0x00010111
+/* VLSP Module ID */
+#define AFE_MODULE_VLSP 0x000102F5
+/* VLSP Parameter ID */
+#define AFE_PARAM_ID_VLSP_CONFIG 0x000102F6
+#define AFE_PARAM_ID_VLSP_RESET 0x000102F7
+#define AFE_PARAM_ID_VLSP_WRITE 0x000102F8
+
+#define AFE_API_VERSION_VLSP_CONFIG 0x1
+/* Version for afe_event_vlsp_v1 payload */
+#define AFE_API_VERSION_VLSP_EVENT_V1 0x1
+/* Version for afe_event_vlsp_v2 payload */
+#define AFE_API_VERSION_VLSP_EVENT_V2 0x2
+/* Version for afe_event_vlsp_v2 payload */
+#define VLSP_MAX_CHANNEL_CNT 8
+/* Size of VLSP Event Queue */
+#define VLSP_EVT_QUEUE_SIZE 256
+/* Size of VLSP CEC Message */
+#define VLSP_EVT_V2_MAX_PAYLOAD_LEN (64-24)
+
+struct afe_event_vlsp_v1 {
+	u32 minor_version; /* 1 */
+	/* Tracks the configuration of this event. */
+	u32 channel_id;
+	/* VLSP channel id (0.. VLSP_MAX_CHANNEL_CNT-1) */
+	u64 time_stamp;
+	/* timestamp of gpio state event in microsecond unit */
+	u32 pin_state;
+	/* 4 bytes of gpio state */
+} __packed;
+
+struct afe_event_vlsp_v2 {
+	u32 minor_version; /* 2 */
+	/* Tracks the configuration of this event. */
+	u32 channel_id;
+	/* VLSP channel id (0.. VLSP_MAX_CHANNEL_CNT-1) */
+	u64 time_stamp;
+	/* timestamp of event in microsecond unit.
+	   @values Any valid unsigned 64bit integer number */
+	u32 peripheral_id;
+	u32 sequence;
+	/* (event) id of virtual periperal */
+	u8  reserved[VLSP_EVT_V2_MAX_PAYLOAD_LEN];
+} __packed;
+
+struct afe_param_id_vlsp_cfg {
+	u32 minor_version;
+	/* Tracks the configuration of this parameter.
+	   @values #AFE_API_VERSION_SPDIF_CONFIG */
+	u32 channel_id;
+	/* Channel ID of VLSP.
+	-  @values
+	-  0 .. 7 : range of GPIO interface IDs
+	 */
+	u32 pin_num;
+	/* Physical number of GPIO.
+	   @values
+	   - 14 : CEC I/O on QCS405
+	   - 77 : IR Sensor Input on QCS405
+	   - etc
+	 */
+	u32 pin_trigger_type;
+	/* Indicates gpio trigger type.
+
+	   @values
+	   - GPIOINT_TRIGGER_HIGH -- The GPIO interrupt will trigger only if the
+	   input signal is high
+	   - GPIOINT_TRIGGER_LOW --  The GPIO interrupt will trigger only if the
+	   input signal is low
+	   - GPIOINT_TRIGGER_RISING -- The GPIO interrupt will trigger only if
+	   the input signal level transitions from low to high
+	   - GPIOINT_TRIGGER_FALLING -- The GPIO interrupt will trigger only if
+	   the input signal level transitions from high to low
+	   - GPIOINT_TRIGGER_DUAL_EDGE --  The GPIO interrupt will trigger only
+	   if the input signal level transitions from high to low or from low to
+	   high
+	 */
+	u32 pin_map_type;
+	/* Indicates gpio type
+
+	   @values
+	   - GPIO_TYPE_DEFAULT -- Chip level GPIO, mapped to LPASS via direct
+	   connect lines
+	   - GPIO_TYPE_LPI -- LPASS LPI TLMM GPIO
+	   - GPIO_TYPE_PDC -- Chip level GPIO, mapped to LPASS via PDC mux
+	 */
+	u32 pin_gate_type;
+	/* Indicates irq type.
+
+	  @values
+	  - IRQ_TYPE_DEFAULT -- Interrupt is not gated
+	  - IRQ_TYPE_PMU -- Interrupt is Power Management Unit(PMU) gated
+	  - IRQ_TYPE_PDC -- Interrupt is Power Domain Control (PDC) gated
+	 */
+	u32 peripheral_id;
+	/* Virtual peripheral ID supported by VLSP.
+	  @values
+	  - 0 : Simple GPIO pin, 1 : CEC, others : reserved
+	 */
+	u32 peripheral_config;
+	/* Virtual peripheral configuration.
+
+	  @values
+	  - reserved
+	 */
+}__packed;
+
 #define AFE_PARAM_ID_PCM_CONFIG        0x0001020E
 #define AFE_API_VERSION_PCM_CONFIG	0x1
 /* Enumeration for the auxiliary PCM synchronization signal
