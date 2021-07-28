@@ -755,6 +755,17 @@ static int mdm_sec_mi2s_tx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rt,
 	return 0;
 }
 
+static int sdx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rt,
+				  struct snd_pcm_hw_params *params)
+{
+	struct snd_interval *rate = hw_param_interval(params,
+						      SNDRV_PCM_HW_PARAM_RATE);
+	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+		       SNDRV_PCM_FORMAT_S16_LE);
+	rate->min = rate->max = mdm_mi2s_rate;
+	return 0;
+}
+
 #if 0
 static int mdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rt,
 				struct snd_pcm_hw_params *params)
@@ -2079,6 +2090,65 @@ static struct snd_soc_dai_link mdm_dai[] = {
 #endif
 };
 
+static struct snd_soc_dai_link sdx_common_be_dai_links[] = {
+	/* Backend AFE DAI Links */
+	{
+		.name = LPASS_BE_AFE_PCM_RX,
+		.stream_name = "AFE Playback",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_AFE_PCM_RX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(afe_pcm_rx),
+	},
+	{
+		.name = LPASS_BE_AFE_PCM_TX,
+		.stream_name = "AFE Capture",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_AFE_PCM_TX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(afe_pcm_tx),
+	},
+	/* Incall Record Uplink BACK END DAI Link */
+	{
+		.name = LPASS_BE_INCALL_RECORD_TX,
+		.stream_name = "Voice Uplink Capture",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_INCALL_RECORD_TX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(incall_record_tx)
+	},
+	/* Incall Record Downlink BACK END DAI Link */
+	{
+		.name = LPASS_BE_INCALL_RECORD_RX,
+		.stream_name = "Voice Downlink Capture",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_INCALL_RECORD_RX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		SND_SOC_DAILINK_REG(incall_record_rx),
+	},
+	/* Incall Music BACK END DAI Link */
+	{
+		.name = LPASS_BE_VOICE_PLAYBACK_TX,
+		.stream_name = "Voice Farend Playback",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_VOICE_PLAYBACK_TX,
+		.be_hw_params_fixup = sdx_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		SND_SOC_DAILINK_REG(voice_playback_tx),
+	},
+};
+
 static int mdm_auxpcm_startup(struct snd_pcm_substream *substream)
 {
 	int ret = 0;
@@ -2288,6 +2358,7 @@ static struct snd_soc_dai_link mdm_mi2s_be_dai[] = {
 
 static struct snd_soc_dai_link mdm_tasha_dai_links[
 			ARRAY_SIZE(mdm_dai) +
+			ARRAY_SIZE(sdx_common_be_dai_links) +
 			ARRAY_SIZE(mdm_mi2s_be_dai)];
 
 static struct snd_soc_card snd_soc_card_mdm_tasha = {
@@ -2472,6 +2543,10 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 		memcpy(mdm_tasha_dai_links + total_links,
 		       mdm_dai, sizeof(mdm_dai));
 		total_links += ARRAY_SIZE(mdm_dai);
+
+		memcpy(mdm_tasha_dai_links + total_links,
+		       sdx_common_be_dai_links, sizeof(sdx_common_be_dai_links));
+		total_links += ARRAY_SIZE(sdx_common_be_dai_links);
 
 		memcpy(mdm_tasha_dai_links + total_links,
 			mdm_mi2s_be_dai, sizeof(mdm_mi2s_be_dai));

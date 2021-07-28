@@ -94,6 +94,31 @@ SND_SOC_DAILINK_DEFS(sec_mi2s_rx_hostless,
 #endif
 
 /* BE dai-links */
+SND_SOC_DAILINK_DEFS(afe_pcm_rx,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-dev.224")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+
+SND_SOC_DAILINK_DEFS(afe_pcm_tx,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-dev.225")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+
+SND_SOC_DAILINK_DEFS(incall_record_tx,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-dev.32772")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+
+SND_SOC_DAILINK_DEFS(incall_record_rx,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-dev.32771")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-tx")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+
+SND_SOC_DAILINK_DEFS(voice_playback_tx,
+	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-dev.32773")),
+	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
+	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
+
 SND_SOC_DAILINK_DEFS(sec_mi2s_rx,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-q6-mi2s.1")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("msm-stub-codec.1", "msm-stub-rx")),
