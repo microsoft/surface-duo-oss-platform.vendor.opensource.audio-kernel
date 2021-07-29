@@ -555,9 +555,14 @@ static void shift_non_tunnel_popp(u32 popp_idx)
 		memcpy(&rtac_asm_data.popp[popp_idx].popp_topology,
 			&rtac_asm_data.popp[popp_idx + 1].popp_topology,
 			sizeof(uint32_t));
+		memcpy(&rtac_asm_data.popp[popp_idx].app_type,
+			&rtac_asm_data.popp[popp_idx + 1].app_type,
+			sizeof(uint32_t));
 		memset(&rtac_asm_data.popp[popp_idx + 1].popp,
 			0, sizeof(uint32_t));
 		memset(&rtac_asm_data.popp[popp_idx + 1].popp_topology,
+			0, sizeof(uint32_t));
+		memset(&rtac_asm_data.popp[popp_idx + 1].app_type,
 			0, sizeof(uint32_t));
 	}
 }
