@@ -179,7 +179,7 @@ endif
 
 # for sa8155 sound card driver
 ifdef CONFIG_SND_SOC_SA8155
-	MACHINE_OBJS += sa8295.o
+	MACHINE_OBJS += sa8155.o
 endif
 
 # for sa8295 sound card driver
