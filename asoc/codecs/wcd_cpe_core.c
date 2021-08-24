@@ -16,7 +16,6 @@
 #include <sound/info.h>
 #include <sound/lsm_params.h>
 #include <soc/qcom/pm.h>
-#include <dsp/audio_cal_utils.h>
 #include <asoc/core.h>
 #include "cpe_core.h"
 #include "cpe_err.h"
