@@ -2451,7 +2451,7 @@ static void send_adm_cal(int fedai_id, int port_id, int copp_idx, int path, int 
 				perf_mode, app_type, acdb_id, sample_rate);
 		/* send persistent cal only in case of record */
 		if (path == TX_DEVICE)
-			send_adm_cal_type(fedai_id, ADM_LSM_AUDPROC_PERSISTENT_CAL, path,
+			send_adm_cal_type(fedai_id, ADM_AUDPROC_PERSISTENT_CAL, path,
 				  port_id, copp_idx, perf_mode, app_type,
 				  acdb_id, sample_rate);
 	} else {
@@ -3216,11 +3216,11 @@ int adm_open_v2(int port_id, int path, int rate, int channel_mode, int topology,
 	     struct msm_ec_ref_port_cfg *ec_ref_port_cfg,
 	    struct msm_pcm_channel_mixer *ec_ref_chmix_cfg)
 {
-	struct adm_cmd_device_open_v5	open;
-	struct adm_cmd_device_open_v6	open_v6;
-	struct adm_cmd_device_open_v8	open_v8;
-	struct adm_device_endpoint_payload ep1_payload;
-	struct adm_device_endpoint_payload ep2_payload;
+	struct adm_cmd_device_open_v5	open = {0};
+	struct adm_cmd_device_open_v6	open_v6 = {0};
+	struct adm_cmd_device_open_v8	open_v8 = {0};
+	struct adm_device_endpoint_payload ep1_payload = {0};
+	struct adm_device_endpoint_payload ep2_payload = {0};
 	int ep1_payload_size = 0;
 	int ep2_payload_size = 0;
 	int ret = 0;
@@ -3235,8 +3235,8 @@ int adm_open_v2(int port_id, int path, int rate, int channel_mode, int topology,
 					ec_ref_port_cfg->port_id :
 					this_adm.ec_ref_rx;
 
-	int ec_ref_ch = ec_ref_port_cfg ?
-					ec_ref_port_cfg->ch :
+	int ec_ref_ch = ec_ref_chmix_cfg ?
+					ec_ref_chmix_cfg->input_channel :
 					this_adm.num_ec_ref_rx_chans;
 
 	int ec_ref_bit = ec_ref_port_cfg ?
@@ -3440,11 +3440,10 @@ int adm_open_v2(int port_id, int path, int rate, int channel_mode, int topology,
 				if (ec_ref_ch != 0) {
 					open_v8.endpoint_id_2 =
 						ec_ref_port_id;
-					ec_ref_port_id = AFE_PORT_INVALID;
+					this_adm.ec_ref_rx = AFE_PORT_INVALID;
 				} else {
-					pr_err("%s: EC channels not set %d\n",
+					pr_warn("%s: EC channels not set %d\n",
 						__func__, ec_ref_ch);
-					return -EINVAL;
 				}
 			}
 

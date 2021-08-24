@@ -751,7 +751,7 @@ static int q6asm_map_cal_memory(int32_t cal_type,
 		goto done;
 	}
 
-	/* Use second asm buf to map memory */
+	/* Use first asm buf to map memory */
 	if (common_client.port[IN].buf == NULL) {
 		pr_err("%s: common buf is NULL\n",
 			__func__);
@@ -841,6 +841,8 @@ static int q6asm_unmap_cal_memory(int32_t cal_type,
 			goto done;
 		}
 	}
+
+	common_client.port[IN].buf->phys = cal_block->cal_data.paddr;
 
 	result2 = q6asm_memory_unmap_regions(&common_client, IN);
 	if (result2 < 0) {
@@ -2562,7 +2564,8 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		if (payload_size > UINT_MAX - sizeof(struct msm_adsp_event_data)) {
 			pr_err("%s: payload size = %d exceeds limit.\n",
 				__func__, payload_size);
-			spin_unlock(&(session[session_id].session_lock));
+			spin_unlock_irqrestore(
+				&(session[session_id].session_lock), flags);
 			return -EINVAL;
 		}
 
@@ -5428,7 +5431,6 @@ static int q6asm_enc_cfg_blk_pcm_v5(struct audio_client *ac,
 fail_cmd:
 	return rc;
 }
-EXPORT_SYMBOL(q6asm_enc_cfg_blk_pcm_v5);
 
 /*
  * q6asm_enc_cfg_blk_pcm_v4 - sends encoder configuration parameters
@@ -8884,7 +8886,6 @@ fail_cmd:
 	mmap_region_cmd = NULL;
 	return rc;
 }
-EXPORT_SYMBOL(q6asm_memory_map_regions);
 
 /**
  * q6asm_memory_unmap_regions -
@@ -8983,7 +8984,6 @@ fail_cmd:
 	}
 	return rc;
 }
-EXPORT_SYMBOL(q6asm_memory_unmap_regions);
 
 int q6asm_set_lrgain(struct audio_client *ac, int left_gain, int right_gain)
 {
