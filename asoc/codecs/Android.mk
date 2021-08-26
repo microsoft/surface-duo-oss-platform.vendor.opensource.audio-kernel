@@ -41,9 +41,12 @@ LOCAL_PATH := $(call my-dir)
 ifneq ($(findstring vendor,$(LOCAL_PATH)),)
 
 ifneq ($(findstring opensource,$(LOCAL_PATH)),)
-	AUDIO_BLD_DIR := $(shell pwd)/vendor/qcom/opensource/audio-kernel
+	ifneq ($(BOARD_OPENSOURCE_DIR), )
+	   AUDIO_BLD_DIR := $(shell pwd)/$(BOARD_OPENSOURCE_DIR)/audio-kernel
+	else
+	   AUDIO_BLD_DIR := $(shell pwd)/vendor/qcom/opensource/audio-kernel
+	endif # BOARD_OPENSOURCE_DIR
 endif # opensource
-
 ifeq ($(TARGET_SUPPORTS_WEARABLES),true)
 DLKM_DIR := $(BOARD_COMMON_DIR)/dlkm
 else
