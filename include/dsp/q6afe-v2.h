@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -495,7 +495,17 @@ int afe_send_spdif_chstatus_mask_cfg(struct afe_spdif_chstatus_mask_config
 int afe_spdif_reg_chstatus_event_cfg(u16 port_id, u16 reg_flag,
 		void (*cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv),
+		void (*notify_cb)(void *priv),
 		void *private_data);
+
+int afe_vlsp_reg_event_cfg(u16 reg_flag,
+		void (*cb)(u32 opcode, u32 token, void *payload,
+			   u16 payload_size, void *priv),
+		void (*notify)(void *priv),
+		void *private_data);
+
+int afe_vlsp_send_cfg(struct afe_param_id_vlsp_cfg *port_cfg);
+int afe_vlsp_send_reset(void);
 
 int afe_turn_onoff_hw_mad(u16 mad_type, u16 mad_enable);
 int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type);

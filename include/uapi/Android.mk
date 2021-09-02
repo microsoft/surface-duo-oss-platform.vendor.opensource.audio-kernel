@@ -4,7 +4,11 @@
 LOCAL_PATH := $(call my-dir)
 MYLOCAL_PATH := $(LOCAL_PATH)
 
-UAPI_OUT := $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/include
+ifneq ($(BOARD_OPENSOURCE_DIR), )
+   UAPI_OUT := $(PRODUCT_OUT)/obj/$(BOARD_OPENSOURCE_DIR)/audio-kernel/include
+else
+   UAPI_OUT := $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/include
+endif # BOARD_OPENSOURCE_DIR
 
 AUDIO_KERNEL_HEADERS := $(call all-named-files-under,*.h,linux) $(call all-named-files-under,*.h,sound)
 
