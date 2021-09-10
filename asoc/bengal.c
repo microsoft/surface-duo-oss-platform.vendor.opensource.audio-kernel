@@ -551,6 +551,7 @@ static struct snd_soc_codec_conf *msm_codec_conf;
 static struct snd_soc_card snd_soc_card_bengal_msm;
 static int dmic_0_1_gpio_cnt;
 static int dmic_2_3_gpio_cnt;
+static u32 wcd_datalane_mismatch;
 
 static void *def_wcd_mbhc_cal(void);
 static void *def_rouleur_mbhc_cal(void);
@@ -4354,7 +4355,11 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	snd_soc_dapm_ignore_suspend(dapm, "AMIC4");
 	snd_soc_dapm_sync(dapm);
 
-	if (!strncmp(component->driver->name, ROULEUR_DRV_NAME,
+	if (wcd_datalane_mismatch) {
+		bolero_set_port_map(component,
+				ARRAY_SIZE(sm_port_map_khaje),
+				sm_port_map_khaje);
+	} else if (!strncmp(component->driver->name, ROULEUR_DRV_NAME,
 						strlen(ROULEUR_DRV_NAME))) {
 		rouleur_info_create_codec_entry(pdata->codec_root, component);
 		bolero_set_port_map(bolero_component, ARRAY_SIZE(sm_port_map_rouleur), sm_port_map_rouleur);
@@ -5624,21 +5629,20 @@ static int msm_populate_dai_link_component_of_node(
 					continue;
 
 				np = dai_link[i].codecs[j].of_node;
-                if (!of_device_is_available(np)) {
-                    dev_err(cdev, "%s: codec is disabled: %s\n",
+				if (!of_device_is_available(np)) {
+					dev_err(cdev, "%s: codec is disabled: %s\n",
 						__func__,
 						np->full_name);
 					dai_link[i].codecs[j].of_node = NULL;
 					continue;
-                }
-
+				}
 				codecs_enabled++;
 			}
 			if (codecs_enabled > 0 &&
-				    codecs_enabled < dai_link[i].num_codecs) {
+				codecs_enabled < dai_link[i].num_codecs) {
 				codecs_comp = devm_kzalloc(cdev,
-				    sizeof(struct snd_soc_dai_link_component)
-				    * codecs_enabled, GFP_KERNEL);
+					sizeof(struct snd_soc_dai_link_component)
+					* codecs_enabled, GFP_KERNEL);
 				if (!codecs_comp) {
 					dev_err(cdev, "%s: %s dailink codec component alloc failed\n",
 						__func__, dai_link[i].name);
@@ -6157,6 +6161,10 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err;
 	}
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+			"qcom,wcd-datalane-mismatch",
+			&wcd_datalane_mismatch);
 
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret == -EPROBE_DEFER) {

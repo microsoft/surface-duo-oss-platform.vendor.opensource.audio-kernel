@@ -288,7 +288,7 @@ static int adm_get_copp_id(int port_idx, int copp_idx)
 }
 
 static int adm_get_idx_if_single_copp_exists(int port_idx,
-			int topology, int mode,
+			int topology,
 			int rate, int bit_width,
 			uint32_t copp_token)
 {
@@ -299,8 +299,6 @@ static int adm_get_idx_if_single_copp_exists(int port_idx,
 	for (idx = 0; idx < MAX_COPPS_PER_PORT; idx++)
 		if ((topology ==
 			atomic_read(&this_adm.copp.topology[port_idx][idx])) &&
-			(mode ==
-			 atomic_read(&this_adm.copp.mode[port_idx][idx])) &&
 			(rate ==
 			 atomic_read(&this_adm.copp.rate[port_idx][idx])) &&
 			(bit_width ==
@@ -322,7 +320,7 @@ static int adm_get_idx_if_copp_exists(int port_idx, int topology, int mode,
 
 	if (copp_token)
 		return adm_get_idx_if_single_copp_exists(port_idx,
-				topology, mode,
+				topology,
 				rate, bit_width,
 				copp_token);
 
@@ -3235,8 +3233,8 @@ int adm_open_v2(int port_id, int path, int rate, int channel_mode, int topology,
 					ec_ref_port_cfg->port_id :
 					this_adm.ec_ref_rx;
 
-	int ec_ref_ch = ec_ref_port_cfg ?
-					ec_ref_port_cfg->ch :
+	int ec_ref_ch = ec_ref_chmix_cfg ?
+					ec_ref_chmix_cfg->input_channel :
 					this_adm.num_ec_ref_rx_chans;
 
 	int ec_ref_bit = ec_ref_port_cfg ?
@@ -3440,11 +3438,10 @@ int adm_open_v2(int port_id, int path, int rate, int channel_mode, int topology,
 				if (ec_ref_ch != 0) {
 					open_v8.endpoint_id_2 =
 						ec_ref_port_id;
-					ec_ref_port_id = AFE_PORT_INVALID;
+					this_adm.ec_ref_rx = AFE_PORT_INVALID;
 				} else {
-					pr_err("%s: EC channels not set %d\n",
+					pr_warn("%s: EC channels not set %d\n",
 						__func__, ec_ref_ch);
-					return -EINVAL;
 				}
 			}
 
