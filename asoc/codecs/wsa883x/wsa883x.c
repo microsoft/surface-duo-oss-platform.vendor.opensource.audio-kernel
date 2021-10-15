@@ -1228,6 +1228,11 @@ static void wsa883x_codec_init(struct snd_soc_component *component)
 	if (wsa883x->variant == WSA8830 || wsa883x->variant == WSA8832)
 		snd_soc_component_update_bits(component, WSA883X_DRE_CTL_0,
 					0x07, 0x03);
+//MSCHANGE - Start
+	if (!(strcmp(wsa883x->wsa883x_name_prefix, "SpkrRecv")))
+		snd_soc_component_update_bits(component, WSA883X_DRE_CTL_0,
+					0x07, 0x04);
+//MSCHANGE - End
 }
 
 static int32_t wsa883x_temp_reg_read(struct snd_soc_component *component,

@@ -5265,6 +5265,12 @@ static int msm_snd_cdc_dma_hw_params(struct snd_pcm_substream *substream,
 		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_0:
 		{
 			user_set_tx_ch = msm_vi_feed_tx_ch;
+			/* MSCHANGE Start
+			   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+			   from QC case #04933686 */
+			if (!strcmp(dai_link->name, LPASS_BE_WSA_CDC_DMA_TX_0_VI))
+				afe_set_visense_capture();
+			/* MSCHANGE End */
 		}
 		break;
 		case MSM_BACKEND_DAI_WSA_CDC_DMA_TX_1:
@@ -7777,6 +7783,7 @@ static int msm_int_wsa_init(struct snd_soc_pcm_runtime *rtd)
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(rtd->card);
 	int wsa_active_devs = 0;
+	int ret = 0;
 
         if (pdata->wsa_max_devs > 0) {
 		component = snd_soc_rtdcom_lookup(rtd, "wsa-codec.1");
@@ -7811,9 +7818,42 @@ static int msm_int_wsa_init(struct snd_soc_pcm_runtime *rtd)
 				WSA883X_MAX_SWR_PORTS, &ch_mask[0],
 				&ch_rate[0], &spkright_port_types[0]);
 
-		wsa883x_codec_info_create_codec_entry(pdata->codec_root,
+//MSFT CHANGE START
+		ret = wsa883x_codec_info_create_codec_entry(pdata->codec_root,
 							component);
+		if (ret)
+			pr_err("%s: wsa883x_codec_info_create_codec_entry returned error %d\n",
+				__func__, ret);
+		else
+			wsa_active_devs++;
+//MSFT CHANGE END
 	}
+
+//MSFT CHANGE START
+        /* If current platform has more than two WSAs */
+	if (pdata->wsa_max_devs > wsa_active_devs) {
+		component = snd_soc_rtdcom_lookup(rtd, "wsa-codec.3");
+		if (!component) {
+			pr_err("%s: wsa-codec.3 component is NULL\n", __func__);
+			pr_err("%s: %d WSA is found. Expect %d WSA.",
+				__func__, wsa_active_devs, pdata->wsa_max_devs);
+			return -EINVAL;
+		}
+
+		dapm = snd_soc_component_get_dapm(component);
+
+		wsa883x_set_channel_map(component, &spkleft_ports[0],
+			WSA883X_MAX_SWR_PORTS, &ch_mask[0],
+			&ch_rate[0], &spkleft_port_types[0]);
+
+		ret = wsa883x_codec_info_create_codec_entry(pdata->codec_root,
+			component);
+
+		if (ret)
+			pr_err("%s: wsa883x_codec_info_create_codec_entry returned error %d\n",
+				__func__, ret);
+	}
+//MSFT CHANGE END
 
 	return 0;
 }
@@ -7900,6 +7940,8 @@ static int msm_rx_tx_codec_init(struct snd_soc_pcm_runtime *rtd)
 	bolero_register_wake_irq(component, false);
 
 	if (pdata->wcd_disabled) {
+		//MSCHANGE - Need to allocate Bolero port params even if wcd_disabled is set
+		bolero_set_port_map(bolero_component, ARRAY_SIZE(sm_port_map), sm_port_map);
 		codec_reg_done = true;
 		return 0;
 	}
