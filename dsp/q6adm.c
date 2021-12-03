@@ -111,6 +111,9 @@ struct adm_ctl {
 	int tx_port_id;
 	bool hyp_assigned;
 	int fnn_app_type;
+    // MSFT CHANGE Start
+    bool is_channel_swapped;
+    // MSFT CHANGE End
 };
 
 static struct adm_ctl			this_adm;
@@ -2451,7 +2454,7 @@ static void send_adm_cal(int fedai_id, int port_id, int copp_idx, int path, int 
 				perf_mode, app_type, acdb_id, sample_rate);
 		/* send persistent cal only in case of record */
 		if (path == TX_DEVICE)
-			send_adm_cal_type(fedai_id, ADM_LSM_AUDPROC_PERSISTENT_CAL, path,
+			send_adm_cal_type(fedai_id, ADM_AUDPROC_PERSISTENT_CAL, path,
 				  port_id, copp_idx, perf_mode, app_type,
 				  acdb_id, sample_rate);
 	} else {
@@ -5477,6 +5480,14 @@ int adm_swap_speaker_channels(int port_id, int copp_idx,
 			(uint16_t) PCM_CHANNEL_FR;
 	}
 
+    // MSFT CHANGE Start
+	if(spk_swap || this_adm.is_channel_swapped)
+	{
+		//before applying swap channel, mute the device to avoid pop
+		ret = adm_set_volume(port_id, copp_idx, 0);
+		msleep(50);
+	}
+    // MSFT CHANGE End
 	ret = adm_pack_and_set_one_pp_param(port_id, copp_idx, param_hdr,
 					    (u8 *) &mfc_cfg);
 	if (ret < 0) {
@@ -5485,6 +5496,14 @@ int adm_swap_speaker_channels(int port_id, int copp_idx,
 		return ret;
 	}
 
+    // MSFT CHANGE Start
+	if(spk_swap || this_adm.is_channel_swapped)
+	{
+		//after applying swap channel, reset to default(TBD)
+		ret = adm_set_volume(port_id, copp_idx, 0x2000);
+	}
+	this_adm.is_channel_swapped = spk_swap;
+    // MSFT CHANGE End
 	pr_debug("%s: mfc_cfg Set params returned success", __func__);
 	return 0;
 }
@@ -5866,6 +5885,9 @@ int __init adm_init(void)
 	this_adm.tx_port_id = -1;
 	this_adm.hyp_assigned = false;
 	this_adm.fnn_app_type = -1;
+    // MSFT CHANGE Start
+	this_adm.is_channel_swapped = false;
+	// MSFT CHANGE End
 	init_waitqueue_head(&this_adm.matrix_map_wait);
 	init_waitqueue_head(&this_adm.adm_wait);
 	mutex_init(&this_adm.adm_apr_lock);
