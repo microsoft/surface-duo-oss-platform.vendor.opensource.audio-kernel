@@ -427,11 +427,20 @@ static const struct soc_enum mi2s_config_enum[] = {
 
 static const char *const cdc_dma_format[] = {
 	"UNPACKED",
+	// MSFT CHANGE Start
+	"UNPACKED_NON_LINEAR",
+	"PACKED_LINEAR_60958",
+	"PACKED_NON_LINEAR_60958",
+	"NULL",
+	"NULL",
 	"PACKED_16B",
+	// MSFT CHANGE End
 };
 
 static const struct soc_enum cdc_dma_config_enum[] = {
-	SOC_ENUM_SINGLE_EXT(2, cdc_dma_format),
+	// MSFT CHANGE Start
+	SOC_ENUM_SINGLE_EXT(7, cdc_dma_format),
+	// MSFT CHANGE End
 };
 
 static const char *const sb_format[] = {

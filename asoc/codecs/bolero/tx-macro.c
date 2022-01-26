@@ -185,6 +185,9 @@ struct tx_macro_priv {
 	bool register_event_listener;
 	u16 current_clk_id;
 	int disable_afe_wakeup_event_listener;
+//MSFT_CHANGE start
+	struct device_node *tx_dmic_en_np;
+//MSFT_CHANGE end
 };
 
 static bool tx_macro_get_data(struct snd_soc_component *component,
@@ -374,6 +377,30 @@ static int tx_macro_swr_pwr_event(struct snd_soc_dapm_widget *w,
 	return ret;
 }
 
+//MSFT_CHANGE Start
+static int dmic_gpio_ctrl(struct tx_macro_priv *tx_priv, bool enable)
+{
+	int ret = 0;
+
+	if (tx_priv->tx_dmic_en_np) {
+		if (enable)
+			ret = msm_cdc_pinctrl_select_active_state(
+				tx_priv->tx_dmic_en_np);
+		else
+			ret = msm_cdc_pinctrl_select_sleep_state(
+				tx_priv->tx_dmic_en_np);
+		if (ret != 0)
+			dev_err(tx_priv->dev,
+				"%s: Failed to turn state %d; ret=%d\n",
+				__func__, enable, ret);
+	} else {
+		return -EINVAL;
+	}
+
+	return ret;
+}
+//MSFT_CHANGE End
+
 static int tx_macro_mclk_event(struct snd_soc_dapm_widget *w,
 			       struct snd_kcontrol *kcontrol, int event)
 {
@@ -389,6 +416,14 @@ static int tx_macro_mclk_event(struct snd_soc_dapm_widget *w,
 	dev_dbg(tx_dev, "%s: event = %d\n", __func__, event);
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+
+		//MSFT_CHANGE Start
+                if (tx_priv->tx_dmic_en_np) {
+			ret = dmic_gpio_ctrl(tx_priv, true);
+			dev_dbg(tx_priv->dev, "%s: dmic_gpio_ctrl enable. ret: %d\n", __func__, ret);
+		}
+		//MSFT_CHANGE End
+
 		ret = tx_macro_mclk_enable(tx_priv, 1);
 		if (ret)
 			tx_priv->dapm_mclk_enable = false;
@@ -398,6 +433,13 @@ static int tx_macro_mclk_event(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMD:
 		if (tx_priv->dapm_mclk_enable)
 			ret = tx_macro_mclk_enable(tx_priv, 0);
+
+		//MSFT_CHANGE Start
+		if (tx_priv->tx_dmic_en_np) {
+			ret = dmic_gpio_ctrl(tx_priv, false);
+			dev_dbg(tx_priv->dev, "%s: dmic_gpio_ctrl disable. ret: %d\n", __func__, ret);
+		}
+		//MSFT_CHANGE End
 		break;
 	default:
 		dev_err(tx_priv->dev,
@@ -3454,6 +3496,19 @@ static int tx_macro_probe(struct platform_device *pdev)
 		sample_rate, tx_priv) == TX_MACRO_DMIC_SAMPLE_RATE_UNDEFINED)
 			return -EINVAL;
 	}
+
+	//MSFT_CHANGE start
+	tx_priv->tx_dmic_en_np = of_parse_phandle(pdev->dev.of_node,
+		"qcom,dmic-clk-en-node", 0);
+	if (!tx_priv->tx_dmic_en_np) {
+		dev_err(&pdev->dev, "%s: TX macro Not using DMIC enable gpio\n",
+			__func__);
+	}
+	else {
+		dev_dbg(&pdev->dev, "%s: Setting default gpio value to false\n", __func__);
+		dmic_gpio_ctrl(tx_priv, false);
+	}
+	//MSFT_CHANGE end
 
 	if (of_find_property(pdev->dev.of_node,
 			     disable_afe_wakeup_event_listener_dt, NULL)) {

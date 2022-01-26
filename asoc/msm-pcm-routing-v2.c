@@ -83,6 +83,10 @@ static uint16_t msm_ec_ref_ch_weights[PCM_FORMAT_MAX_NUM_CHANNEL_V8]
 				[PCM_FORMAT_MAX_NUM_CHANNEL_V8];
 
 static uint32_t voc_session_id = ALL_SESSION_VSID;
+// MSFT CHANGE Start
+static int vi_lch_port;
+static int vi_rch_port;
+// MSFT CHANGE End
 static int msm_route_ext_ec_ref;
 static bool is_custom_stereo_on;
 static bool is_ds2_on;
@@ -32454,27 +32458,27 @@ static int spkr_prot_put_vi_lch_port(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
 	int ret = 0;
-	int item;
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 
 	pr_debug("%s item is %d\n", __func__,
 		   ucontrol->value.enumerated.item[0]);
 	mutex_lock(&routing_lock);
-	item = ucontrol->value.enumerated.item[0];
-	if (item < e->items) {
+	// MSFT CHANGE Start
+	vi_lch_port = ucontrol->value.enumerated.item[0];
+	if (vi_lch_port < e->items) {
 		pr_debug("%s RX DAI ID %d TX DAI id %d\n",
-			__func__, e->shift_l, e->values[item]);
+			__func__, e->shift_l, e->values[vi_lch_port]);
 		if (e->shift_l < MSM_BACKEND_DAI_MAX &&
-			e->values[item] < MSM_BACKEND_DAI_MAX)
+			e->values[vi_lch_port] < MSM_BACKEND_DAI_MAX)
 			/* Enable feedback TX path */
 			ret = afe_spk_prot_feed_back_cfg(
-			   msm_bedais[e->values[item]].port_id,
+			   msm_bedais[e->values[vi_lch_port]].port_id,
 			   msm_bedais[e->shift_l].port_id, 1, 0, 1);
 		else {
 			pr_debug("%s values are out of range item %d\n",
-			__func__, e->values[item]);
+			__func__, e->values[vi_lch_port]);
 			/* Disable feedback TX path */
-			if (e->values[item] == MSM_BACKEND_DAI_MAX)
+			if (e->values[vi_lch_port] == MSM_BACKEND_DAI_MAX)
 				ret = afe_spk_prot_feed_back_cfg(0, 0, 0, 0, 0);
 			else
 				ret = -EINVAL;
@@ -32483,6 +32487,7 @@ static int spkr_prot_put_vi_lch_port(struct snd_kcontrol *kcontrol,
 		pr_err("%s item value is out of range item\n", __func__);
 		ret = -EINVAL;
 	}
+	// MSFT CHANGE End
 	mutex_unlock(&routing_lock);
 	return ret;
 }
@@ -32491,28 +32496,28 @@ static int spkr_prot_put_vi_rch_port(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
 	int ret = 0;
-	int item;
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
 
 	pr_debug("%s item is %d\n", __func__,
 			ucontrol->value.enumerated.item[0]);
 	mutex_lock(&routing_lock);
-	item = ucontrol->value.enumerated.item[0];
-	if (item < e->items) {
+	// MSFT CHANGE Start
+	vi_rch_port = ucontrol->value.enumerated.item[0];
+	if (vi_rch_port < e->items) {
 		pr_debug("%s RX DAI ID %d TX DAI id %d\n",
-				__func__, e->shift_l, e->values[item]);
+				__func__, e->shift_l, e->values[vi_rch_port]);
 		if (e->shift_l < MSM_BACKEND_DAI_MAX &&
-				e->values[item] < MSM_BACKEND_DAI_MAX)
+				e->values[vi_rch_port] < MSM_BACKEND_DAI_MAX)
 			/* Enable feedback TX path */
 			ret = afe_spk_prot_feed_back_cfg(
-					msm_bedais[e->values[item]].port_id,
+					msm_bedais[e->values[vi_rch_port]].port_id,
 					msm_bedais[e->shift_l].port_id,
 					1, 1, 1);
 		else {
 			pr_debug("%s values are out of range item %d\n",
-					__func__, e->values[item]);
+					__func__, e->values[vi_rch_port]);
 			/* Disable feedback TX path */
-			if (e->values[item] == MSM_BACKEND_DAI_MAX)
+			if (e->values[vi_rch_port] == MSM_BACKEND_DAI_MAX)
 				ret = afe_spk_prot_feed_back_cfg(0,
 						0, 0, 0, 0);
 			else
@@ -32522,6 +32527,7 @@ static int spkr_prot_put_vi_rch_port(struct snd_kcontrol *kcontrol,
 		pr_err("%s item value is out of range item\n", __func__);
 		ret = -EINVAL;
 	}
+	// MSFT CHANGE End
 	mutex_unlock(&routing_lock);
 	return ret;
 }
@@ -32529,6 +32535,9 @@ static int spkr_prot_put_vi_rch_port(struct snd_kcontrol *kcontrol,
 static int spkr_prot_get_vi_lch_port(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
+	// MSFT CHANGE Start
+	ucontrol->value.enumerated.item[0] = vi_lch_port;
+	// MSFT CHANGE End
 	pr_debug("%s\n", __func__);
 	return 0;
 }
@@ -32537,7 +32546,9 @@ static int spkr_prot_get_vi_rch_port(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
 	pr_debug("%s\n", __func__);
-	ucontrol->value.enumerated.item[0] = 0;
+	// MSFT CHANGE Start
+	ucontrol->value.enumerated.item[0] = vi_rch_port;
+	// MSFT CHANGE End
 	return 0;
 }
 

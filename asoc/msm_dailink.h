@@ -1038,14 +1038,20 @@ SND_SOC_DAILINK_DEFS(wsa_dma_rx0,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-cdc-dma-dev.45056")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("bolero_codec", "wsa_macro_rx1"),
 			   COMP_CODEC("wsa-codec1", "wsa_rx1"),
-			   COMP_CODEC("wsa-codec2", "wsa_rx2")),
+			   COMP_CODEC("wsa-codec2", "wsa_rx2"),
+			   //MSFT CHANGE START
+			   COMP_CODEC("wsa-codec3", "wsa_rx3")),
+			   //MSFT CHANGE END
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
 SND_SOC_DAILINK_DEFS(wsa_dma_rx1,
 	DAILINK_COMP_ARRAY(COMP_CPU("msm-dai-cdc-dma-dev.45058")),
 	DAILINK_COMP_ARRAY(COMP_CODEC("bolero_codec", "wsa_macro_rx_mix"),
 			   COMP_CODEC("wsa-codec1", "wsa_rx1"),
-			   COMP_CODEC("wsa-codec2", "wsa_rx2")),
+			   COMP_CODEC("wsa-codec2", "wsa_rx2"),
+			   //MSFT CHANGE START
+			   COMP_CODEC("wsa-codec3", "wsa_rx3")),
+			   //MSFT CHANGE END
 	DAILINK_COMP_ARRAY(COMP_PLATFORM("msm-pcm-routing")));
 
 SND_SOC_DAILINK_DEFS(wsa_dma_tx1,

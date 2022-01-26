@@ -609,6 +609,12 @@ int afe_set_pll_clk_drift(u16 port_id, int32_t set_clk_drift,
 int afe_set_clk_id(u16 port_id, uint32_t clk_id);
 void afe_set_lsm_afe_port_id(int idx, int lsm_port);
 
+/* MSCHANGE Start
+   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+   from QC case #04933686 */
+void afe_set_visense_capture(void);
+/* MSCHANGE End */
+
 enum {
 	AFE_LPASS_CORE_HW_BLOCK_ID_NONE,
 	AFE_LPASS_CORE_HW_RSVD,

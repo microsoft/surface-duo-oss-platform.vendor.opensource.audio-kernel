@@ -101,7 +101,9 @@ static const struct wsa_reg_mask_val reg_init[] = {
 	{WSA883X_VBAT_SNS, 0x60, 0x20},
 	{WSA883X_DRE_CTL_0, 0xF0, 0x90},
 	{WSA883X_DRE_IDLE_DET_CTL, 0x10, 0x00},
-	{WSA883X_CURRENT_LIMIT, 0x78, 0x40},
+// MSFT CHANGE Start
+	{WSA883X_CURRENT_LIMIT, 0x78, 0x28},
+// MSFT CHANGE End
 	{WSA883X_DRE_CTL_0, 0x07, 0x02},
 	{WSA883X_VAGC_TIME, 0x0F, 0x0F},
 	{WSA883X_VAGC_ATTN_LVL_1_2, 0xFF, 0x00},
@@ -124,6 +126,9 @@ static const struct wsa_reg_mask_val reg_init[] = {
 	{WSA883X_DRE_CTL_1, 0x3E, 0x20},
 	{WSA883X_CKWD_CTL_1, 0x1F, 0x1B},
 	{WSA883X_GMAMP_SUP1, 0x60, 0x60},
+// MSFT CHANGE Start
+	{WSA883X_SPKR_OCP_CTL, 0x38, 0x10},
+// MSFT CHANGE End
 };
 
 static int wsa883x_handle_post_irq(void *data);
@@ -1228,6 +1233,11 @@ static void wsa883x_codec_init(struct snd_soc_component *component)
 	if (wsa883x->variant == WSA8830 || wsa883x->variant == WSA8832)
 		snd_soc_component_update_bits(component, WSA883X_DRE_CTL_0,
 					0x07, 0x03);
+//MSCHANGE - Start
+	if (!(strcmp(wsa883x->wsa883x_name_prefix, "SpkrRecv")))
+		snd_soc_component_update_bits(component, WSA883X_DRE_CTL_0,
+					0x07, 0x04);
+//MSCHANGE - End
 }
 
 static int32_t wsa883x_temp_reg_read(struct snd_soc_component *component,
