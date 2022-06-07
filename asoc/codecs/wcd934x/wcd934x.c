@@ -1,4 +1,5 @@
 /* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020 Microsoft Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -5003,7 +5004,7 @@ static int __tavil_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 		break;
 	case SND_SOC_DAPM_POST_PMU:
 		/* wait for cnp time */
-		usleep_range(1000, 1100);
+		usleep_range(10000, 11000);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		tavil_micbias_control(codec, micb_num, MICB_DISABLE, true);
