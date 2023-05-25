@@ -275,6 +275,11 @@ struct afe_ctl {
 	uint32_t cps_ch_mask;
 	struct afe_cps_hw_intf_cfg *cps_config;
 	int lsm_afe_ports[MAX_LSM_SESSIONS];
+	/* MSCHANGE Start
+	   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+	   from QC case #04933686 */
+	bool visense_capture;
+	/* MSCHANGE End */
 };
 
 struct afe_clkinfo_per_port {
@@ -580,6 +585,16 @@ void afe_set_spk_v_vali_flag(int v_vali_flag)
 {
 	this_afe.v_vali_flag = v_vali_flag;
 }
+
+/* MSCHANGE Start
+   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+   from QC case #04933686 */
+void afe_set_visense_capture(void)
+{
+	this_afe.visense_capture = true;
+}
+EXPORT_SYMBOL(afe_set_visense_capture);
+/* MSCHANGE End */
 
 int afe_get_topology(int port_id)
 {
@@ -5977,8 +5992,16 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 			this_afe.afe_port_start_failed[port_index] = false;
 		}
 		afe_send_port_topology_id(port_id);
-		afe_send_cal(port_id);
-		afe_send_hw_delay(port_id, rate);
+		/* MSCHANGE Start
+		   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+		   from QC case #04933686 */
+		if (port_id == AFE_PORT_ID_WSA_CODEC_DMA_TX_0 && this_afe.visense_capture) {
+			this_afe.visense_capture = false;
+		} else {
+			afe_send_cal(port_id);
+			afe_send_hw_delay(port_id, rate);
+		}
+		/* MSCHANGE End */
 	}
 
 	if ((this_afe.cps_config) &&
