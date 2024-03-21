@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/debugfs.h>
@@ -275,6 +275,11 @@ struct afe_ctl {
 	uint32_t cps_ch_mask;
 	struct afe_cps_hw_intf_cfg *cps_config;
 	int lsm_afe_ports[MAX_LSM_SESSIONS];
+	/* MSCHANGE Start
+	   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+	   from QC case #04933686 */
+	bool visense_capture;
+	/* MSCHANGE End */
 };
 
 struct afe_clkinfo_per_port {
@@ -581,6 +586,16 @@ void afe_set_spk_v_vali_flag(int v_vali_flag)
 	this_afe.v_vali_flag = v_vali_flag;
 }
 
+/* MSCHANGE Start
+   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+   from QC case #04933686 */
+void afe_set_visense_capture(void)
+{
+	this_afe.visense_capture = true;
+}
+EXPORT_SYMBOL(afe_set_visense_capture);
+/* MSCHANGE End */
+
 int afe_get_topology(int port_id)
 {
 	int topology;
@@ -786,32 +801,74 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 	switch (param_hdr.param_id) {
 	case AFE_PARAM_ID_CALIB_RES_CFG_V2:
 		expected_size += sizeof(struct asm_calib_res_cfg);
+		if (param_hdr.param_size != sizeof(struct asm_calib_res_cfg)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.calib_data;
 		break;
 	case AFE_PARAM_ID_SP_V2_TH_VI_FTM_PARAMS:
 		expected_size += sizeof(struct afe_sp_th_vi_ftm_params);
+		if (param_hdr.param_size != sizeof(struct afe_sp_th_vi_ftm_params)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.th_vi_resp;
 		break;
 	case AFE_PARAM_ID_SP_V2_TH_VI_V_VALI_PARAMS:
 		expected_size += sizeof(struct afe_sp_th_vi_v_vali_params);
+		if (param_hdr.param_size != sizeof(struct afe_sp_th_vi_v_vali_params)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.th_vi_v_vali_resp;
 		break;
 	case AFE_PARAM_ID_SP_V2_EX_VI_FTM_PARAMS:
 		expected_size += sizeof(struct afe_sp_ex_vi_ftm_params);
+		if (param_hdr.param_size != sizeof(struct afe_sp_ex_vi_ftm_params)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.ex_vi_resp;
 		break;
 	case AFE_PARAM_ID_SP_RX_TMAX_XMAX_LOGGING:
 		expected_size += sizeof(
 				struct afe_sp_rx_tmax_xmax_logging_param);
+		if (param_hdr.param_size != sizeof(struct afe_sp_rx_tmax_xmax_logging_param)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.xt_logging_resp;
 		break;
 	case AFE_PARAM_ID_SP_V4_CALIB_RES_CFG:
 		expected_size += sizeof(
 				struct afe_sp_v4_param_th_vi_calib_res_cfg);
+		if (param_hdr.param_size != sizeof(
+				struct afe_sp_v4_param_th_vi_calib_res_cfg)) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		data_dest = (u32 *) &this_afe.spv4_calib_data;
 		break;
 	case AFE_PARAM_ID_SP_V4_TH_VI_FTM_PARAMS:
 		num_ch = data_start[0];
+		if (num_ch > SP_V2_NUM_MAX_SPKRS) {
+			pr_err("%s: Error: num_ch %d is greater than expected\n",
+				__func__,num_ch);
+			return -EINVAL;
+		}
+		if (param_hdr.param_size != (sizeof(struct afe_sp_v4_param_th_vi_ftm_params) +
+			(num_ch * sizeof(struct afe_sp_v4_channel_ftm_params)))) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		this_afe.spv4_th_vi_ftm_rcvd_param_size = param_hdr.param_size;
 		data_dest = (u32 *)&this_afe.spv4_th_vi_ftm_resp;
 		expected_size +=
@@ -820,6 +877,18 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 		break;
 	case AFE_PARAM_ID_SP_V4_TH_VI_V_VALI_PARAMS:
 		num_ch = data_start[0];
+		if (num_ch > SP_V2_NUM_MAX_SPKRS) {
+			pr_err("%s: Error: num_ch %d is greater than expected\n",
+				__func__,num_ch);
+			return -EINVAL;
+		}
+		if (param_hdr.param_size != (sizeof(struct afe_sp_v4_param_th_vi_v_vali_params) +
+				(num_ch *
+				sizeof(struct afe_sp_v4_channel_v_vali_params)))) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		this_afe.spv4_v_vali_rcvd_param_size = param_hdr.param_size;
 		data_dest = (u32 *)&this_afe.spv4_v_vali_resp;
 		expected_size +=
@@ -829,6 +898,18 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 		break;
 	case AFE_PARAM_ID_SP_V4_EX_VI_FTM_PARAMS:
 		num_ch = data_start[0];
+		if (num_ch > SP_V2_NUM_MAX_SPKRS) {
+			pr_err("%s: Error: num_ch %d is greater than expected\n",
+				__func__,num_ch);
+			return -EINVAL;
+		}
+		if (param_hdr.param_size !=  (sizeof(struct afe_sp_v4_param_ex_vi_ftm_params) +
+				(num_ch *
+				sizeof(struct afe_sp_v4_channel_ex_vi_ftm_params)))) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		this_afe.spv4_ex_vi_ftm_rcvd_param_size = param_hdr.param_size;
 		data_dest = (u32 *)&this_afe.spv4_ex_vi_ftm_resp;
 		expected_size +=
@@ -837,6 +918,18 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 		break;
 	case AFE_PARAM_ID_SP_V4_RX_TMAX_XMAX_LOGGING:
 		num_ch = data_start[0];
+		if (num_ch > SP_V2_NUM_MAX_SPKRS) {
+			pr_err("%s: Error: num_ch %d is greater than expected\n",
+				__func__,num_ch);
+			return -EINVAL;
+		}
+		if (param_hdr.param_size != (sizeof(struct afe_sp_v4_param_tmax_xmax_logging) +
+				(num_ch *
+				sizeof(struct afe_sp_v4_channel_tmax_xmax_params)))) {
+			pr_err("%s: Error: param_size %d is greater than expected\n",
+				__func__,param_hdr.param_size);
+			return -EINVAL;
+		}
 		this_afe.spv4_max_log_rcvd_param_size = param_hdr.param_size;
 		data_dest = (u32 *)&this_afe.spv4_max_log_resp;
 		expected_size +=
@@ -5977,8 +6070,16 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 			this_afe.afe_port_start_failed[port_index] = false;
 		}
 		afe_send_port_topology_id(port_id);
-		afe_send_cal(port_id);
-		afe_send_hw_delay(port_id, rate);
+		/* MSCHANGE Start
+		   QC patch "audio-kernel.git-e08db62f8ff0da6658183d4b30539ac8861af320.patch"
+		   from QC case #04933686 */
+		if (port_id == AFE_PORT_ID_WSA_CODEC_DMA_TX_0 && this_afe.visense_capture) {
+			this_afe.visense_capture = false;
+		} else {
+			afe_send_cal(port_id);
+			afe_send_hw_delay(port_id, rate);
+		}
+		/* MSCHANGE End */
 	}
 
 	if ((this_afe.cps_config) &&

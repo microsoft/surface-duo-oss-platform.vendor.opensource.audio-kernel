@@ -1,3 +1,5 @@
+#define DEBUG
+
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
@@ -1248,10 +1250,13 @@ static int wsa_macro_enable_swr(struct snd_soc_dapm_widget *w,
 		if (wsa_priv->swr_ctrl_data) {
 			swrm_wcd_notify(
 				wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
-				SWR_DEVICE_UP, NULL);
-			swrm_wcd_notify(
-				wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
-				SWR_SET_NUM_RX_CH, &ch_cnt);
+			SWR_DEVICE_UP, NULL);
+
+//MSFT_CHANGE - Disable SWR broadcast on stereo channels. See BUG 95233
+			//swrm_wcd_notify(
+			//	wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
+			//	SWR_SET_NUM_RX_CH, &ch_cnt);
+//MSFT_CHANGE - End
 		}
 		break;
 	case SND_SOC_DAPM_POST_PMD:
@@ -1263,10 +1268,12 @@ static int wsa_macro_enable_swr(struct snd_soc_dapm_widget *w,
 			wsa_priv->rx_1_count--;
 		ch_cnt = wsa_priv->rx_0_count + wsa_priv->rx_1_count;
 
-		if (wsa_priv->swr_ctrl_data)
-			swrm_wcd_notify(
-				wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
-				SWR_SET_NUM_RX_CH, &ch_cnt);
+//MSFT_CHANGE - Disable SWR broadcast on stereo channels. See BUG 95233
+		//if (wsa_priv->swr_ctrl_data)
+		//	swrm_wcd_notify(
+		//		wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
+		//		SWR_SET_NUM_RX_CH, &ch_cnt);
+//MSFT_CHANGE - End
 		break;
 	}
 	dev_dbg(wsa_priv->dev, "%s: current swr ch cnt: %d\n",
